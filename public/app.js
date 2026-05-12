@@ -704,6 +704,10 @@ function checkout() {
   const item = product();
   const sku = findSku(item);
   if (!sku) return home();
+  if ((sku.stockStatus || sku.stock) === 'sold_out') {
+    notify('当前 SKU 已售罄，请重新选择规格');
+    return detail(item.slug);
+  }
   shell(`
     <section class="checkout-head">
       <h1>购买 ${item.name}</h1>
@@ -714,7 +718,7 @@ function checkout() {
       <div class="checkout-left">
         <section class="glass panel order-preview">
           <h3>订单商品预览 <button data-action="openProduct" data-slug="${item.slug}">✎ 修改规格</button></h3>
-          <div class="preview-row">${icon(item.icon)}<b>${item.name}</b>${Object.entries(selectedOptions(item)).map(([k, v]) => `<span>${v}</span>`).join('')}<span>${sku.deliveryType === 'auto' ? '自动发货' : '手动发货'}</span></div>
+          <div class="preview-row">${icon(item.icon)}<b>${item.name}</b>${Object.entries(selectedOptions(item)).map(([k, v]) => `<span>${v}</span>`).join('')}<span>${deliveryLabel(sku.deliveryType)}</span><span>${stockLabel(sku.stockStatus || sku.stock)}</span></div>
         </section>
         <section class="glass panel">
           <h3>联系信息</h3>
@@ -723,7 +727,12 @@ function checkout() {
         <section class="glass panel">
           <h3>支付信息</h3>
           <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${paymentIcon(n.code === 'TRON' ? 'C02_tron_trc20.png' : 'C03_wallet.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
-          <p class="warning">${featureIcon('B07_warning_triangle.png', '警告')} 请确认转账网络与订单一致，勿跨链支付</p>
+          <div class="network-confirm">
+            <b>你选择的是 ${networkText(state.paymentNetwork)}</b>
+            <span>请确认钱包/交易所转账网络与订单完全一致，不要使用其他链或内部转账网络。</span>
+            <span>错链支付、少付、多付、超时付款都将进入异常订单，需要人工处理。</span>
+            <label class="agree"><input type="checkbox" id="networkConfirm" /> 我已确认支付网络和金额风险</label>
+          </div>
         </section>
         <section class="glass panel confirm-box">
           <h3>支付前确认</h3>
@@ -735,8 +744,9 @@ function checkout() {
         <h2>订单摘要</h2>
         <div class="summary-product">${icon(item.icon)}<div><b>${item.name}</b><small>${Object.values(selectedOptions(item)).join(' / ')}</small></div><span>× 1</span></div>
         <div class="line"><span>商品单价</span>${price(sku.priceUsdt)}</div>
-        <div class="line"><span>优惠折扣</span><b class="green">- 0.00 USDT</b></div>
+        <div class="line"><span>参考金额</span><b>${money(sku.priceUsdt)}（仅供参考）</b></div>
         <div class="line total"><span>应付金额</span>${price(sku.priceUsdt)}</div>
+        <p class="summary-note">订单创建时锁定 USDT 金额，链上手续费由用户承担。</p>
         <label class="agree"><input type="checkbox" id="agree" /> 我已阅读并同意 <a>购买须知</a> 与 <a>售后规则</a></label>
         <button class="primary" data-action="createOrder">${paymentIcon('C01_usdt.png', 'USDT')} 确认并支付</button>
         <p class="secure">支付通知与发货结果将同时发送至 Telegram 与邮箱</p>
@@ -771,7 +781,10 @@ async function createOrder() {
   if (agree && !agree.checked) return notify('请先勾选购买须知与售后规则');
   const item = product();
   const sku = findSku(item);
+  if (!sku || (sku.stockStatus || sku.stock) === 'sold_out') return notify('当前 SKU 无法购买，请重新选择规格');
   let serverOrder = null;
+  const networkConfirm = document.querySelector('#networkConfirm');
+  if (networkConfirm && !networkConfirm.checked) return notify('请先确认支付网络风险');
   try {
     const response = await fetch('/api/orders', {
       method: 'POST',
@@ -882,7 +895,9 @@ async function pay(id) {
           <p>${featureIcon('B07_warning_triangle.png', '注意')} 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
         </section>
         <section class="glass panel pay-cta">
-          <p>支付后通常需要 1–3 分钟链上确认，请勿重复支付</p>
+          <p>支付后通常需要 1–3 分钟链上确认，请勿重复支付。若未自动识别，可提交 TxID 进入人工核验。</p>
+          <label>交易 Hash / TxID<input id="txHashInput" value="${order.raw?.txHash || ''}" placeholder="粘贴钱包或交易所返回的 TxID" /></label>
+          <button class="primary small" data-action="submitTxHash" data-id="${order.id}">${paymentIcon('C06_address.png', 'TxID')} 提交 TxID</button>
           <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
         </section>
         <section class="glass panel support"><b>遇到问题？联系客服或前往订单查询</b><a href="#/orders/lookup">订单查询</a></section>
@@ -893,7 +908,7 @@ async function pay(id) {
 }
 
 function statusTracker(items, status) {
-  const index = { pending_payment: 1, payment_confirming: 2, delivering: 3, completed: 4 }[status] || 0;
+  const index = { created: 0, pending_payment: 1, payment_confirming: 2, paid: 3, delivering: 3, completed: 4 }[status] || 0;
   return `<div class="status-tracker">${items.map((item, i) => `<span class="${i <= index ? 'active' : ''}"><b>${['✓', '◔', '⌛', '▤', '✓'][i]}</b>${item}</span>`).join('')}</div>`;
 }
 
@@ -1003,15 +1018,62 @@ async function success(id) {
   `, 'page');
 }
 
+async function orderDetail(id) {
+  const order = (await loadServerOrder(id)) || findExactOrder(id);
+  if (!order) return lookup();
+  const item = products.find((p) => p.id === order.productId) || products[0];
+  const canPay = ['created', 'pending_payment', 'payment_confirming'].includes(order.status);
+  shell(`
+    <section class="pay-head">
+      <div><h1>订单详情</h1><p>这里汇总支付状态、发货状态、交付记录和售后入口，便于追踪问题。</p></div>
+      ${statusTracker(['已创建', '等待付款', '链上确认', '发货中', '已完成'], order.status)}
+    </section>
+    <section class="success-grid order-detail-grid">
+      <section class="glass panel">
+        <h3>订单信息</h3>
+        <div class="summary-product">${icon(item.icon)}<div><b>${order.productName}</b><small>${Object.values(order.options).join(' / ')}</small></div></div>
+        ${[
+          ['订单号', order.orderNo],
+          ['订单状态', statusLabel(order.status)],
+          ['应付金额', `${order.amountUsdt.toFixed(2)} USDT（${order.fiatAmount} 仅供参考）`],
+          ['支付网络', networkText(order.paymentNetwork)],
+          ['Telegram', order.telegramUsername],
+          ['邮箱', order.email]
+        ].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+        ${canPay ? `<a class="primary small link-button" href="#/pay/${order.id}">继续支付</a>` : ''}
+      </section>
+      <section class="glass panel">
+        <h3>发货与通知</h3>
+        <div class="delivery-ok"><b>${order.status === 'completed' ? '发货已完成' : order.status === 'delivering' ? '发货处理中' : '等待付款后发货'}</b><span>${deliveryLabel(order.deliveryType)}</span></div>
+        <div class="secret">
+          <small>交付内容</small>
+          <p>${order.status === 'completed' ? '激活码 / 链接已发送至邮箱与 Telegram（敏感内容已隐藏）' : '付款确认后展示发货进度，自动发货失败会进入人工队列。'}</p>
+        </div>
+        <div class="structured-detail compact">
+          <div><span>通知记录</span><b>订单创建、支付成功、发货成功/失败都会记录发送状态</b></div>
+          <div><span>异常处理</span><b>少付、多付、错链、超时付款均可通过 TxID 进入人工核验</b></div>
+        </div>
+      </section>
+      <section class="glass panel support-ticket">
+        <h3>售后工单</h3>
+        <label>问题类型<select id="ticketType"><option>未收到发货</option><option>卡密无效</option><option>账号无法登录</option><option>少付/多付/错链</option><option>填写信息错误</option></select></label>
+        <label>问题描述<textarea id="ticketBody" placeholder="描述问题并补充截图链接、TxID 或账号信息"></textarea></label>
+        <button class="primary" data-action="submitTicket" data-id="${order.id}">提交售后</button>
+      </section>
+    </section>
+  `, 'page');
+}
+
 async function lookup() {
   const result = state.lookupResult;
   shell(`
     <section class="lookup-page">
       <div class="glass panel lookup-box">
         <h1>订单查询</h1>
-        <p>支持订单号 + 邮箱，或订单号 + Telegram 用户名查询。登录后可查看全部订单。</p>
+        <p>支持订单号 + 邮箱/Telegram，或直接用 TxID 找回支付异常订单。登录后可查看本机已保存订单。</p>
         <label>订单号<input id="lookupOrder" placeholder="GF20240527000123" /></label>
         <label>邮箱 / Telegram 用户名<input id="lookupContact" placeholder="name@example.com 或 @username" /></label>
+        <label>TxID / 交易 Hash<input id="lookupTxHash" placeholder="支付后未自动识别时可填写" /></label>
         <button class="primary" data-action="lookupOrder">查询订单</button>
         ${state.user ? `<h3>我的订单</h3><div class="order-list">${orders().map(orderItem).join('') || '<p>暂无订单</p>'}</div>` : ''}
       </div>
@@ -1021,7 +1083,7 @@ async function lookup() {
 }
 
 function orderItem(order, detail = false) {
-  return `<a class="order-item" href="${order.status === 'completed' ? `#/order/${order.id}/success` : `#/pay/${order.id}`}"><b>${order.orderNo}</b><span>${order.productName}</span><span>${statusLabel(order.status)}</span><strong>${order.amountUsdt.toFixed(2)} USDT</strong>${detail ? `<small>${Object.values(order.options).join(' / ')} · ${order.telegramUsername} · ${order.email}</small>` : ''}</a>`;
+  return `<a class="order-item" href="#/order/${order.id}"><b>${order.orderNo}</b><span>${order.productName}</span><span>${statusLabel(order.status)}</span><strong>${order.amountUsdt.toFixed(2)} USDT</strong>${detail ? `<small>${Object.values(order.options).join(' / ')} · ${order.telegramUsername} · ${order.email}</small>` : ''}</a>`;
 }
 
 function productsPage() {
@@ -1073,21 +1135,62 @@ function renderAdmin() {
   const tab = state.adminTab;
   shell(`
     <section class="admin-shell">
-      <aside class="glass admin-nav"><h2>后台管理</h2>${['products|商品与 SKU', 'orders|订单管理', 'payments|支付配置', 'delivery|发货管理'].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
+      <aside class="glass admin-nav"><h2>后台管理</h2>${['dashboard|运营看板', 'products|商品与 SKU', 'orders|订单管理', 'payments|支付配置', 'delivery|发货队列', 'support|售后工单'].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
       <section class="glass admin-content">${adminContent(tab)}</section>
     </section>
   `, 'page');
 }
 
 function adminContent(tab) {
-  if (tab === 'orders') return `<h1>订单管理</h1><div class="admin-table">${orders().map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminMarkPaid" data-id="${o.id}">手动标记已支付</button><button data-action="adminDeliver" data-id="${o.id}">手动补发</button></div>`).join('') || '暂无订单'}</div>`;
+  const orderList = orders();
+  if (tab === 'dashboard') {
+    const paid = orderList.filter((o) => ['paid', 'delivering', 'completed'].includes(o.status));
+    const revenue = paid.reduce((sum, order) => sum + Number(order.amountUsdt || 0), 0);
+    const failedDelivery = orderList.filter((o) => ['failed', 'delivering'].includes(o.status));
+    const lowStock = products.flatMap((p) => p.skus.filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock').map((sku) => `${p.name} ${Object.values(sku.optionValues).join('/')}`));
+    return `<h1>运营看板</h1><div class="metric-grid">${[
+      ['今日订单', orderList.length],
+      ['成交金额', `${revenue.toFixed(2)} USDT`],
+      ['待处理', orderList.filter((o) => ['paid', 'delivering', 'payment_confirming'].includes(o.status)).length],
+      ['库存预警', lowStock.length]
+    ].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div><h2>处理队列</h2><div class="admin-table">${failedDelivery.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">处理发货</button><a href="#/order/${o.id}">查看</a></div>`).join('') || '暂无积压订单'}</div><h2>库存预警</h2><p class="warning">${lowStock.join('、') || '暂无库存预警'}</p>`;
+  }
+  if (tab === 'orders') return `<h1>订单管理</h1><div class="admin-table">${orderList.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminMarkPaid" data-id="${o.id}">手动标记已支付</button><button data-action="adminDeliver" data-id="${o.id}">手动补发</button><a href="#/order/${o.id}">详情</a></div>`).join('') || '暂无订单'}</div>`;
   if (tab === 'payments') return `<h1>支付配置</h1><div class="admin-table">${networks.map((n) => `<div><b>${n.displayName}</b><span>${n.tokenStandard}</span><span>${(n.enabled ?? n.isEnabled) ? '已启用' : '已关闭'} / ${(n.recommended ?? n.isRecommended) ? '推荐' : '普通'}</span><button data-action="adminToggleNetwork" data-code="${n.code}">${(n.enabled ?? n.isEnabled) ? '关闭网络' : '启用网络'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}">设为推荐</button></div>`).join('')}</div><p class="warning">自动监听校验：地址、网络、USDT 合约、到账金额、确认数、订单有效期与交易 Hash 唯一性。</p>`;
-  if (tab === 'delivery') return `<h1>发货管理</h1><div class="admin-table">${products.map((p) => `<div><b>${p.name}</b><span>${p.deliveryType}</span><span>卡密库存 / Webhook / 手动队列</span><button>配置库存来源</button><button>查看发货记录</button></div>`).join('')}</div>`;
+  if (tab === 'delivery') return `<h1>发货队列</h1><div class="admin-table">${orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${deliveryLabel(o.deliveryType)} / ${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">补发/完成</button><a href="#/order/${o.id}">发货记录</a></div>`).join('') || '暂无待发货订单'}</div><h2>发货能力</h2><div class="admin-table">${products.map((p) => `<div><b>${p.name}</b><span>${deliveryLabel(p.deliveryType)}</span><span>卡密库存 / Webhook / 人工队列</span><button>配置库存来源</button><button>查看日志</button></div>`).join('')}</div>`;
+  if (tab === 'support') return `<h1>售后工单</h1><div class="admin-table">${(JSON.parse(localStorage.getItem('gfTickets') || '[]')).map((t) => `<div><b>${t.ticketNo}</b><span>${t.type}</span><span>${t.status}</span><button>补发</button><button>关闭</button></div>`).join('') || '暂无售后工单'}</div>`;
   return `<h1>商品与 SKU 配置</h1><div class="admin-table">${products.map((p) => `<div><b>${p.name}</b><span>${p.category}</span><span>${p.skus.length} 个 SKU / ${p.status === 'hidden' ? '已隐藏' : '已上架'}</span><button data-action="selectProduct" data-id="${p.id}">编辑规格</button><button data-action="adminToggleProduct" data-id="${p.id}">${p.status === 'hidden' ? '上架' : '下架'}</button></div>`).join('')}</div>`;
 }
 
 function faq() {
-  shell(`<section class="glass panel faq"><h1>FAQ</h1>${['支付后多久发货？自动发货通常在链上确认后 1–3 分钟完成。', '可以不登录 Telegram 吗？可以，但仍需填写 Telegram 用户名与邮箱。', '转错网络怎么办？跨链或错链支付可能导致资产无法找回，请付款前确认网络。'].map((text) => `<details open><summary>${text.split('？')[0]}？</summary><p>${text.split('？')[1]}</p></details>`).join('')}</section>`, 'page');
+  const groups = {
+    下单类: [
+      ['我需要提供哪些信息？', '至少需要 Telegram 用户名和接收邮箱。部分商品还需要账号 ID、区服、Google 邮箱或备注。'],
+      ['Telegram 或邮箱填错怎么办？', '未发货前可在订单详情提交售后工单申请修改；已发货后需要人工审核是否可补发。'],
+      ['可以修改订单信息吗？', '订单未支付或未发货前可以申请修改，支付后请保留订单号和 TxID。']
+    ],
+    支付类: [
+      ['支持哪些网络？', '当前支持 TRON、ETH、BSC、BASE 等 USDT 网络，实际可用网络以结算页为准。'],
+      ['付款后没识别怎么办？', '在支付页或订单详情提交 TxID，系统会进入链上检测或人工核验。'],
+      ['少付、多付、超时付款怎么办？', '订单会进入异常处理，少付需补差价，多付可申请退差额或余额，超时付款需人工匹配。'],
+      ['转错网络怎么办？', '错链支付可能无法找回，请在付款前二次确认网络。发生后请提交 TxID 等待人工处理。']
+    ],
+    发货类: [
+      ['自动发货多久完成？', '链上确认后通常 1-3 分钟完成。若库存或接口异常，会进入发货失败队列。'],
+      ['手动发货多久完成？', '一般 10 分钟内开始处理，复杂订单或高风险订单可能需要 24 小时内完成。'],
+      ['发货内容在哪里查看？', '发货结果会发送至邮箱和 Telegram，也可以在订单详情查看状态与隐藏后的交付摘要。']
+    ],
+    售后类: [
+      ['什么情况可以补发？', '保期内卡密无效、账号无法登录、订阅掉单、自动发货失败等情况可申请补发或协助。'],
+      ['什么情况不支持退款？', '已发货且信息正确、用户自身网络或账号条件不满足、已使用的虚拟商品通常不支持无理由退款。'],
+      ['如何提交售后？', '进入订单详情，选择问题类型并填写描述、截图链接或 TxID。后台客服会按工单处理。']
+    ],
+    账号类: [
+      ['账号可以改密码或换绑吗？', '以商品详情的使用限制为准。共享服务通常不支持改密或换绑。'],
+      ['共享账号有什么限制？', '共享账号可能限制设备数、登录地区、登录频率和 IP 环境，请按发货说明使用。']
+    ]
+  };
+  shell(`<section class="glass panel faq"><h1>FAQ</h1>${Object.entries(groups).map(([title, items]) => `<h2>${title}</h2>${items.map(([q, a]) => `<details open><summary>${q}</summary><p>${a}</p></details>`).join('')}`).join('')}</section>`, 'page');
 }
 
 function networkText(code) {
@@ -1149,6 +1252,7 @@ async function route() {
   if (hash.startsWith('/product/')) return detail(hash.split('/').pop());
   if (hash.startsWith('/pay/')) return pay(hash.split('/').pop());
   if (hash.startsWith('/order/') && hash.endsWith('/success')) return success(hash.split('/')[2]);
+  if (hash.startsWith('/order/')) return orderDetail(hash.split('/').pop());
   home();
 }
 
@@ -1156,6 +1260,14 @@ document.addEventListener('input', (event) => {
   if (event.target.matches('[data-field]')) syncInputs();
   if (event.target.matches('[data-action="searchProducts"]')) {
     state.searchQuery = event.target.value;
+    return route();
+  }
+  if (event.target.matches('[data-action="filterDelivery"]')) {
+    state.deliveryFilter = event.target.value;
+    return route();
+  }
+  if (event.target.matches('[data-action="sortProducts"]')) {
+    state.sortBy = event.target.value;
     return route();
   }
 });
@@ -1176,6 +1288,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'closeTelegramPanel') { state.telegramPanelOpen = false; return route(); }
   if (action === 'openProduct') { location.hash = `#/product/${el.dataset.slug}`; return; }
   if (action === 'filterCategory') { state.categoryFilter = el.dataset.category; return route(); }
+  if (action === 'stockOnly') { state.stockFilter = event.target.checked; return route(); }
   if (action === 'selectProduct') { state.selectedProductId = el.dataset.id; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
   if (action === 'setOption') { const item = products.find((p) => p.id === el.dataset.product); state.selectedOptions[item.id] = { ...selectedOptions(item), [el.dataset.key]: el.dataset.value }; persist(); return route(); }
   if (action === 'quickProduct') { state.selectedProductId = event.target.value; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
@@ -1192,17 +1305,52 @@ document.addEventListener('click', async (event) => {
   if (action === 'goCheckout') { syncInputs(); location.hash = '#/checkout'; }
   if (action === 'createOrder') return createOrder();
   if (action === 'markPaid') return markPaid(el.dataset.id);
+  if (action === 'submitTicket') {
+    const type = document.querySelector('#ticketType')?.value || '售后问题';
+    const description = document.querySelector('#ticketBody')?.value.trim();
+    if (!description) return notify('请填写问题描述');
+    const response = await fetch(`/api/orders/${el.dataset.id}/tickets`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type, description })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(result.error || '售后提交失败');
+    const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]').filter((ticket) => ticket.id !== result.id);
+    tickets.unshift(result);
+    localStorage.setItem('gfTickets', JSON.stringify(tickets));
+    notify(`售后工单已创建：${result.ticketNo}`);
+    return orderDetail(el.dataset.id);
+  }
+  if (action === 'submitTxHash') {
+    const txHash = document.querySelector('#txHashInput')?.value.trim();
+    if (!txHash || txHash.length < 12) return notify('请填写有效的 TxID');
+    const response = await fetch(`/api/orders/${el.dataset.id}/txhash`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ txHash })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(result.error || 'TxID 提交失败');
+    const order = normalizeServerOrder(result);
+    if (order) saveOrder(order);
+    notify('TxID 已提交，订单进入检测/人工核验');
+    return pay(el.dataset.id);
+  }
   if (action === 'lookupOrder') {
     const orderNo = document.querySelector('#lookupOrder').value.trim();
     const contact = document.querySelector('#lookupContact').value.trim().toLowerCase();
+    const txHash = document.querySelector('#lookupTxHash').value.trim();
     const contactVariants = new Set([contact, contact.startsWith('@') ? contact.slice(1) : `@${contact}`].filter(Boolean));
-    state.lookupResult = orders().find((o) => o.orderNo === orderNo && [o.email.toLowerCase(), o.telegramUsername.toLowerCase()].some((value) => contactVariants.has(value)));
+    state.lookupResult = txHash
+      ? orders().find((o) => o.raw?.txHash === txHash || o.txHash === txHash)
+      : orders().find((o) => o.orderNo === orderNo && [o.email.toLowerCase(), o.telegramUsername.toLowerCase()].some((value) => contactVariants.has(value)));
     if (!state.lookupResult) {
       try {
         const response = await fetch('/api/orders/lookup', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orderNo, contact })
+          body: JSON.stringify({ orderNo, contact, txHash })
         });
         if (response.ok) {
           const apiOrder = await response.json();
