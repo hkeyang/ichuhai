@@ -10,6 +10,12 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "routes": [
+    "ichuhai.shop/*",
+    "www.ichuhai.shop/*"
+  ],
+  "workers_dev": true,
+  "preview_urls": true,
   "build": {
     "command": "npx opennextjs-cloudflare build"
   },
