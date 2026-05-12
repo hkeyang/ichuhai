@@ -17,7 +17,8 @@
     "worker:orders": "node workers/order-maintenance.mjs",
     "smoke": "node scripts/smoke.mjs",
     "visual:audit": "node scripts/visual-audit.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "security:check": "node scripts/security-check.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.9",

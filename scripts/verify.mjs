@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const requiredFiles = ['index.html', 'styles.css', 'app.js', 'RUNBOOK.md', '.env.example', 'scripts/smoke.mjs', 'COMPLETION_AUDIT.md'];
+const requiredFiles = ['index.html', 'styles.css', 'app.js', 'RUNBOOK.md', '.env.example', 'scripts/smoke.mjs', 'scripts/security-check.mjs', 'COMPLETION_AUDIT.md'];
 for (const file of requiredFiles) readFileSync(file, 'utf8');
 
 const html = readFileSync('index.html', 'utf8');
@@ -11,6 +11,7 @@ const plan = readFileSync('PRODUCT_PLAN.md', 'utf8');
 const report = readFileSync('ACCEPTANCE_REPORT.md', 'utf8');
 const runbook = readFileSync('RUNBOOK.md', 'utf8');
 const smoke = readFileSync('scripts/smoke.mjs', 'utf8');
+const securityCheck = readFileSync('scripts/security-check.mjs', 'utf8');
 const audit = readFileSync('COMPLETION_AUDIT.md', 'utf8');
 const visualAuditScript = readFileSync('scripts/visual-audit.mjs', 'utf8');
 const oldBrandPattern = new RegExp(['Glass', 'Future'].join(''));
@@ -42,6 +43,7 @@ const checks = [
   ['mailer integration', readFileSync('src/integrations/mailer.mjs', 'utf8').includes('nodemailer') && server.includes('sendDeliveryEmail')],
   ['admin api', server.includes("path === '/api/admin/orders'")],
   ['admin auth and audit', server.includes("path === '/api/admin/login'") && server.includes('auditLogs')],
+  ['security hardening', server.includes('requireProductionConfig') && server.includes('createAdminSessionToken') && server.includes('encryptInventoryValue')],
   ['admin product config api', server.includes('adminProduct')],
   ['admin product create api', server.includes("path === '/api/admin/products'")],
   ['admin sku config api', server.includes('adminSku')],
@@ -54,6 +56,7 @@ const checks = [
   ['acceptance report', report.includes('提示词到产物清单') && report.includes('验收结论')],
   ['runbook', runbook.includes('本地启动') && runbook.includes('生产接入顺序')],
   ['smoke test', smoke.includes('/api/orders') && smoke.includes('/api/admin/deliveries')],
+  ['security check', securityCheck.includes('untrusted origin') && securityCheck.includes('inventory should be stored as versioned encrypted payload')],
   ['visual audit script', visualAuditScript.includes('01.png') && visualAuditScript.includes('05.png')],
   ['completion audit', audit.includes('目标拆解') && audit.includes('未完成或弱验证项')]
 ];
