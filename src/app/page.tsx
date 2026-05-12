@@ -1,11 +1,11 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import Script from 'next/script';
 
-export default async function HomePage() {
-  const html = await fs.readFile(path.join(process.cwd(), 'index.html'), 'utf8');
-  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] || '<div id="app"></div>';
-
+export default function HomePage() {
   return (
-    <main dangerouslySetInnerHTML={{ __html: body }} />
+    <main>
+      <div id="app" />
+      <div id="toast" className="toast" role="status" aria-live="polite" />
+      <Script src="/app.js" type="module" strategy="afterInteractive" />
+    </main>
   );
 }
