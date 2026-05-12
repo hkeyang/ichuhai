@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  telegramId        String?  @unique
+  telegramUsername  String?
+  telegramFirstName String?
+  telegramLastName  String?
+  telegramPhotoUrl  String?
+  email             String?
+  defaultCurrency   String   @default("USD")
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  orders            Order[]
+}
+
+model Product {
+  id                       String               @id
+  slug                     String               @unique
+  name                     String
+  categoryId               String
+  iconUrl                  String?
+  coverUrl                 String?
+  shortDescription         String?
+  detailDescription        String?
+  deliveryType             DeliveryType
+  status                   ProductStatus        @default(active)
+  isHot                    Boolean              @default(false)
+  isRecommended            Boolean              @default(false)
+  sortOrder                Int                  @default(0)
+  baseCurrency             String               @default("USDT")
+  optionGroups             ProductOptionGroup[]
+  skus                     ProductSku[]
+  notices                  ProductNotice?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+}
+
+model ProductOptionGroup {
+  id          String          @id @default(cuid())
+  productId   String
+  name        String
+  key         String
+  required    Boolean         @default(true)
+  displayType String
+  sortOrder   Int             @default(0)
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options     ProductOption[]
+
+  @@unique([productId, key])
+}
+
+model ProductOption {
+  id        String             @id @default(cuid())
+  groupId   String
+  label     String
+  value     String
+  sortOrder Int                @default(0)
+  group     ProductOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model ProductSku {
+  id                String      @id
+  productId         String
+  optionValues      Json
+  priceUsdt         Decimal     @db.Decimal(18, 6)
+  originalPriceUsdt Decimal?    @db.Decimal(18, 6)
+  stockType         StockType   @default(unlimited)
+  stockQuantity     Int?
+  stockStatus       StockStatus @default(in_stock)
+  deliveryType      DeliveryType
+  isDefault         Boolean     @default(false)
+  isRecommended     Boolean     @default(false)
+  discountLabel     String?
+  product           Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryItems    InventoryItem[]
+  orders            Order[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model ProductNotice {
+  id              String  @id @default(cuid())
+  productId       String  @unique
+  deliverySummary String?
+  warrantySummary String?
+  refundSummary   String?
+  usageGuide      String?
+  warrantyDetail  String?
+  refundRule      String?
+  attention       String?
+  faq             Json?
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model PaymentNetwork {
+  id             String   @id
+  code           String   @unique
+  displayName    String
+  tokenStandard  String
+  chainId        String?
+  usdtContract   String?
+  address        String
+  isEnabled      Boolean  @default(true)
+  isRecommended  Boolean  @default(false)
+  confirmations  Int      @default(1)
+  minAmountUsdt  Decimal? @db.Decimal(18, 6)
+  maxAmountUsdt  Decimal? @db.Decimal(18, 6)
+  warningText    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Order {
+  id                   String       @id @default(cuid())
+  orderNo              String       @unique
+  userId               String?
+  productId            String
+  skuId                String
+  productSnapshot      Json
+  skuSnapshot          Json
+  telegramUsername     String
+  email                String
+  amountUsdt           Decimal      @db.Decimal(18, 6)
+  fiatCurrency         String
+  fiatAmountSnapshot   Decimal      @db.Decimal(18, 6)
+  exchangeRateSnapshot Decimal      @db.Decimal(18, 6)
+  paymentCurrency      String       @default("USDT")
+  paymentNetwork       String
+  paymentAddress       String
+  txHash               String?      @unique
+  status               OrderStatus  @default(pending_payment)
+  expiresAt            DateTime
+  paidAt               DateTime?
+  deliveredAt          DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  user                 User?        @relation(fields: [userId], references: [id])
+  sku                  ProductSku   @relation(fields: [skuId], references: [id])
+  deliveries           DeliveryRecord[]
+}
+
+model InventoryItem {
+  id             String          @id @default(cuid())
+  skuId          String
+  encryptedValue String
+  maskedValue    String
+  status         InventoryStatus @default(available)
+  assignedOrderId String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sku            ProductSku      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryRecord {
+  id            String       @id @default(cuid())
+  orderId       String
+  method        DeliveryType
+  operator      String?
+  channel       Json
+  maskedContent String
+  provider      String?
+  status        String       @default("sent")
+  failureReason String?
+  createdAt     DateTime     @default(now())
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorRole String
+  action    String
+  target    String
+  targetId  String?
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+enum DeliveryType {
+  auto
+  manual
+  mixed
+}
+
+enum ProductStatus {
+  active
+  hidden
+  sold_out
+}
+
+enum StockType {
+  unlimited
+  limited
+}
+
+enum StockStatus {
+  in_stock
+  low_stock
+  sold_out
+}
+
+enum InventoryStatus {
+  available
+  reserved
+  delivered
+  disabled
+}
+
+enum OrderStatus {
+  created
+  pending_payment
+  payment_confirming
+  paid
+  delivering
+  completed
+  expired
+  failed
+  refunding
+  refunded
+}
