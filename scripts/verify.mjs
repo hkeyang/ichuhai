@@ -13,11 +13,12 @@ const runbook = readFileSync('RUNBOOK.md', 'utf8');
 const smoke = readFileSync('scripts/smoke.mjs', 'utf8');
 const audit = readFileSync('COMPLETION_AUDIT.md', 'utf8');
 const visualAuditScript = readFileSync('scripts/visual-audit.mjs', 'utf8');
+const oldBrandPattern = new RegExp(['Glass', 'Future'].join(''));
 
 const checks = [
   ['app root', html.includes('id="app"')],
   ['hash routes', js.includes("routes =") && js.includes("'/checkout'") && js.includes("'/admin'")],
-  ['next architecture', readFileSync('next.config.mjs', 'utf8').includes('nextConfig') && readFileSync('src/app/page.tsx', 'utf8').includes('GlassFuture') === false],
+  ['next architecture', readFileSync('next.config.mjs', 'utf8').includes('nextConfig') && oldBrandPattern.test(readFileSync('src/app/page.tsx', 'utf8')) === false],
   ['prisma schema', readFileSync('prisma/schema.prisma', 'utf8').includes('model Order') && readFileSync('prisma/schema.prisma', 'utf8').includes('model AuditLog')],
   ['products and skus', js.includes('optionGroups') && js.includes('skus')],
   ['order creation', js.includes('createOrder')],

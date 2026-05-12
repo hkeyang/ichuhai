@@ -18,6 +18,7 @@ const mime = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
+  '.ico': 'image/x-icon',
   '.json': 'application/json; charset=utf-8'
 };
 
@@ -569,7 +570,11 @@ async function api(req, res, url) {
 
 function staticFile(req, res, url) {
   const clean = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
-  const file = clean === '/' ? join(ROOT, 'index.html') : join(ROOT, clean);
+  const publicFile = ['/assets/', '/favicon.ico', '/apple-touch-icon.png', '/android-chrome-192x192.png', '/android-chrome-512x512.png']
+    .some((prefix) => clean === prefix || clean.startsWith(prefix))
+    ? join(ROOT, 'public', clean)
+    : null;
+  const file = publicFile || (clean === '/' ? join(ROOT, 'index.html') : join(ROOT, clean));
   if (!file.startsWith(ROOT)) {
     res.writeHead(403);
     return res.end('Forbidden');
@@ -590,5 +595,5 @@ createServer(async (req, res) => {
     return json(res, 500, { error: 'internal server error' });
   }
 }).listen(PORT, () => {
-  console.log(`GlassFuture Market running at http://localhost:${PORT}`);
+  console.log(`ichuhai running at http://localhost:${PORT}`);
 });

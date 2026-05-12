@@ -2,8 +2,12 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata = {
-  title: 'GlassFuture Market',
-  description: 'Virtual digital goods marketplace'
+  title: 'ichuhai',
+  description: 'Digital products, instant delivery, secure crypto payment',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png'
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

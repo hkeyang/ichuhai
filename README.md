@@ -1,6 +1,6 @@
-GlassFuture Market 官网技术开发文档 v1.0
+ichuhai 官网技术开发文档 v1.0
 1. 项目定位
-GlassFuture Market 是一个面向全球用户的虚拟数字商品商城，主要销售 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品。
+ichuhai 是一个面向全球用户的虚拟数字商品商城，主要销售 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品。
 核心目标：
 
 
@@ -59,7 +59,7 @@ MVP 阶段可以保留人工兜底能力：即使开启自动监听，也允许�
 内容包括：
 
 
-Logo：GlassFuture Market
+Logo：ichuhai
 
 
 导航：

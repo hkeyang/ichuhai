@@ -16,6 +16,64 @@ const networks = [
   { code: 'BASE', displayName: 'BASE', tokenStandard: 'ERC20', icon: '●', recommended: false, enabled: true, warning: '请确认钱包支持 BASE 网络。' }
 ];
 
+const ASSETS = {
+  logo: '/assets/brand/logo/',
+  nav: '/assets/icons/brand-navigation/',
+  trust: '/assets/icons/trust-selling-points/',
+  payment: '/assets/icons/payment-crypto/',
+  category: '/assets/icons/category/',
+  product: '/assets/icons/product/'
+};
+
+const PRODUCT_ICONS = {
+  discord: 'E01_discord_nitro.png',
+  spotify: 'E02_spotify_premium.png',
+  youtube: 'E03_youtube_premium.png',
+  steam: 'E04_steam_wallet.png',
+  office: 'E05_microsoft_365.png',
+  telegram: 'E06_telegram_premium.png',
+  netflix: 'E07_netflix.png',
+  apple: 'E08_apple_gift_card.png',
+  google: 'E09_google_play.png',
+  xbox: 'E10_xbox_gift_card.png',
+  playstation: 'E11_playstation_gift_card.png'
+};
+
+const CATEGORY_ICONS = {
+  '全部': 'D01_all.png',
+  '社交': 'D02_social.png',
+  '音乐': 'D03_music.png',
+  '视频': 'D04_video.png',
+  '游戏': 'D05_gaming.png',
+  '软件': 'D06_software.png',
+  '礼品卡': 'D07_gift_card.png',
+  '更多': 'D08_more.png'
+};
+
+function assetImg(src, alt, className) {
+  return `<img class="${className}" src="${src}" alt="${alt}" loading="lazy" />`;
+}
+
+function navIcon(file, alt) {
+  return assetImg(`${ASSETS.nav}${file}`, alt, 'nav-icon');
+}
+
+function featureIcon(file, alt) {
+  return assetImg(`${ASSETS.trust}${file}`, alt, 'feature-icon');
+}
+
+function paymentIcon(file, alt, className = 'payment-icon') {
+  return assetImg(`${ASSETS.payment}${file}`, alt, className);
+}
+
+function categoryIcon(label) {
+  return assetImg(`${ASSETS.category}${CATEGORY_ICONS[label] || CATEGORY_ICONS['更多']}`, `${label}分类`, 'category-icon');
+}
+
+function statusIcon(file, alt) {
+  return assetImg(`${ASSETS.payment}${file}`, alt, 'status-icon-large');
+}
+
 const products = [
   {
     id: 'discord-nitro',
@@ -340,8 +398,8 @@ function renderTelegramWidget() {
 }
 
 function mockTelegramLogin() {
-  state.user = { id: 'user_001', username: 'glass_user', defaultCurrency: state.fiatCurrency };
-  state.telegramUsername = '@glass_user';
+  state.user = { id: 'user_001', username: 'ichuhai_user', defaultCurrency: state.fiatCurrency };
+  state.telegramUsername = '@ichuhai_user';
   state.telegramPanelOpen = false;
   persist();
   notify('Telegram 模拟登录成功');
@@ -349,18 +407,12 @@ function mockTelegramLogin() {
 }
 
 function logo() {
-  return `<a class="brand" href="#/"><span class="brand-mark">◇</span><span>GlassFuture Market</span></a>`;
+  return `<a class="brand" href="#/" aria-label="ichuhai 首页"><img class="logo-horizontal" src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>`;
 }
 
 function icon(type) {
-  const map = {
-    discord: '<span class="product-icon discord">☯</span>',
-    spotify: '<span class="product-icon spotify">♪</span>',
-    youtube: '<span class="product-icon youtube">▶</span>',
-    steam: '<span class="product-icon steam">◒</span>',
-    office: '<span class="product-icon office">▣</span>'
-  };
-  return map[type] || '<span class="product-icon">◇</span>';
+  const file = PRODUCT_ICONS[type] || 'E12_placeholder_blank.png';
+  return assetImg(`${ASSETS.product}${file}`, `${type || 'ichuhai'} 商品图标`, 'product-icon');
 }
 
 function header() {
@@ -368,18 +420,18 @@ function header() {
     <header class="topbar">
       ${logo()}
       <nav class="nav">
-        <a href="#/products">▧ 商品</a>
-        <a href="#/faq">◔ FAQ</a>
-        <a href="#/orders/lookup">▤ 订单查询</a>
-        <a href="#/admin">▦ 后台</a>
+        <a href="#/products">${navIcon('A02_products.png', '商品')} 商品</a>
+        <a href="#/faq">${navIcon('A03_faq_help.png', 'FAQ')} FAQ</a>
+        <a href="#/orders/lookup">${navIcon('A04_orders_lookup.png', '订单查询')} 订单查询</a>
+        <a href="#/admin">${navIcon('A05_admin_dashboard.png', '后台')} 后台</a>
       </nav>
       <div class="top-actions">
-        <button class="pill" data-action="telegramLogin">${state.user ? '@' + state.user.username : 'Telegram 登录'}</button>
+        <button class="pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}${state.user ? '@' + state.user.username : 'Telegram 登录'}</button>
         <div class="currency">
-          <button class="pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency}⌄</button>
+          <button class="pill" data-action="toggleCurrency">${navIcon('A08_language_currency.png', '语言货币')} ${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency}⌄</button>
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
-        <a class="pill cart" href="#/checkout">🛒 购物车（0）</a>
+        <a class="pill cart" href="#/checkout">${navIcon('A06_shopping_cart.png', '购物车')} 购物车（0）</a>
       </div>
     </header>
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
@@ -425,12 +477,12 @@ function home() {
       <div class="home-main">
         <section class="hero">
           <div>
-            <h1>未来已来，<span>虚拟由你定义</span></h1>
-            <p>精选高品质数字商品，即刻拥有，安全便捷。</p>
+            <h1>全球数字商品，<span>一站式秒发</span></h1>
+            <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
             <div class="hero-tags">
-              <span>⚡ <b>即时发货</b><small>秒级交付</small></span>
-              <span>🛡 <b>安全支付</b><small>加密保障</small></span>
-              <span>🎧 <b>7×24支持</b><small>全时在线</small></span>
+              <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
+              <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
+              <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
             </div>
           </div>
         </section>
@@ -463,8 +515,8 @@ function productBrowser(full = false) {
   return `
     <section class="glass panel product-browser">
       <div class="tabs">
-        ${categories.map((c) => `<button class="${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${c}</button>`).join('')}
-        <label class="search">⌕ <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称" /></label>
+        ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${categoryIcon(c)}${c}</button>`).join('')}
+        <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称" /></label>
       </div>
       <div class="product-row">
         ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
@@ -530,9 +582,9 @@ function noticePanel(item) {
     <section class="glass panel notice">
       <h3>商品说明 <span>（${item.name}）</span></h3>
       <div class="notice-summary">
-        <span>⚡ 发货方式：${item.notice.deliverySummary}</span>
-        <span>🛡 保质期：${item.notice.warrantySummary}</span>
-        <span>ℹ 售后规则：${item.notice.refundSummary}</span>
+        <span>${featureIcon(item.notice.deliverySummary.includes('手动') ? 'B10_manual_processing.png' : item.notice.deliverySummary.includes('自动') ? 'B09_auto_delivery.png' : 'B01_lightning_instant_delivery.png', '发货方式')} 发货方式：${item.notice.deliverySummary}</span>
+        <span>${featureIcon('B08_warranty_guarantee.png', '质保')} 保质期：${item.notice.warrantySummary}</span>
+        <span>${featureIcon('B07_warning_triangle.png', '售后规则')} 售后规则：${item.notice.refundSummary}</span>
       </div>
       ${['usageGuide', 'warrantyDetail', 'attention'].map((key) => `<details><summary>${{ usageGuide: '使用说明', warrantyDetail: '保质期详情', attention: '注意事项' }[key]}</summary><p>${item.notice[key]}</p></details>`).join('')}
     </section>
@@ -543,7 +595,7 @@ function quickOrder(item, sku) {
   const disabled = !sku || sku.stockStatus === 'sold_out';
   return `
     <aside class="glass quick-order">
-      <div class="bolt">ϟ</div>
+      <div class="bolt">${featureIcon('B01_lightning_instant_delivery.png', '即时发货')}</div>
       <h2>快速下单</h2>
       <label>商品<select data-action="quickProduct">${products.map((p) => `<option value="${p.id}" ${p.id === item.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label>
       <label>规格 / 套餐<select data-action="quickSku">${item.skus.map((s) => `<option value="${s.id}" ${sku?.id === s.id ? 'selected' : ''}>${Object.values(s.optionValues).join(' · ')}</option>`).join('')}</select></label>
@@ -552,9 +604,9 @@ function quickOrder(item, sku) {
       <label>支付币种<input value="USDT 🔒" disabled /></label>
       <label>支付网络<select data-action="setNetwork">${networks.map((n) => `<option value="${n.code}" ${n.code === state.paymentNetwork ? 'selected' : ''}>${n.displayName} (${n.tokenStandard})</option>`).join('')}</select></label>
       <div class="amount"><span>订单金额</span><strong>${sku ? price(sku.priceUsdt) : '当前规格暂不可购买'}</strong></div>
-      <button class="primary" data-action="goCheckout" ${disabled ? 'disabled' : ''}>▣ 立即支付</button>
+      <button class="primary" data-action="goCheckout" ${disabled ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} 立即支付</button>
       <p class="secure">支付信息与订单通知将同时发送至 Telegram 与邮箱</p>
-      <footer>🛡 安全加密支付，保障您的隐私与资产安全</footer>
+      <footer>${featureIcon('B02_shield_secure_payment.png', '安全加密支付')} 安全加密支付，保障您的隐私与资产安全</footer>
     </aside>
   `;
 }
@@ -573,12 +625,12 @@ function detail(slug = 'discord-nitro') {
     <section class="detail-grid">
       <div class="glass product-visual">
         ${icon(item.icon)}
-        <div class="thumbs"><button>‹</button><span>${icon(item.icon)}</span><span>◇</span><span>◈</span><button>›</button></div>
+        <div class="thumbs"><button>‹</button><span>${icon(item.icon)}</span><span>${assetImg(`${ASSETS.logo}ichuhai-logo-icon-color.png`, 'ichuhai 图标', 'logo-icon')}</span><span>${featureIcon('B08_warranty_guarantee.png', '质保')}</span><button>›</button></div>
       </div>
       <div class="glass detail-panel">
         <h1>${item.name}</h1>
         <p>${item.short}</p>
-        <div class="mini-tags"><span>🛡 ${item.notice.deliverySummary}</span><span>✅ 库存充足</span><span>🎧 支持售后咨询</span></div>
+        <div class="mini-tags"><span>${featureIcon('B02_shield_secure_payment.png', '安全保障')} ${item.notice.deliverySummary}</span><span>${featureIcon('B06_check_circle_success.png', '库存充足')} 库存充足</span><span>${featureIcon('B03_headset_support.png', '售后咨询')} 支持售后咨询</span></div>
         <div class="detail-price">${sku ? price(sku.priceUsdt) : ''}</div>
         ${optionPanel(item)}
       </div>
@@ -611,8 +663,8 @@ function checkout() {
         </section>
         <section class="glass panel">
           <h3>支付信息</h3>
-          <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${n.icon} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
-          <p class="warning">⚠ 请确认转账网络与订单一致，勿跨链支付</p>
+          <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${paymentIcon(n.code === 'TRON' ? 'C02_tron_trc20.png' : 'C03_wallet.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
+          <p class="warning">${featureIcon('B07_warning_triangle.png', '警告')} 请确认转账网络与订单一致，勿跨链支付</p>
         </section>
         <section class="glass panel confirm-box">
           <h3>支付前确认</h3>
@@ -627,7 +679,7 @@ function checkout() {
         <div class="line"><span>优惠折扣</span><b class="green">- 0.00 USDT</b></div>
         <div class="line total"><span>应付金额</span>${price(sku.priceUsdt)}</div>
         <label class="agree"><input type="checkbox" id="agree" /> 我已阅读并同意 <a>购买须知</a> 与 <a>售后规则</a></label>
-        <button class="primary" data-action="createOrder">▣ 确认并支付</button>
+        <button class="primary" data-action="createOrder">${paymentIcon('C01_usdt.png', 'USDT')} 确认并支付</button>
         <p class="secure">支付通知与发货结果将同时发送至 Telegram 与邮箱</p>
       </aside>
     </section>
@@ -738,10 +790,10 @@ async function pay(id) {
   const order = (await loadServerOrder(id)) || findExactOrder(id);
   if (!order) return checkout();
   const walletModes = [
-    { key: 'browser', label: '浏览器钱包', note: '推荐', icon: '◐' },
-    { key: 'mobile', label: '移动钱包', note: 'APP 扫码打开', icon: '▯' },
-    { key: 'walletconnect', label: 'WalletConnect', note: '通用连接协议', icon: '〰' },
-    { key: 'tronlink', label: 'TronLink', note: '浏览器插件', icon: '△' }
+    { key: 'browser', label: '浏览器钱包', note: '推荐', icon: paymentIcon('C03_wallet.png', '浏览器钱包', 'wallet-icon') },
+    { key: 'mobile', label: '移动钱包', note: 'APP 扫码打开', icon: paymentIcon('C04_qr_code.png', '移动钱包扫码', 'wallet-icon') },
+    { key: 'walletconnect', label: 'WalletConnect', note: '通用连接协议', icon: paymentIcon('C06_address.png', 'WalletConnect', 'wallet-icon') },
+    { key: 'tronlink', label: 'TronLink', note: '浏览器插件', icon: paymentIcon('C02_tron_trc20.png', 'TronLink', 'wallet-icon') }
   ];
   shell(`
     <section class="pay-head">
@@ -757,22 +809,22 @@ async function pay(id) {
         <section class="glass panel wallets">
           <h3>打开钱包并转账 <small>系统将尝试自动唤起您选择的钱包</small></h3>
           <div class="wallet-row">${walletModes.map((wallet) => `<button class="${state.walletMode === wallet.key ? 'active' : ''}" data-action="setWalletMode" data-wallet="${wallet.key}"><span>${wallet.icon}</span><b>${wallet.label}</b><small>${wallet.note}</small></button>`).join('')}</div>
-          <button class="primary small" data-action="openWallet">↻ 重新打开钱包</button>
+          <button class="primary small" data-action="openWallet">${paymentIcon('C03_wallet.png', '钱包')} 重新打开钱包</button>
         </section>
-        <section class="glass panel tips"><h3>重要提示</h3><p>ℹ 请严格按订单金额支付，必须与订单金额一致，少付或多付将无法到账。</p><p>⚠ 请务必使用 ${networkText(order.paymentNetwork)} 网络转账，切勿使用其他链或交易所内部转账。</p><p>◴ 请在倒计时内完成支付，超时未支付订单将自动取消。</p></section>
+        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请严格按订单金额支付，必须与订单金额一致，少付或多付将无法到账。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请务必使用 ${networkText(order.paymentNetwork)} 网络转账，切勿使用其他链或交易所内部转账。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，超时未支付订单将自动取消。</p></section>
       </div>
       <div>
         <section class="glass panel qr-panel">
           <h3>请使用 ${networkText(order.paymentNetwork)} 向以下地址转账</h3>
-          <div class="qr-wrap"><div class="fake-qr"><span>◇</span></div><button data-action="copyPaymentInfo">↧ 保存二维码</button></div>
-          <div class="copy-box"><label>收款地址 <small>安全验证通过</small><input value="${order.paymentAddress}" readonly /></label><button data-copy="${order.paymentAddress}">复制地址</button></div>
-          <div class="copy-box"><label>支付金额<input value="${order.amountUsdt.toFixed(2)} USDT ≈ ${order.fiatAmount}" readonly /></label><button data-copy="${order.amountUsdt.toFixed(2)}">复制金额</button></div>
-          <div class="copy-box"><label>支付网络<input value="${networkText(order.paymentNetwork)}" readonly /></label><button data-copy="${networkText(order.paymentNetwork)}">复制网络</button></div>
-          <p>ⓘ 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
+          <div class="qr-wrap"><div class="fake-qr"><span>${paymentIcon('C04_qr_code.png', '二维码')}</span></div><button data-action="copyPaymentInfo">${paymentIcon('C04_qr_code.png', '二维码')} 保存二维码</button></div>
+          <div class="copy-box"><label>${paymentIcon('C06_address.png', '收款地址')} 收款地址 <small>安全验证通过</small><input value="${order.paymentAddress}" readonly /></label><button data-copy="${order.paymentAddress}">${paymentIcon('C05_copy.png', '复制')} 复制地址</button></div>
+          <div class="copy-box"><label>${paymentIcon('C01_usdt.png', 'USDT')} 支付金额<input value="${order.amountUsdt.toFixed(2)} USDT ≈ ${order.fiatAmount}" readonly /></label><button data-copy="${order.amountUsdt.toFixed(2)}">${paymentIcon('C05_copy.png', '复制')} 复制金额</button></div>
+          <div class="copy-box"><label>${paymentIcon('C02_tron_trc20.png', '支付网络')} 支付网络<input value="${networkText(order.paymentNetwork)}" readonly /></label><button data-copy="${networkText(order.paymentNetwork)}">${paymentIcon('C05_copy.png', '复制')} 复制网络</button></div>
+          <p>${featureIcon('B07_warning_triangle.png', '注意')} 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
         </section>
         <section class="glass panel pay-cta">
           <p>支付后通常需要 1–3 分钟链上确认，请勿重复支付</p>
-          <button class="primary" data-action="markPaid" data-id="${order.id}">✓ 我已完成支付</button>
+          <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
         </section>
         <section class="glass panel support"><b>遇到问题？联系客服或前往订单查询</b><a href="#/orders/lookup">订单查询</a></section>
       </div>
@@ -860,10 +912,10 @@ async function success(id) {
       ];
   shell(`
     <section class="success-hero glass">
-      <div class="success-orb">✓</div>
-      <div><h1>订单已完成，感谢您的购买！</h1><p>支付成功，订单已顺利完成，商品已发送至您的 Telegram 与邮箱。</p><div class="mini-tags"><span>Telegram 通知已发送</span><span>邮件通知已发送</span><span>安全可靠的自动发货系统</span></div></div>
+      <div class="success-orb">${statusIcon('C08_payment_success.png', '支付成功')}</div>
+      <div><h1>订单已完成，感谢您的购买！</h1><p>支付成功，订单已顺利完成，商品已发送至您的 Telegram 与邮箱。</p><div class="mini-tags"><span>${featureIcon('B06_check_circle_success.png', '通知已发送')} Telegram 通知已发送</span><span>${featureIcon('B06_check_circle_success.png', '邮件已发送')} 邮件通知已发送</span><span>${featureIcon('B09_auto_delivery.png', '自动发货')} 安全可靠的自动发货系统</span></div></div>
     </section>
-    <section class="glass completion">${events.map((e) => `<span><b>✓</b>${e.label}<small>${e.time}</small></span>`).join('')}</section>
+    <section class="glass completion">${events.map((e) => `<span><b>${featureIcon('B06_check_circle_success.png', '完成')}</b>${e.label}<small>${e.time}</small></span>`).join('')}</section>
     <section class="success-grid">
       <section class="glass panel">
         <h3>订单信息</h3>

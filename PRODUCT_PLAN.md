@@ -1,8 +1,8 @@
-# GlassFuture Market 产品完整规划
+# ichuhai 产品完整规划
 
 ## 1. 产品目标
 
-GlassFuture Market 是一个虚拟数字商品商城，面向全球用户销售 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品。产品核心目标是让用户快速选择商品、确认规格、使用 USDT 支付，并在链上确认后获得自动或人工发货结果。
+ichuhai 是一个虚拟数字商品商城，面向全球用户销售 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品。产品核心目标是让用户快速选择商品、确认规格、使用 USDT 支付，并在链上确认后获得自动或人工发货结果。
 
 ## 2. 本地交付范围
 

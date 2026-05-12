@@ -51,7 +51,7 @@ for (const page of pages) {
   });
 }
 
-const report = `# GlassFuture Market 视觉逐页验收
+const report = `# ichuhai 视觉逐页验收
 
 生成时间：${new Date().toISOString()}
 
