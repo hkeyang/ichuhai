@@ -72,7 +72,15 @@ const CATEGORY_ICON_KEYS = {
 const GUARANTEE_ITEMS = [
   { icon: 'B02_shield_secure_payment.png', title: '安全可靠', desc: '资金加密托管，交易安全有保障' },
   { icon: 'B01_lightning_instant_delivery.png', title: '极速秒发', desc: '自动化系统，秒级交付到手' },
-  { icon: 'B03_headset_support.png', title: '专业服务', desc: '7×24 小时在线客服支持' }
+  { icon: 'B03_headset_support.png', title: '专业服务', desc: '7×24 小时在线客服支持' },
+  { icon: 'B06_check_circle_success.png', title: '资深团队', desc: '多年行业经验，值得信赖' }
+];
+
+const HOME_FLOW_STEPS = [
+  { icon: 'B02_shield_secure_payment.png', title: '1 选择商品', desc: '浏览并选择所需商品', source: 'trust' },
+  { icon: 'A07_user_login.png', title: '2 登录绑定', desc: 'Telegram 登录更快捷', source: 'nav' },
+  { icon: 'C08_payment_success.png', title: '3 完成支付', desc: '支持 USDT 等多种方式', source: 'payment' },
+  { icon: 'B01_lightning_instant_delivery.png', title: '4 自动交付', desc: '系统秒发，安全可靠', source: 'trust' }
 ];
 
 const HOME_FAQS = [
@@ -257,7 +265,7 @@ const state = {
   walletMode: localStorage.getItem('walletMode') || 'browser',
   lookupResult: null,
   adminTab: 'dashboard',
-  adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [] },
+  adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [], ops: {} },
   config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } },
   telegramPanelOpen: false,
   noticeTab: 'basic',
@@ -519,13 +527,9 @@ function header() {
   return `
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
-      <nav class="nav">
-        <a href="#/products">${navIcon('A02_products.png', '商品')} 商品</a>
-        <a href="#/faq">${navIcon('A03_faq_help.png', 'FAQ')} FAQ</a>
-        <a href="#/orders/lookup">${navIcon('A04_orders_lookup.png', '订单查询')} 订单查询</a>
-      </nav>
       <div class="top-actions">
-        <button class="pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}${state.user ? '@' + state.user.username : isDetail ? '登录 / 注册' : 'Telegram 登录'}</button>
+        <a class="pill header-help ${isDetail ? 'detail-hide-action' : ''}" href="#/faq">${navIcon('A03_faq_help.png', '帮助中心')} 帮助中心</a>
+        <button class="pill telegram-pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}Telegram 登录</button>
         <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
           <button class="pill" data-action="toggleCurrency">${navIcon('A08_language_currency.png', '语言货币')} ${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency}⌄</button>
           ${state.currencyOpen ? currencyMenu() : ''}
@@ -588,7 +592,7 @@ function chevronIcon() {
 function home() {
   shell(`
     <section class="hero">
-      <div>
+      <div class="hero-copy">
         <h1>全球数字商品，<span>一站式秒发</span></h1>
         <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
         <div class="hero-tags">
@@ -596,9 +600,14 @@ function home() {
           <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
           <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
         </div>
+        <div class="hero-actions">
+          <a class="primary-button" href="#products">立即选购 →</a>
+          <a class="text-button" href="#why-us">为什么选择我们 →</a>
+        </div>
       </div>
     </section>
     ${productBrowser()}
+    ${purchaseFlow()}
     ${platformGuarantee()}
     ${homeFaq()}
     ${siteFooter()}
@@ -632,9 +641,12 @@ function productBrowser(full = false) {
   const categories = ['全部', '社交', '音乐', '视频', '游戏', '软件', '礼品卡', '更多'];
   const visible = visibleProducts(full);
   return `
-    <section class="product-section product-browser">
-      <div class="tabs">
-        ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${categoryIcon(c)}${c}</button>`).join('')}
+    <section id="products" class="product-section product-browser">
+      <div class="product-header">
+        <h2>热门商品</h2>
+        <div class="tabs">
+          ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${categoryIcon(c)}${c}</button>`).join('')}
+        </div>
         <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称" /></label>
       </div>
       ${full ? `<div class="filter-bar">
@@ -650,10 +662,29 @@ function productBrowser(full = false) {
   `;
 }
 
+function purchaseFlow() {
+  return `
+    <section class="purchase-flow">
+      <h2>购买流程</h2>
+      <div class="flow-steps">
+        ${HOME_FLOW_STEPS.map((item, index) => `
+          <div class="flow-step">
+            <span class="flow-icon">${item.source === 'nav' ? navIcon(item.icon, item.title) : item.source === 'payment' ? paymentIcon(item.icon, item.title) : featureIcon(item.icon, item.title)}</span>
+            <span>
+              <strong>${item.title}</strong>
+              <small>${item.desc}</small>
+            </span>
+          </div>
+          ${index < HOME_FLOW_STEPS.length - 1 ? '<span class="step-arrow">›</span>' : ''}
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function platformGuarantee() {
   return `
-    <section class="platform-guarantee">
-      <h2 class="guarantee-title">平台保障</h2>
+    <section id="why-us" class="platform-guarantee">
       <div class="guarantee-list">
         ${GUARANTEE_ITEMS.map((item) => `
           <div class="guarantee-item">
@@ -672,16 +703,7 @@ function platformGuarantee() {
 function homeFaq() {
   return `
     <section class="home-faq">
-      <div class="faq-left">
-        <h2>常见问题</h2>
-        <p>我们致力于为全球用户提供安全、快速、可靠的数字商品服务。</p>
-        <div class="faq-trust-list">
-          <div class="faq-trust-item">${lineIcon('shield-check', '安全交易保障', 'faq-trust-icon')}<div><b>安全交易保障</b><span>多重风控机制，守护每一笔交易</span></div></div>
-          <div class="faq-trust-item">${lineIcon('lightning', '自动化订单处理', 'faq-trust-icon')}<div><b>自动化订单处理</b><span>系统自动化，秒级完成交付</span></div></div>
-          <div class="faq-trust-item">${lineIcon('headset', '全天候客服支持', 'faq-trust-icon')}<div><b>全天候客服支持</b><span>专业团队，随时为您服务</span></div></div>
-        </div>
-        <a class="faq-contact" href="#/faq">还有问题？联系我们 <span>→</span></a>
-      </div>
+      <h2>常见问题</h2>
       <div class="faq-list">
         ${HOME_FAQS.map((faq, index) => `
           <button class="faq-item ${state.homeFaqActive === index ? 'active' : ''}" data-action="toggleHomeFaq" data-index="${index}" type="button">
@@ -694,6 +716,14 @@ function homeFaq() {
           </button>
         `).join('')}
       </div>
+      <div class="support-banner">
+        <span class="support-icon">${lineIcon('headset', '客服团队', 'support-headset')}</span>
+        <div>
+          <h3>还有问题？联系我们的客服团队</h3>
+          <p>7x24 小时在线响应，为您提供专业、高效的帮助</p>
+        </div>
+        <a class="support-button" href="#/faq">${navIcon('A07_user_login.png', '联系在线客服')} 联系在线客服</a>
+      </div>
     </section>
   `;
 }
@@ -701,9 +731,42 @@ function homeFaq() {
 function siteFooter() {
   return `
     <footer class="site-footer">
-      <span class="footer-brand">ichuhai</span>
-      <span class="footer-slogan">全球数字商品，一站式秒发</span>
-      <span class="footer-copyright">© 2026 ichuhai</span>
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" />
+          <p>全球数字商品，一站式秒发</p>
+          <p>安全 · 快速 · 可靠</p>
+        </div>
+        <div class="footer-column">
+          <h4>平台</h4>
+          <a href="#/products">商品中心</a>
+          <a href="#/faq">帮助中心</a>
+          <a href="#/">关于我们</a>
+        </div>
+        <div class="footer-column">
+          <h4>支持</h4>
+          <a href="#/faq">新手指南</a>
+          <a href="#/faq">常见问题</a>
+          <a href="#/faq">联系客服</a>
+        </div>
+        <div class="footer-column">
+          <h4>支付方式</h4>
+          <div class="payment-icons">
+            <span>USDT</span>
+            <span>TRX</span>
+            <span>◎</span>
+          </div>
+          <p>更多支付方式陆续接入中</p>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 ichuhai. 保留所有权利。</span>
+        <div>
+          <a href="#/">服务条款</a>
+          <a href="#/">隐私政策</a>
+          <a href="#/">免责声明</a>
+        </div>
+      </div>
     </footer>
   `;
 }
@@ -719,7 +782,8 @@ function card(item) {
       <b>${item.name}</b>
       <span class="product-spec">${spec}</span>
       ${price(sku.priceUsdt)}
-      <span class="product-badges"><small>${item.category}</small><em class="${deliveryClass}">${deliveryLabel(item.deliveryType)}</em><i class="stock ${stock}">${stockLabel(stock)}</i></span>
+      <span class="product-badges"><i class="stock ${stock}">${stockLabel(stock)}</i><em class="${deliveryClass}">⚡ 秒发</em></span>
+      <span class="buy-button">${navIcon('A06_shopping_cart.png', '购买')} 立即购买</span>
     </a>
   `;
 }
@@ -782,45 +846,14 @@ function optionPanel(item, purchaseMode = false) {
     `;
   }
   const sku = findSku(item, opts);
-  const network = networks.find((n) => n.code === state.paymentNetwork) || networks[0];
-  const disabled = !sku || (sku.stockStatus || sku.stock) === 'sold_out';
-  const buttonText = state.user ? `立即支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
+  const steps = item.optionGroups.map((group, idx) => renderPurchaseStep(item, group, idx + 1));
+  steps.push(renderPaymentStep(steps.length + 1));
   return `
-    <section class="purchase-card">
-      <div class="purchase-options-grid">
-        ${item.optionGroups.map((group, idx) => `
-          <div class="option-group">
-            <h4><span>${idx + 1}</span>${group.name}</h4>
-            <div class="choice-list ${group.displayType} ${group.key === 'duration' ? 'plans' : ''}">
-              ${group.options.map((option) => {
-                const next = { ...opts, [group.key]: option };
-                const possible = item.skus.some((sku) => {
-                  if (sku.optionValues[group.key] !== option) return false;
-                  return Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined);
-                });
-                const active = opts[group.key] === option;
-                const matching = item.skus.find((sku) => sku.optionValues[group.key] === option && Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined));
-                return `<button class="${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : '当前组合暂不可购买'}" ${possible ? '' : 'disabled'}>
-                  ${optionLabel(option)}
-                  ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
-                  ${group.displayType === 'cards' && matching ? `<small>${matching.priceUsdt.toFixed(2)} USDT<br/>≈ ${money(matching.priceUsdt)}</small>` : ''}
-                </button>`;
-              }).join('')}
-            </div>
-          </div>
-        `).join('')}
-        <div class="option-group payment-group">
-          <h4><span>${item.optionGroups.length + 1}</span>支付方式</h4>
-          <div class="payment-list">
-            <button class="active" type="button">${paymentIcon('C01_usdt.png', 'USDT')} USDT</button>
-            ${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}" type="button">${paymentIcon(n.code === 'TRON' ? 'C02_tron_trc20.png' : 'C03_wallet.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}
-          </div>
-        </div>
+    <section class="purchase-layout">
+      <div class="purchase-flow" style="--step-count:${steps.length}">
+        ${steps.join('')}
       </div>
-      <div class="login-order-note">${featureIcon('B04_lock_encryption.png', '订单绑定')} 订单数据将自动保存至「我的订单」，登录后可随时查看订单状态与发货信息。</div>
-      <button class="primary-pay-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} ${buttonText}</button>
-      <div class="security-note">${featureIcon('B02_shield_secure_payment.png', '安全支付')} 安全加密支付，保障您的隐私与资产安全</div>
-      <span class="sr-only">当前支付网络：${network.displayName} ${network.tokenStandard}</span>
+      ${orderPreview(item, sku)}
     </section>
   `;
 }
@@ -830,62 +863,172 @@ function optionLabel(value) {
   return `${flags[value] || ''} ${value}`;
 }
 
-function noticePanel(item) {
-  const sku = findSku(item);
-  const profile = productProfile(item, sku);
-  const tabs = [
-    { key: 'basic', label: `${featureIcon('B01_lightning_instant_delivery.png', '基础信息')} 基础信息` },
-    { key: 'delivery', label: `${featureIcon('B03_headset_support.png', '发货与售后')} 发货与售后` },
-    { key: 'limits', label: `${featureIcon('B08_warranty_guarantee.png', '使用限制')} 使用限制` },
-    { key: 'risk', label: `${featureIcon('B07_warning_triangle.png', '风险说明')} 风险说明` }
+const OPTION_META = {
+  region: {
+    Global: { icon: '🌐', sub: '全球通用' },
+    US: { icon: '🇺🇸', sub: '暂不支持' },
+    EU: { icon: '🇪🇺', sub: '暂不支持' },
+    JP: { icon: '🇯🇵', sub: '暂不支持' }
+  },
+  account: {
+    新号: { icon: '👥', sub: '全新账号' },
+    老号: { icon: '👤', sub: '已有账号' },
+    共享: { icon: '👥', sub: '库存不足' }
+  }
+};
+
+const PAYMENT_META = {
+  TRON: { title: 'USDT (TRC20)', sub: '安全 · 快速', icon: 'C01_usdt.png' },
+  ETH: { title: 'ETH (ERC20)', sub: '以太坊网络', icon: 'C03_wallet.png' },
+  BSC: { title: 'BSC (BEP20)', sub: '币安智能链', icon: 'C03_wallet.png' },
+  BASE: { title: 'BASE (ERC20)', sub: 'Base 网络', icon: 'C03_wallet.png' }
+};
+
+function paymentDisplay(code = state.paymentNetwork) {
+  const network = networks.find((n) => n.code === code) || networks[0];
+  return PAYMENT_META[network.code]?.title || `${network.displayName} (${network.tokenStandard})`;
+}
+
+function optionReason(item, group, option, possible) {
+  if (possible) return '';
+  const anySku = item.skus.some((sku) => sku.optionValues[group.key] === option);
+  const stockSku = item.skus.find((sku) => sku.optionValues[group.key] === option && (sku.stockStatus || sku.stock) === 'sold_out');
+  if (stockSku) return '库存不足';
+  if (!anySku) return group.key === 'account' && option === '共享' ? '库存不足' : '暂不支持';
+  return '当前不可用';
+}
+
+function renderOptionButton(item, group, option) {
+  const opts = selectedOptions(item);
+  const next = { ...opts, [group.key]: option };
+  const possible = item.skus.some((sku) => {
+    if (sku.optionValues[group.key] !== option) return false;
+    if ((sku.stockStatus || sku.stock) === 'sold_out') return false;
+    return Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined);
+  });
+  const active = opts[group.key] === option;
+  const matching = item.skus.find((sku) => sku.optionValues[group.key] === option && (sku.stockStatus || sku.stock) !== 'sold_out' && Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined));
+  const meta = OPTION_META[group.key]?.[option] || {};
+  const isPlan = group.displayType === 'cards' || group.key === 'duration' || group.key === 'plan' || group.key === 'amount';
+  const reason = optionReason(item, group, option, possible);
+  const className = [
+    'selection-card',
+    isPlan ? 'plan-card' : '',
+    active ? 'active' : '',
+    possible ? '' : 'disabled'
+  ].filter(Boolean).join(' ');
+
+  if (isPlan) {
+    return `<button class="${className}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : reason}" ${possible ? '' : 'disabled'}>
+      ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
+      <strong>${option}</strong>
+      <span class="card-price">${matching ? `${matching.priceUsdt.toFixed(2)} USDT` : '-- USDT'}</span>
+      <small>${matching ? `≈ ${money(matching.priceUsdt)}` : reason}</small>
+      ${active ? '<i class="checkmark">✓</i>' : ''}
+    </button>`;
+  }
+
+  return `<button class="${className}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : reason}" ${possible ? '' : 'disabled'}>
+    <span class="option-art">${meta.icon || optionLabel(option).trim().slice(0, 2)}</span>
+    <span class="option-copy"><strong>${option}</strong><small>${possible ? (meta.sub || '可选择') : reason}</small></span>
+    ${active ? '<i class="checkmark">✓</i>' : ''}
+  </button>`;
+}
+
+function renderPurchaseStep(item, group, index) {
+  const typeClass = group.key === 'duration' || group.key === 'plan' || group.key === 'amount' ? 'plans' : group.key;
+  return `<section class="purchase-step" style="--step-index:${index}">
+    <div class="step-marker"><span>${index}</span></div>
+    <div class="step-panel">
+      <h3>${group.name}</h3>
+      <div class="step-options ${typeClass}">
+        ${group.options.map((option) => renderOptionButton(item, group, option)).join('')}
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderPaymentStep(index) {
+  return `<section class="purchase-step" style="--step-index:${index}">
+    <div class="step-marker"><span>${index}</span></div>
+    <div class="step-panel">
+      <h3>支付方式</h3>
+      <div class="step-options payment-cards">
+        ${networks.map((n) => {
+          const meta = PAYMENT_META[n.code] || { title: networkText(n.code), sub: n.warning, icon: 'C03_wallet.png' };
+          const active = n.code === state.paymentNetwork;
+          return `<button class="selection-card payment-option ${active ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}" type="button">
+            ${n.recommended ? '<em>推荐</em>' : ''}
+            <span class="payment-art">${paymentIcon(meta.icon, meta.title)}</span>
+            <span class="option-copy"><strong>${meta.title}</strong><small>${meta.sub}</small></span>
+            ${active ? '<i class="checkmark">✓</i>' : ''}
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+  </section>`;
+}
+
+function orderPreview(item, sku) {
+  const opts = selectedOptions(item);
+  const disabled = !sku || (sku.stockStatus || sku.stock) === 'sold_out';
+  const buttonText = disabled ? '请先完成商品选择' : state.user ? `立即支付 ${sku.priceUsdt.toFixed(2)} USDT` : `登录后支付 ${sku.priceUsdt.toFixed(2)} USDT`;
+  const rows = [
+    ['商品', item.name],
+    ['地区', opts.region || '不适用'],
+    ['账号类型', opts.account || '不适用'],
+    ['套餐周期', opts.duration || opts.plan || opts.amount || '已选择'],
+    ['支付方式', paymentDisplay()]
   ];
-  const active = tabs.some((tab) => tab.key === state.noticeTab) ? state.noticeTab : 'basic';
-  const content = {
-    basic: [
-      ['B09_auto_delivery.png', '发货方式', item.notice.deliverySummary, '付款完成后，系统将自动为您开通服务。'],
-      ['B01_lightning_instant_delivery.png', '预计发货', profile.delivery, '高峰期可能略有延迟，请耐心等待。'],
-      ['B08_warranty_guarantee.png', '保质期', item.notice.warrantySummary, '自开通成功起算，按所选套餐持续生效。'],
-      ['shield-check', '售后规则', item.notice.refundSummary, '虚拟商品一经开通，无法退换，请谨慎购买。']
-    ],
-    delivery: [
-      ['B01_lightning_instant_delivery.png', '自动处理', '付款确认后系统自动处理订单', '通常 1-3 分钟完成发货，异常订单会进入人工队列。'],
-      ['B03_headset_support.png', '保期协助', '保期内失效可申请补发或人工协助', '请在订单详情提交售后工单并补充必要说明。'],
-      ['B06_check_circle_success.png', '发货记录', '订单状态可在「我的订单」查看', '发货进度、支付状态与售后记录会持续归档。'],
-      ['shield-check', '退款规则', '已发货且信息无误通常不支持无理由退款', '请在购买前确认规格、地区与支付网络。']
-    ],
-    limits: [
-      ['B02_shield_secure_payment.png', '地区限制', profile.limits, 'Global 地区通常适配范围更广，特殊地区请按说明使用。'],
-      ['B04_lock_encryption.png', '账号状态', '请确认账号状态正常后再购买', '新号请勿频繁切换设备、地区或 IP。'],
-      ['B08_warranty_guarantee.png', '套餐匹配', '不同账号类型可选套餐可能不同', '如组合不可选，请切换地区、账号类型或周期。'],
-      ['B03_headset_support.png', '使用协助', '遇到限制可提交售后工单', '客服会根据订单记录与发货状态协助排查。']
-    ],
-    risk: [
-      ['B07_warning_triangle.png', '不可撤销', '虚拟商品发货后不可撤销', '发货完成后无法回收权益或兑换码。'],
-      ['C10_countdown_timer.png', '异常支付', '异常支付会进入人工处理', '少付、多付、错链、超时付款都需要人工核验。'],
-      ['C02_tron_trc20.png', '网络确认', `当前支付网络：${networkText(state.paymentNetwork)}`, '转账前请确认钱包网络与订单完全一致。'],
-      ['B04_lock_encryption.png', '规格确认', '购买前请确认规格、地区和支付网络', '订单创建后金额与网络会被锁定。']
-    ]
-  }[active];
+  const trust = [
+    ['B04_lock_encryption.png', '安全加密', '全程 SSL 加密，保护您的隐私与交易安全'],
+    ['B01_lightning_instant_delivery.png', '自动发货', '付款成功后，系统自动处理您的订单'],
+    ['B08_warranty_guarantee.png', '售后保障', '30 天保障期，专业售后团队支持']
+  ];
+  return `<aside class="order-preview-card">
+    <h2>订单预览</h2>
+    <div class="preview-lines">${rows.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>
+    <div class="preview-total">
+      <span>应付金额</span>
+      <strong>${sku ? `${sku.priceUsdt.toFixed(2)} USDT` : '-- USDT'}</strong>
+      <small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small>
+    </div>
+    <div class="preview-trust">
+      ${trust.map(([iconFile, title, text]) => `<div>${featureIcon(iconFile, title)}<span><strong>${title}</strong><small>${text}</small></span></div>`).join('')}
+    </div>
+    <button class="primary-pay-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${featureIcon('B04_lock_encryption.png', '锁定支付')} ${buttonText}</button>
+    <p class="preview-save">${featureIcon('B02_shield_secure_payment.png', '自动保存')} 登录后订单信息将自动保存</p>
+  </aside>`;
+}
+
+function noticePanel(item) {
+  const isGift = item.category === '礼品卡' || item.name.includes('Wallet') || item.name.includes('Gift');
+  const content = isGift ? [
+    ['B09_auto_delivery.png', '自动发货', '付款完成后，系统将自动发送卡密或兑换指引。', 'notice-blue'],
+    ['C04_qr_code.png', '查看方式', '登录后可在订单详情查看完整兑换码与发货记录。', 'notice-purple'],
+    ['B01_lightning_instant_delivery.png', '使用说明', '请按商品区服与平台规则兑换，兑换前核对账号地区。', 'notice-green'],
+    ['B03_headset_support.png', '售后规则', '卡密发出后不支持退款，如无法兑换请先联系客服。', 'notice-yellow'],
+    ['B07_warning_triangle.png', '风险说明', '请勿转售或用于违规用途，错误区服可能无法兑换。', 'notice-red']
+  ] : [
+    ['B09_auto_delivery.png', '自动发货', '付款完成后，系统将自动为您开通服务，无需等待人工处理。', 'notice-blue'],
+    ['B01_lightning_instant_delivery.png', '1–3 分钟到账', '高峰期可能略有延迟，请耐心等待，通常 1–3 分钟内到账。', 'notice-purple'],
+    ['B08_warranty_guarantee.png', '30 天保障', '自开通成功起算，按所选套餐持续生效，享受完整服务期间。', 'notice-green'],
+    ['B03_headset_support.png', '售后规则', '开通后不支持退款，如遇问题请先联系客服，我们将尽力协助处理。', 'notice-yellow'],
+    ['B06_check_circle_success.png', '使用说明', '购买后登录 Discord 即可自动激活，可在用户设置中查看 Nitro 状态。', 'notice-purple'],
+    ['B07_warning_triangle.png', '风险说明', '请勿用于违法违规用途，账号共享或转售可能导致服务被撤销，风险自担。', 'notice-red']
+  ];
   return `
     <section class="notice-card">
-      <div class="notice-header"><h2>购买须知</h2><span>（${item.name}）</span></div>
-      <div class="notice-tabs">${tabs.map((tab) => `<button class="${active === tab.key ? 'active' : ''}" data-action="setNoticeTab" data-tab="${tab.key}" type="button">${tab.label}</button>`).join('')}</div>
+      <div class="notice-header"><div><h2>购买须知</h2><p>重要规则直接展示，购买前请快速确认。</p></div></div>
       <div class="notice-grid">
-        ${content.map(([iconFile, label, title, text]) => `
-          <div class="notice-item">
+        ${content.map(([iconFile, label, text, tone]) => `
+          <div class="notice-item ${tone}">
             <div class="notice-icon">${iconFile.startsWith('C') ? paymentIcon(iconFile, label) : iconFile === 'shield-check' ? lineIcon('shield-check', label, 'feature-icon support-rule-icon') : featureIcon(iconFile, label)}</div>
-            <h3>${label}</h3>
-            <strong>${title}</strong>
+            <strong>${label}</strong>
             <p>${text}</p>
           </div>
         `).join('')}
       </div>
-      <div class="account-binding-note">
-        <strong>${featureIcon('B02_shield_secure_payment.png', '订单绑定')} 订单信息自动绑定当前登录账号</strong>
-        <p>登录购买后，订单将自动绑定您的账号，便于查询与售后服务。</p>
-        <span class="binding-shield">${featureIcon('B02_shield_secure_payment.png', '订单绑定')}</span>
-      </div>
-      ${['usageGuide', 'warrantyDetail', 'attention'].map((key) => `<details><summary>${{ usageGuide: '使用说明', warrantyDetail: '保质期详情', attention: '注意事项' }[key]}</summary><p>${item.notice[key]}</p></details>`).join('')}
     </section>
   `;
 }
@@ -934,12 +1077,12 @@ function detail(slug = 'discord-nitro') {
       <div class="product-main-info">
         ${icon(item.icon)}
         <div>
-          <h1>${item.name}</h1>
+          <div class="hero-title-row"><h1>${item.name}</h1><span>${featureIcon('B06_check_circle_success.png', '官方正版')} 官方正版</span></div>
           <p>${item.short}</p>
-          <div class="product-tags"><span>${featureIcon('B09_auto_delivery.png', '自动发货')} ${item.notice.deliverySummary}</span><span>${featureIcon('B06_check_circle_success.png', '库存充足')} 库存充足</span><span>${featureIcon('B02_shield_secure_payment.png', '安全可靠')} 安全可靠</span></div>
+          <div class="product-tags"><span>${featureIcon('B06_check_circle_success.png', '自定义表情')} 自定义表情</span><span>${featureIcon('B09_auto_delivery.png', '高清直播')} 高清直播</span><span>${featureIcon('B02_shield_secure_payment.png', '大文件上传')} 大文件上传</span></div>
         </div>
       </div>
-      <div class="product-hero-art" aria-hidden="true"><span></span><i></i><b></b></div>
+      <div class="product-hero-art" aria-hidden="true"><span>${icon(item.icon)}</span><i></i><b></b><em></em></div>
       <div class="product-price">${sku ? price(sku.priceUsdt) : '<span>暂不可购买</span>'}</div>
     </section>
     ${optionPanel(item, true)}
@@ -958,7 +1101,7 @@ function detail(slug = 'discord-nitro') {
       <div class="sticky-product">${icon(item.icon)}<div><strong>${item.name}</strong><p>${Object.values(opts).join(' · ')}</p></div></div>
       <div class="sticky-meta">
         <div><span>套餐周期</span><strong>${opts.duration || opts.plan || opts.amount || '已选择'}</strong></div>
-        <div><span>支付方式</span><strong>${networkText(state.paymentNetwork)}</strong></div>
+        <div><span>支付方式</span><strong>${paymentDisplay()}</strong></div>
         <div><span>应付金额</span><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
       </div>
       <div class="sticky-mobile-price"><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
@@ -1411,35 +1554,80 @@ async function renderAdmin() {
   const tab = state.adminTab;
   shell(`
     <section class="admin-shell">
-      <aside class="glass admin-nav"><h2>后台管理</h2>${['dashboard|运营看板', 'products|商品与 SKU', 'orders|订单管理', 'payments|支付配置', 'delivery|发货队列', 'support|售后工单', 'notifications|通知记录', 'audit|审计日志'].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
+      <aside class="glass admin-nav"><h2>运营后台</h2>${[
+        'dashboard|运营看板',
+        'products|商品中心',
+        'inventory|库存中心',
+        'orders|订单中心',
+        'payments|支付中心',
+        'delivery|发货中心',
+        'support|售后中心',
+        'users|用户中心',
+        'content|内容中心',
+        'marketing|营销中心',
+        'notifications|通知中心',
+        'system|系统设置',
+        'audit|审计日志'
+      ].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
       <section class="glass admin-content">${adminContent(tab)}</section>
     </section>
   `, 'page');
+}
+
+function adminOps() {
+  return state.adminData.ops || {};
+}
+
+function adminActionForm(action, fields, button = '保存') {
+  return `<form class="admin-form" data-action="adminOps" data-ops="${action}">
+    ${fields.map((field) => {
+      const [name, label, type = 'text', placeholder = ''] = field;
+      if (type === 'textarea') return `<label>${label}<textarea name="${name}" placeholder="${placeholder}"></textarea></label>`;
+      if (type === 'checkbox') return `<label class="checkline"><input name="${name}" type="checkbox" /> ${label}</label>`;
+      return `<label>${label}<input name="${name}" type="${type}" placeholder="${placeholder}" /></label>`;
+    }).join('')}
+    <button class="primary small" type="submit">${button}</button>
+  </form>`;
+}
+
+function adminSkuRows(productList) {
+  return productList.flatMap((p) => (p.skus || []).map((sku) => ({ product: p, sku })));
 }
 
 function adminContent(tab) {
   const orderList = adminOrders();
   const productList = adminProducts();
   const networkList = adminNetworks();
+  const ops = adminOps();
+  const skuRows = adminSkuRows(productList);
   if (tab === 'dashboard') {
     const paid = orderList.filter((o) => ['paid', 'delivering', 'completed'].includes(o.status));
     const revenue = paid.reduce((sum, order) => sum + Number(order.amountUsdt || 0), 0);
     const failedDelivery = orderList.filter((o) => ['failed', 'delivering'].includes(o.status));
-    const lowStock = productList.flatMap((p) => (p.skus || []).filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock').map((sku) => `${p.name} ${Object.values(sku.optionValues || {}).join('/')}`));
+    const lowStock = productList.flatMap((p) => (p.skus || []).filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock' || Number(sku.stockQuantity || 0) <= Number(sku.warningStock || 5)).map((sku) => `${p.name} ${Object.values(sku.optionValues || {}).join('/')}`));
     return `<h1>运营看板</h1><div class="metric-grid">${[
       ['今日订单', orderList.length],
       ['成交金额', `${revenue.toFixed(2)} USDT`],
-      ['待处理', orderList.filter((o) => ['paid', 'delivering', 'payment_confirming'].includes(o.status)).length],
-      ['库存预警', lowStock.length]
-    ].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div><h2>处理队列</h2><div class="admin-table">${failedDelivery.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">处理发货</button><a href="#/order/${o.id}">查看</a></div>`).join('') || '暂无积压订单'}</div><h2>库存预警</h2><p class="warning">${lowStock.join('、') || '暂无库存预警'}</p>`;
+      ['待发货', orderList.filter((o) => ['paid', 'delivering'].includes(o.status)).length],
+      ['发货失败', failedDelivery.length],
+      ['售后待处理', (state.adminData.supportTickets || []).filter((t) => ['open', 'in_progress'].includes(t.status)).length],
+      ['库存预警', lowStock.length],
+      ['支付异常', (ops.paymentTransactions || []).filter((t) => !['matched', 'manual_confirm'].includes(t.matchStatus)).length],
+      ['通知失败', (state.adminData.notifications || []).filter((n) => n.status === 'failed').length]
+    ].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div><h2>待处理队列</h2><div class="admin-table">${failedDelivery.concat(orderList.filter((o) => o.status === 'paid')).slice(0, 8).map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">处理发货</button><a href="#/order/${o.id}">查看</a></div>`).join('') || '暂无积压订单'}</div><h2>库存预警</h2><p class="warning">${lowStock.join('、') || '暂无库存预警'}</p>`;
   }
-  if (tab === 'orders') return `<h1>订单管理</h1><div class="admin-table">${orderList.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminMarkPaid" data-id="${o.id}">手动标记已支付</button><button data-action="adminDeliver" data-id="${o.id}">手动补发</button><a href="#/order/${o.id}">详情</a></div>`).join('') || '暂无订单'}</div>`;
-  if (tab === 'payments') return `<h1>支付配置</h1><div class="admin-table">${networkList.map((n) => `<div><b>${n.displayName}</b><span>${n.tokenStandard}</span><span>${(n.enabled ?? n.isEnabled) ? '已启用' : '已关闭'} / ${(n.recommended ?? n.isRecommended) ? '推荐' : '普通'}</span><button data-action="adminToggleNetwork" data-code="${n.code}">${(n.enabled ?? n.isEnabled) ? '关闭网络' : '启用网络'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}">设为推荐</button></div>`).join('')}</div><p class="warning">自动监听校验：地址、网络、USDT 合约、到账金额、确认数、订单有效期与交易 Hash 唯一性。</p>`;
+  if (tab === 'orders') return `<h1>订单中心</h1><div class="admin-filters"><span>全部订单</span><span>待支付</span><span>已支付</span><span>待发货</span><span>异常订单</span><span>已取消</span></div><div class="admin-table">${orderList.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName} / ${Object.values(o.options || {}).join(' / ')}</span><span>${statusLabel(o.status)} · ${o.paymentNetwork}</span><button data-action="adminMarkPaid" data-id="${o.id}">手动确认支付</button><button data-action="adminDeliver" data-id="${o.id}">人工发货/补发</button><a href="#/order/${o.id}">详情</a></div>`).join('') || '暂无订单'}</div>`;
+  if (tab === 'payments') return `<h1>支付中心</h1><h2>支付网络配置</h2><div class="admin-table">${networkList.map((n) => `<div><b>${n.displayName}</b><span>${n.tokenStandard} · ${n.address || '未配置地址'}</span><span>${(n.enabled ?? n.isEnabled) ? '已启用' : '已关闭'} / ${(n.recommended ?? n.isRecommended) ? '推荐' : '普通'} / ${n.confirmations || 1} 确认</span><button data-action="adminToggleNetwork" data-code="${n.code}">${(n.enabled ?? n.isEnabled) ? '关闭网络' : '启用网络'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}">设为推荐</button></div>`).join('')}</div><h2>到账交易与异常</h2>${adminActionForm('paymentTransaction.create', [['txHash','交易 Hash'], ['network','网络','text','TRON'], ['toAddress','收款地址'], ['amount','到账金额'], ['orderNo','绑定订单号'], ['matchStatus','匹配状态','text','manual_confirm'], ['note','处理备注']], '记录到账交易')}<div class="admin-table">${(ops.paymentTransactions || []).map((t) => `<div><b>${t.txHash}</b><span>${t.network} / ${t.amount} ${t.token}</span><span>${t.matchStatus} / ${t.matchedOrderNo || '未绑定'}</span><span>${timeFrom(t.detectedAt || t.createdAt)}</span></div>`).join('') || '暂无监听交易'}</div>`;
   if (tab === 'delivery') return `<h1>发货队列</h1><div class="admin-table">${orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${deliveryLabel(o.deliveryType)} / ${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">补发/完成</button><a href="#/order/${o.id}">发货记录</a></div>`).join('') || '暂无待发货订单'}</div><h2>发货能力</h2><div class="admin-table">${productList.map((p) => `<div><b>${p.name}</b><span>${deliveryLabel(p.deliveryType)}</span><span>${(p.skus || []).length} 个 SKU / 卡密库存 / 人工队列</span><button data-action="selectProduct" data-id="${p.id}">配置库存来源</button><button data-action="adminTab" data-tab="audit">查看日志</button></div>`).join('')}</div>`;
-  if (tab === 'support') return `<h1>售后工单</h1><div class="admin-table">${(state.adminData.supportTickets.length ? state.adminData.supportTickets : JSON.parse(localStorage.getItem('gfTickets') || '[]')).map((t) => `<div><b>${t.ticketNo}</b><span>${t.type}</span><span>${t.status}</span><button data-action="adminDeliver" data-id="${t.orderId}">补发</button><a href="#/order/${t.orderId}">订单</a></div>`).join('') || '暂无售后工单'}</div>`;
-  if (tab === 'notifications') return `<h1>通知记录</h1><div class="admin-table">${state.adminData.notifications.map((n) => `<div><b>${n.type}</b><span>${n.channel} / ${n.provider}</span><span>${n.status}</span><span>${timeFrom(n.createdAt)}</span></div>`).join('') || '暂无通知记录'}</div>`;
+  if (tab === 'support') return `<h1>售后中心</h1><h2>客服回复模板</h2><div class="mini-tags"><span>请提供截图</span><span>我们已为您补发</span><span>请等待 1-3 分钟</span><span>发货后不支持退款</span></div><div class="admin-table">${(state.adminData.supportTickets.length ? state.adminData.supportTickets : JSON.parse(localStorage.getItem('gfTickets') || '[]')).map((t) => `<div><b>${t.ticketNo}</b><span>${t.type}</span><span>${t.status}</span><button data-action="adminDeliver" data-id="${t.orderId}">补发</button><button data-action="adminReplyTicket" data-id="${t.id}">记录回复</button><a href="#/order/${t.orderId}">订单</a></div>`).join('') || '暂无售后工单'}</div>`;
+  if (tab === 'notifications') return `<h1>通知中心</h1><h2>Telegram 通知配置与模板</h2>${adminActionForm('template.save', [['type','模板类型','text','stock_warning'], ['title','标题'], ['content','模板内容','textarea','支持 {{orderNo}} {{skuName}} 等变量'], ['enabled','启用','checkbox']], '保存通知模板')}<div class="admin-table">${(ops.notificationTemplates || []).map((n) => `<div><b>${n.type}</b><span>${n.title}</span><span>${n.enabled ? '启用' : '停用'}</span><span>${n.content}</span></div>`).join('')}</div><h2>发送记录</h2><div class="admin-table">${state.adminData.notifications.map((n) => `<div><b>${n.type}</b><span>${n.channel} / ${n.provider}</span><span>${n.status}</span><span>${timeFrom(n.createdAt)}</span></div>`).join('') || '暂无通知记录'}</div>`;
   if (tab === 'audit') return `<h1>审计日志</h1><div class="admin-table">${state.adminData.auditLogs.map((log) => `<div><b>${log.action}</b><span>${log.actorRole}:${escapeHtml(log.actorId)}</span><span>${log.target} / ${escapeHtml(log.targetId)}</span><span>${timeFrom(log.createdAt)}</span></div>`).join('') || '暂无审计日志'}</div>`;
-  return `<h1>商品与 SKU 配置</h1><div class="admin-table">${productList.map((p) => `<div><b>${p.name}</b><span>${p.category}</span><span>${(p.skus || []).length} 个 SKU / ${p.status === 'hidden' ? '已隐藏' : p.status === 'archived' ? '已归档' : '已上架'}</span><button data-action="selectProduct" data-id="${p.id}">编辑规格</button><button data-action="adminToggleProduct" data-id="${p.id}">${p.status === 'hidden' ? '上架' : '下架'}</button></div>`).join('')}</div>`;
+  if (tab === 'inventory') return `<h1>库存中心</h1><h2>批量导入库存</h2>${adminActionForm('inventory.import', [['skuId','SKU ID','text', skuRows[0]?.sku.id || ''], ['productId','商品 ID','text', skuRows[0]?.product.id || ''], ['type','库存类型','text','card / account / coupon'], ['items','库存内容','textarea','一行一个卡密、账号或券码']], '预览并导入')}<h2>库存项目</h2><div class="admin-table">${(ops.inventory || []).map((i) => `<div><b>${i.maskedValue}</b><span>${i.productName || i.productId || i.skuProductId} / ${i.skuId}</span><span>${i.type} · ${i.status}</span><span>${i.importBatchId || '手动'}</span></div>`).join('') || '暂无库存'}</div><h2>导入批次</h2><div class="admin-table">${(ops.inventoryBatches || []).map((b) => `<div><b>${b.id.slice(0, 8)}</b><span>${b.type} / ${b.skuId}</span><span>成功 ${b.successCount} · 重复 ${b.duplicateCount} · 失败 ${b.failedCount}</span><span>${timeFrom(b.createdAt)}</span></div>`).join('') || '暂无批次'}</div>`;
+  if (tab === 'users') return `<h1>用户中心</h1><h2>黑名单管理</h2>${adminActionForm('blacklist.create', [['kind','类型','text','telegram_id / wallet / ip / device'], ['value','拉黑值'], ['reason','原因'], ['effect','效果','text','block_order'], ['status','状态','text','active']], '加入黑名单')}<div class="admin-table">${(ops.blacklists || []).map((b) => `<div><b>${b.kind}</b><span>${b.value}</span><span>${b.reason}</span><span>${b.status}</span></div>`).join('') || '暂无黑名单'}</div><h2>Telegram 用户</h2><p class="warning">用户详情聚合订单记录、售后记录、支付记录、通知记录与风险备注。</p>`;
+  if (tab === 'content') return `<h1>内容中心</h1><h2>首页配置</h2>${adminActionForm('content.save', [['key','配置 Key','text','home'], ['value','JSON 内容','textarea','{"heroTitle":"标题","benefits":["即时发货"]}']], '保存内容')}<h2>FAQ 配置</h2>${adminActionForm('faq.create', [['question','问题'], ['answer','答案','textarea'], ['category','分类','text','支付类'], ['sortOrder','排序','number']], '新增 FAQ')}<div class="admin-table">${(ops.faqs || []).map((f) => `<div><b>${f.question}</b><span>${f.category}</span><span>${f.visible ? '显示' : '隐藏'}</span><span>${f.answer}</span></div>`).join('') || '暂无 FAQ'}</div><h2>购买须知模板</h2><div class="admin-table">${(ops.noteTemplates || []).map((n) => `<div><b>${n.name}</b><span>${n.productType}</span><span>${n.enabled ? '启用' : '停用'}</span><span>${n.content}</span></div>`).join('')}</div>`;
+  if (tab === 'marketing') return `<h1>营销中心</h1><h2>优惠码</h2>${adminActionForm('coupon.create', [['name','名称'], ['code','优惠码'], ['discountType','类型','text','amount / percent'], ['discountValue','优惠值'], ['minAmount','最低消费'], ['usageLimit','使用次数','number']], '创建优惠码')}<div class="admin-table">${(ops.coupons || []).map((c) => `<div><b>${c.code}</b><span>${c.name}</span><span>${c.discountType} ${c.discountValue}</span><span>${c.status}</span></div>`).join('') || '暂无优惠码'}</div><h2>商品标签</h2>${adminActionForm('tag.create', [['name','标签名'], ['color','颜色','text','#22c55e'], ['icon','图标','text','zap']], '新增标签')}<div class="admin-table">${(ops.tags || []).map((t) => `<div><b>${t.name}</b><span>${t.color}</span><span>${t.icon}</span><span>${t.enabled ? '启用' : '停用'}</span></div>`).join('')}</div>`;
+  if (tab === 'system') return `<h1>系统设置</h1><h2>管理员账号</h2><div class="admin-table">${(ops.adminUsers || []).map((u) => `<div><b>${u.username}</b><span>${u.email || '-'}</span><span>${u.role}</span><span>${u.status}</span></div>`).join('')}</div><h2>角色权限</h2><div class="admin-table">${(ops.roles || []).map((r) => `<div><b>${r.role}</b><span>${Array.isArray(r.permissionsJson) ? r.permissionsJson.join(', ') : r.permissionsJson}</span><span>${timeFrom(r.updatedAt)}</span></div>`).join('')}</div><p class="warning">高风险操作：修改价格、导入/查看库存、修改收款地址、手动确认支付、人工发货、补发、退款与权限变更均写入审计日志。</p>`;
+  return `<h1>商品中心</h1><h2>商品列表</h2><div class="admin-table">${productList.map((p) => `<div><b>${p.name}</b><span>${p.category || p.categoryId} / ${p.productType || 'subscription'}</span><span>${(p.skus || []).length} 个 SKU / ${p.status === 'hidden' ? '已隐藏' : p.status === 'archived' ? '已归档' : '已上架'}</span><button data-action="selectProduct" data-id="${p.id}">预览前台</button><button data-action="adminToggleProduct" data-id="${p.id}">${p.status === 'hidden' ? '上架' : '下架'}</button></div>`).join('')}</div><h2>商品分类</h2>${adminActionForm('category.create', [['name','分类名称'], ['key','分类 Key'], ['icon','图标','text','tag'], ['sortOrder','排序','number']], '新增分类')}<div class="admin-table">${(ops.categories || []).map((c) => `<div><b>${c.name}</b><span>${c.key}</span><span>${c.icon}</span><span>${c.visible ? '显示' : '隐藏'}</span></div>`).join('')}</div><h2>购买字段配置</h2>${adminActionForm('purchaseField.create', [['productId','商品 ID','text', productList[0]?.id || ''], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / quantity / text / email / number / textarea / switch'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global","subtitle":"全球通用"}]'], ['affectsSku','影响 SKU','checkbox']], '新增购买字段')}<div class="admin-table">${(ops.purchaseFields || []).map((f) => `<div><b>${f.fieldLabel}</b><span>${f.productId} / ${f.fieldKey}</span><span>${f.fieldType} · ${f.affectsSku ? '影响 SKU' : '不影响 SKU'}</span><span>${f.visible ? '启用' : '停用'}</span></div>`).join('') || '暂无动态字段'}</div><h2>SKU 管理</h2><div class="admin-table">${skuRows.map(({ product, sku }) => `<div><b>${sku.skuName || Object.values(sku.optionValues || {}).join(' / ') || sku.id}</b><span>${product.name}</span><span>${Number(sku.priceUsdt).toFixed(2)} USDT · ${deliveryLabel(sku.deliveryType)}</span><span>${sku.stockStatus || sku.stock}</span></div>`).join('')}</div>`;
 }
 
 function faq() {
@@ -1504,6 +1692,37 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
+function parseAdminFormValue(name, value, type) {
+  if (type === 'checkbox') return Boolean(value);
+  if (['sortOrder', 'minValue', 'maxValue', 'usageLimit', 'perUserLimit', 'confirmations'].includes(name)) return value === '' ? undefined : Number(value);
+  if (name === 'options') {
+    try { return JSON.parse(value || '[]'); } catch { return value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean); }
+  }
+  if (name === 'value') {
+    try { return JSON.parse(value || '{}'); } catch { return { text: value }; }
+  }
+  if (name === 'items') return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  return value;
+}
+
+async function submitAdminOps(form) {
+  const payload = { action: form.dataset.ops };
+  const data = new FormData(form);
+  for (const field of form.querySelectorAll('[name]')) {
+    payload[field.name] = parseAdminFormValue(field.name, data.get(field.name) || '', field.type);
+  }
+  const response = await adminFetch('/api/admin/ops', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return notify(result.error || '后台操作失败');
+  state.adminData.ops = result;
+  state.adminData.loaded = false;
+  notify('后台操作已完成并写入审计');
+  return renderAdmin();
+}
+
 function hydrateAdminProduct(serverProduct) {
   const local = products.find((item) => item.id === serverProduct.id || item.slug === serverProduct.slug);
   return {
@@ -1538,13 +1757,14 @@ async function loadAdminData(force = false) {
       ['deliveries', '/api/admin/deliveries'],
       ['notifications', '/api/admin/notifications'],
       ['supportTickets', '/api/admin/support-tickets'],
-      ['auditLogs', '/api/admin/audit-logs']
+      ['auditLogs', '/api/admin/audit-logs'],
+      ['ops', '/api/admin/ops']
     ].map(async ([key, url]) => {
       const response = await adminFetch(url);
-      if (!response.ok) return [key, []];
+      if (!response.ok) return [key, key === 'ops' ? {} : []];
       return [key, await response.json().catch(() => [])];
     }));
-    for (const [key, value] of entries) state.adminData[key] = Array.isArray(value) ? value : [];
+    for (const [key, value] of entries) state.adminData[key] = key === 'ops' ? (value || {}) : (Array.isArray(value) ? value : []);
     state.adminData.loaded = true;
     for (const network of state.adminData.paymentNetworks) {
       syncLocalNetwork(networks.find((item) => item.code === network.code), network);
@@ -1739,6 +1959,19 @@ document.addEventListener('click', async (event) => {
     notify('已写入手动补发记录');
     return renderAdmin();
   }
+  if (action === 'adminReplyTicket') {
+    const content = prompt('请输入客服回复或内部备注');
+    if (!content) return;
+    const response = await adminFetch('/api/admin/ops', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'ticket.reply', ticketId: el.dataset.id, content, status: 'in_progress' })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(result.error || '回复记录失败');
+    state.adminData.ops = result;
+    notify('售后回复已记录');
+    return renderAdmin();
+  }
   if (action === 'adminToggleProduct') {
     const item = adminProducts().find((p) => p.id === el.dataset.id);
     const nextStatus = item.status === 'hidden' ? 'active' : 'hidden';
@@ -1783,6 +2016,13 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'home') { location.hash = '#/'; }
   if (action === 'revealSecret') { document.querySelector('.secret').classList.add('revealed'); notify('完整交付内容已解锁'); }
+});
+
+document.addEventListener('submit', async (event) => {
+  const form = event.target.closest('[data-action="adminOps"]');
+  if (!form) return;
+  event.preventDefault();
+  return submitAdminOps(form);
 });
 
 document.addEventListener('change', (event) => {

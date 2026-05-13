@@ -188,10 +188,262 @@ export async function ensureDatabaseReady(db: D1Database): Promise<void> {
       for (let index = 0; index < statements.length; index += 20) {
         await db.batch(statements.slice(index, index + 20).map((statement) => db.prepare(statement)));
       }
+      await ensureOperationalSchema(db);
     })().catch((error) => {
       bootstrapPromise = null;
       throw error;
     });
   }
   await bootstrapPromise;
+}
+
+async function columnExists(db: D1Database, table: string, column: string): Promise<boolean> {
+  const result = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  return result.results.some((row) => row.name === column);
+}
+
+async function addColumn(db: D1Database, table: string, column: string, definition: string): Promise<void> {
+  if (!(await columnExists(db, table, column))) {
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
+}
+
+async function ensureOperationalSchema(db: D1Database): Promise<void> {
+  const operationalSql = `
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  icon TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  visible INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS product_tags (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#22c55e',
+  icon TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS purchase_fields (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id),
+  field_key TEXT NOT NULL,
+  field_label TEXT NOT NULL,
+  field_type TEXT NOT NULL DEFAULT 'select',
+  required INTEGER NOT NULL DEFAULT 1,
+  affects_sku INTEGER NOT NULL DEFAULT 0,
+  affects_price INTEGER NOT NULL DEFAULT 0,
+  affects_stock INTEGER NOT NULL DEFAULT 0,
+  show_in_summary INTEGER NOT NULL DEFAULT 1,
+  show_in_user_detail INTEGER NOT NULL DEFAULT 1,
+  show_in_admin_detail INTEGER NOT NULL DEFAULT 1,
+  placeholder TEXT,
+  help_text TEXT,
+  default_value TEXT,
+  options_json TEXT NOT NULL DEFAULT '[]',
+  min_value INTEGER,
+  max_value INTEGER,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  visible INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(product_id, field_key)
+);
+CREATE TABLE IF NOT EXISTS inventory_batches (
+  id TEXT PRIMARY KEY,
+  sku_id TEXT NOT NULL REFERENCES skus(id),
+  product_id TEXT,
+  type TEXT NOT NULL DEFAULT 'card',
+  total_count INTEGER NOT NULL DEFAULT 0,
+  success_count INTEGER NOT NULL DEFAULT 0,
+  duplicate_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  empty_count INTEGER NOT NULL DEFAULT 0,
+  operator_id TEXT NOT NULL DEFAULT 'admin',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS payment_transactions (
+  id TEXT PRIMARY KEY,
+  tx_hash TEXT NOT NULL UNIQUE,
+  network TEXT NOT NULL,
+  token TEXT NOT NULL DEFAULT 'USDT',
+  from_address TEXT,
+  to_address TEXT NOT NULL,
+  amount TEXT NOT NULL,
+  confirmations INTEGER NOT NULL DEFAULT 0,
+  matched_order_id TEXT,
+  matched_order_no TEXT,
+  match_status TEXT NOT NULL DEFAULT 'unmatched',
+  detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+  confirmed_at TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS ticket_messages (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL REFERENCES support_tickets(id),
+  author_type TEXT NOT NULL DEFAULT 'admin',
+  content TEXT NOT NULL,
+  internal INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS content_settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS faqs (
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '通用',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  default_open INTEGER NOT NULL DEFAULT 0,
+  visible INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS purchase_note_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  product_type TEXT NOT NULL DEFAULT 'subscription',
+  content TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS notification_templates (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS blacklists (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  effect TEXT NOT NULL DEFAULT 'block_order',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(kind, value)
+);
+CREATE TABLE IF NOT EXISTS coupons (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL UNIQUE,
+  discount_type TEXT NOT NULL DEFAULT 'amount',
+  discount_value TEXT NOT NULL,
+  min_amount TEXT,
+  usage_limit INTEGER,
+  per_user_limit INTEGER,
+  starts_at TEXT,
+  ends_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS admin_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  email TEXT,
+  role TEXT NOT NULL DEFAULT 'super_admin',
+  status TEXT NOT NULL DEFAULT 'active',
+  last_login_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role TEXT PRIMARY KEY,
+  permissions_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_purchase_fields_product ON purchase_fields(product_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(match_status);
+CREATE INDEX IF NOT EXISTS idx_blacklists_status ON blacklists(status);
+INSERT OR IGNORE INTO categories (id, name, key, icon, sort_order) VALUES
+  ('cat_social','社交','social','message-circle',10),
+  ('cat_music','音乐','music','music',20),
+  ('cat_video','视频','video','play',30),
+  ('cat_game','游戏','game','gamepad-2',40),
+  ('cat_software','软件','software','app-window',50),
+  ('cat_more','更多','more','more-horizontal',90);
+INSERT OR IGNORE INTO product_tags (id, name, color, icon, sort_order) VALUES
+  ('tag_auto','自动发货','#16a34a','zap',10),
+  ('tag_hot','热门','#ef4444','flame',20),
+  ('tag_new','新品','#2563eb','sparkles',30),
+  ('tag_low','低价','#f59e0b','badge-dollar-sign',40);
+INSERT OR IGNORE INTO content_settings (key, value_json) VALUES
+  ('home','{"heroTitle":"全球数字商品即时交付","heroSubtitle":"USDT 安全支付，自动发货与人工售后并行。","benefits":["即时发货","安全支付","7x24 支持"]}'),
+  ('platform保障','{"items":["库存加密保存","支付异常人工核验","关键操作审计"]}');
+INSERT OR IGNORE INTO notification_templates (id, type, title, content) VALUES
+  ('tpl_order_created','order_created','订单已创建','订单 {{orderNo}} 已创建，请在有效期内支付。'),
+  ('tpl_paid','payment_success','支付成功','订单 {{orderNo}} 已确认到账，系统正在发货。'),
+  ('tpl_delivered','delivery_success','发货成功','订单 {{orderNo}} 已发货：{{deliveryContent}}'),
+  ('tpl_stock','stock_warning','库存预警','{{skuName}} 可用库存低于预警值。');
+INSERT OR IGNORE INTO purchase_note_templates (id, name, product_type, content) VALUES
+  ('note_subscription','订阅类购买须知','subscription','自动发货 1-3 分钟到账；请确认账号地区与套餐周期；30 天保障按商品说明执行。'),
+  ('note_card','卡密类购买须知','card','付款后在订单详情查看卡密；卡密发出后请尽快兑换；库存异常会转人工处理。'),
+  ('note_account','账号类购买须知','account','账号密码自动发货；请及时修改密码并妥善保存；禁止转售共享。'),
+  ('note_recharge','充值类购买须知','recharge','请确认充值账号无误；通常 5-15 分钟完成；填错账号不支持退款。');
+INSERT OR IGNORE INTO admin_users (id, username, email, role, status) VALUES
+  ('admin_seed','admin','admin@example.com','super_admin','active');
+INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
+  ('super_admin','["*"]'),
+  ('operation','["product.view","product.edit","sku.edit","inventory.import","order.view"]'),
+  ('support','["order.view","ticket.reply","delivery.manual"]'),
+  ('finance','["payment.view","payment.confirm","refund.record"]'),
+  ('readonly','["*.view"]');
+`;
+  const statements = operationalSql.split(";").map((statement) => statement.trim()).filter(Boolean);
+  for (let index = 0; index < statements.length; index += 20) {
+    await db.batch(statements.slice(index, index + 20).map((statement) => db.prepare(statement)));
+  }
+
+  await addColumn(db, "products", "product_type", "TEXT NOT NULL DEFAULT 'subscription'");
+  await addColumn(db, "products", "subtitle", "TEXT");
+  await addColumn(db, "products", "description", "TEXT");
+  await addColumn(db, "products", "icon_url", "TEXT");
+  await addColumn(db, "products", "cover_url", "TEXT");
+  await addColumn(db, "products", "tags_json", "TEXT NOT NULL DEFAULT '[]'");
+  await addColumn(db, "products", "is_home_visible", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "products", "is_recommended", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "products", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "skus", "sku_name", "TEXT");
+  await addColumn(db, "skus", "price_cny", "TEXT");
+  await addColumn(db, "skus", "compare_price_usdt", "TEXT");
+  await addColumn(db, "skus", "cost_usdt", "TEXT");
+  await addColumn(db, "skus", "stock_type", "TEXT NOT NULL DEFAULT 'limited'");
+  await addColumn(db, "skus", "warning_stock", "INTEGER NOT NULL DEFAULT 5");
+  await addColumn(db, "skus", "min_quantity", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "skus", "max_quantity", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "skus", "disabled_reason", "TEXT");
+  await addColumn(db, "skus", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "inventory_items", "product_id", "TEXT");
+  await addColumn(db, "inventory_items", "type", "TEXT NOT NULL DEFAULT 'card'");
+  await addColumn(db, "inventory_items", "import_batch_id", "TEXT");
+  await addColumn(db, "inventory_items", "remark", "TEXT");
+  await addColumn(db, "inventory_items", "locked_at", "TEXT");
+  await addColumn(db, "inventory_items", "sold_at", "TEXT");
+  await addColumn(db, "orders", "quantity", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "orders", "payment_status", "TEXT NOT NULL DEFAULT 'unpaid'");
+  await addColumn(db, "orders", "delivery_status", "TEXT NOT NULL DEFAULT 'undelivered'");
+  await addColumn(db, "orders", "after_sale_status", "TEXT NOT NULL DEFAULT 'none'");
+  await addColumn(db, "orders", "user_input_json", "TEXT NOT NULL DEFAULT '{}'");
 }

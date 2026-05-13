@@ -5,7 +5,7 @@ export default function HomePage() {
     <main>
       <div id="app" />
       <div id="toast" className="toast" role="status" aria-live="polite" />
-      <Script src="/app.js?v=detail-restore-20260513c" type="module" strategy="afterInteractive" />
+      <Script src="/app.js?v=homepage-refresh-20260514a" type="module" strategy="afterInteractive" />
     </main>
   );
 }
