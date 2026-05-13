@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import type { OrderRow } from "@/lib/api/types";
@@ -16,6 +17,7 @@ export async function GET(
   try {
     const { id } = await params;
     const db = (env as CloudflareEnv).DB;
+    await ensureDatabaseReady(db);
 
     // 支持通过 id（UUID）或 orderNo 查询
     const order = await db

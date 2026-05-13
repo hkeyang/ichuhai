@@ -2,6 +2,7 @@
 // POST /api/admin/inventory/import — 导入库存项（需 admin token），AES-GCM 加密每个值
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     }
 
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
     const body = await parseBody<{ skuId?: unknown; items?: unknown }>(request);
 
     const skuId = String(body.skuId ?? "").trim();

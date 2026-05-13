@@ -2,6 +2,7 @@
 // POST /api/internal/orders/[id]/deliver — 内部自动发货（需 x-internal-token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { timingSafeEqual } from "@/lib/api/admin-session";
@@ -9,6 +10,7 @@ import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { sendDeliveryEmail } from "@/lib/api/mailer";
 import { decryptInventoryValue } from "@/lib/api/inventory-crypto";
+import { formatDelivery, formatOrder } from "@/lib/api/formatters";
 import type { OrderRow, DeliveryRow, InventoryItemRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -43,6 +45,7 @@ export async function POST(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     // 1. 查询订单，验证存在
     const order = await db
@@ -202,8 +205,8 @@ export async function POST(
     // 8. 返回 { order, delivery, notification }
     return jsonResponse(
       {
-        order: updatedOrder,
-        delivery,
+        order: updatedOrder ? formatOrder(updatedOrder) : null,
+        delivery: delivery ? formatDelivery(delivery) : null,
         notification: {
           id: notificationId,
           orderId: id,

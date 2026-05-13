@@ -2,11 +2,13 @@
 // PATCH /api/admin/payment-networks/[id] — 更新支付网络（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { cleanString } from "@/lib/api/validators";
+import { formatPaymentNetwork } from "@/lib/api/formatters";
 import type { PaymentNetworkRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -31,10 +33,11 @@ export async function PATCH(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     const existing = await db
-      .prepare("SELECT * FROM payment_networks WHERE id = ?")
-      .bind(id)
+      .prepare("SELECT * FROM payment_networks WHERE id = ? OR code = ?")
+      .bind(id, id)
       .first<PaymentNetworkRow>();
 
     if (!existing) throw new HttpError(404, "payment network not found");
@@ -85,19 +88,26 @@ export async function PATCH(
     if (fields.length === 0) throw new HttpError(422, "no fields to update");
 
     fields.push("updated_at = datetime('now')");
-    values.push(id);
+    values.push(existing.id);
 
     await db
       .prepare(`UPDATE payment_networks SET ${fields.join(", ")} WHERE id = ?`)
       .bind(...values)
       .run();
 
+    if (body.isRecommended) {
+      await db
+        .prepare("UPDATE payment_networks SET is_recommended = 0, updated_at = datetime('now') WHERE id <> ?")
+        .bind(existing.id)
+        .run();
+    }
+
     const updated = await db
       .prepare("SELECT * FROM payment_networks WHERE id = ?")
       .bind(id)
       .first<PaymentNetworkRow>();
 
-    return jsonResponse(updated, 200, request, cloudflareEnv);
+    return jsonResponse(updated ? formatPaymentNetwork(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

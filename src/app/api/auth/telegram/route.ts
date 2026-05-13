@@ -1,8 +1,9 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
-import { verifyTelegramLogin } from "@/lib/api/telegram-auth";
+import { normalizeTelegramUsername, verifyTelegramLogin } from "@/lib/api/telegram-auth";
 
 interface TelegramCallbackBody {
   id?: string | number;
@@ -68,8 +69,11 @@ export async function POST(request: Request) {
 
     // UPSERT users 表（通过 telegram_id 匹配）
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
     const telegramId = telegramData.id;
-    const telegramUsername = telegramData.username ?? telegramData.first_name ?? `user_${telegramId}`;
+    const telegramUsername = normalizeTelegramUsername(
+      telegramData.username ?? telegramData.first_name ?? `user_${telegramId}`
+    );
 
     const existingUser = await db
       .prepare("SELECT id, telegram_id, telegram_username, default_currency FROM users WHERE telegram_id = ?")

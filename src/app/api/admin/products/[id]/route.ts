@@ -2,11 +2,13 @@
 // PATCH /api/admin/products/[id] — 更新商品（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { cleanString, cleanEnum } from "@/lib/api/validators";
+import { formatProduct } from "@/lib/api/formatters";
 import type { ProductRow } from "@/lib/api/types";
 
 const PRODUCT_STATUSES = new Set(["active", "hidden", "archived"]);
@@ -34,6 +36,7 @@ export async function PATCH(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     const existing = await db
       .prepare("SELECT * FROM products WHERE id = ?")
@@ -94,7 +97,7 @@ export async function PATCH(
       .bind(id)
       .first<ProductRow>();
 
-    return jsonResponse(updated, 200, request, cloudflareEnv);
+    return jsonResponse(updated ? formatProduct(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

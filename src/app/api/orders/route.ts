@@ -2,6 +2,7 @@
 // POST /api/orders — 用户下单
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
   const db = cloudflareEnv.DB;
 
   try {
+    await ensureDatabaseReady(db);
     // 1. 解析请求体
     const body = await parseBody<OrderBody>(request);
 

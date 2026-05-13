@@ -2,11 +2,13 @@
 // POST /api/admin/skus/batch-generate — 批量生成 SKU（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { cleanPrice, cleanEnum, cleanOptionGroups } from "@/lib/api/validators";
+import { formatSku } from "@/lib/api/formatters";
 import type { ProductRow, SkuRow } from "@/lib/api/types";
 
 const DELIVERY_TYPES = new Set(["auto", "manual", "mixed"]);
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
     }
 
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
     const body = await parseBody<{
       productId?: unknown;
       optionGroups?: unknown;
@@ -87,7 +90,7 @@ export async function POST(request: Request) {
       if (sku) skus.push(sku);
     }
 
-    return jsonResponse({ generated: skus.length, skus }, 201, request, cloudflareEnv);
+    return jsonResponse({ generated: skus.length, created: skus.length, skus: skus.map(formatSku) }, 201, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

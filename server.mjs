@@ -1,5 +1,5 @@
 /**
- * @deprecated 此文件已被 Next.js Route Handlers（src/app/api/**/route.ts）替代。
+ * @deprecated 此文件已被 Next.js Route Handlers（src/app/api routes）替代。
  * 迁移至 Cloudflare Workers + D1 后，所有 API 逻辑均通过 Route Handlers 提供服务。
  * 本文件仅作为本地开发回退和迁移参考保留，请勿在生产环境中使用。
  * 参见：.kiro/specs/cloudflare-backend-migration/design.md
@@ -77,6 +77,19 @@ function securityHeaders(req = {}) {
     headers['access-control-allow-headers'] = 'content-type,x-admin-token,x-internal-token';
   }
   return headers;
+}
+
+function normalizeTelegramBotUsername(value = '') {
+  return String(value)
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?t\.me\//i, '')
+    .replace(/^@+/, '')
+    .split(/[/?#]/)[0]
+    .trim();
+}
+
+function normalizeTelegramUsername(value = '') {
+  return String(value).trim().replace(/^@+/, '');
 }
 
 function staticSecurityHeaders(target) {
@@ -350,8 +363,8 @@ async function api(req, res, url) {
 
   if (req.method === 'GET' && path === '/api/config') return json(req, res, 200, {
     telegram: {
-      botUsername: TELEGRAM_BOT_USERNAME,
-      loginMode: TELEGRAM_BOT_USERNAME ? 'widget' : 'mock'
+      botUsername: normalizeTelegramBotUsername(TELEGRAM_BOT_USERNAME),
+      loginMode: normalizeTelegramBotUsername(TELEGRAM_BOT_USERNAME) ? 'widget' : 'mock'
     },
     admin: {
       authMode: process.env.NODE_ENV === 'production' ? 'token' : 'dev-open'
@@ -536,7 +549,7 @@ async function api(req, res, url) {
     const input = await body(req);
     const verified = verifyTelegramLogin(input);
     if (!verified.ok && process.env.NODE_ENV === 'production') return json(req, res, 401, { error: verified.reason });
-    const user = { id: `user_${input.id || randomUUID()}`, telegramId: String(input.id || 'dev'), telegramUsername: input.username || 'glass_user', defaultCurrency: 'CNY', lastLoginAt: new Date().toISOString() };
+    const user = { id: `user_${input.id || randomUUID()}`, telegramId: String(input.id || 'dev'), telegramUsername: normalizeTelegramUsername(input.username || 'glass_user'), defaultCurrency: 'CNY', lastLoginAt: new Date().toISOString() };
     data.users = data.users.filter((item) => item.telegramId !== user.telegramId).concat(user);
     await save(data);
     return json(req, res, 200, { token: `dev.${Buffer.from(user.id).toString('base64')}.token`, user, verified: verified.ok });

@@ -72,6 +72,19 @@ export async function verifyTelegramLogin(
   return { ok: true };
 }
 
+export function normalizeTelegramBotUsername(value = ""): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?t\.me\//i, "")
+    .replace(/^@+/, "")
+    .split(/[/?#]/)[0]
+    .trim();
+}
+
+export function normalizeTelegramUsername(value = ""): string {
+  return value.trim().replace(/^@+/, "");
+}
+
 /**
  * 对两个字符串做 timing-safe 比较，防止时序攻击。
  * 长度不同时直接返回 false（但仍执行固定长度的循环以避免泄露长度信息）。

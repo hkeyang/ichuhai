@@ -2,6 +2,7 @@
 // POST /api/orders/:id/tickets — 创建售后工单
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
@@ -38,6 +39,7 @@ export async function POST(
   const { env } = await getCloudflareContext();
   const cloudflareEnv = env as CloudflareEnv;
   const db = cloudflareEnv.DB;
+  await ensureDatabaseReady(db);
 
   try {
     const { id } = await params;

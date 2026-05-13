@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const { env } = await getCloudflareContext();
   try {
     const db = (env as CloudflareEnv).DB;
+    await ensureDatabaseReady(db);
     const { results } = await db
       .prepare('SELECT currency, rate, updated_at FROM exchange_rates ORDER BY currency')
       .all<ExchangeRateRow>();

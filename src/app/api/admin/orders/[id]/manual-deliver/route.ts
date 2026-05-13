@@ -2,6 +2,7 @@
 // POST /api/admin/orders/[id]/manual-deliver — 手动发货（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
@@ -9,6 +10,7 @@ import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { sendDeliveryEmail } from "@/lib/api/mailer";
+import { formatDelivery, formatOrder } from "@/lib/api/formatters";
 import type { OrderRow, DeliveryRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -33,6 +35,7 @@ export async function POST(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     const body = await parseBody<{
       method?: unknown;
@@ -159,8 +162,8 @@ export async function POST(
     // 7. 返回 { order, delivery, notification }
     return jsonResponse(
       {
-        order: updatedOrder,
-        delivery,
+        order: updatedOrder ? formatOrder(updatedOrder) : null,
+        delivery: delivery ? formatDelivery(delivery) : null,
         notification: { id: notificationId, orderId: id, channel: "email", type: "delivery" },
       },
       200,

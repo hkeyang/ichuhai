@@ -1,13 +1,10 @@
-// src/app/api/admin/support-tickets/route.ts
-// GET /api/admin/support-tickets — 查询所有工单（需 admin token）
-
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
-import { formatSupportTicket } from "@/lib/api/formatters";
-import type { SupportTicketRow } from "@/lib/api/types";
+import { formatAuditLog } from "@/lib/api/formatters";
+import type { AuditLogRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -20,24 +17,22 @@ export async function GET(request: Request) {
 
   try {
     const token = request.headers.get("x-admin-token") || "";
-    const isProduction = cloudflareEnv.NODE_ENV === "production";
-    if (isProduction) {
+    if (cloudflareEnv.NODE_ENV === "production") {
       const valid = await verifyAdminSessionToken(token, cloudflareEnv);
       if (!valid) return jsonResponse({ error: "admin auth required" }, 401, request, cloudflareEnv);
     }
 
-    const db = cloudflareEnv.DB;
-    await ensureDatabaseReady(db);
-    const { results } = await db
-      .prepare("SELECT * FROM support_tickets ORDER BY created_at DESC")
-      .all<SupportTicketRow>();
+    await ensureDatabaseReady(cloudflareEnv.DB);
+    const { results } = await cloudflareEnv.DB
+      .prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200")
+      .all<AuditLogRow>();
 
-    return jsonResponse(results.map(formatSupportTicket), 200, request, cloudflareEnv);
+    return jsonResponse(results.map(formatAuditLog), 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
     }
-    console.error("[GET /api/admin/support-tickets] unexpected error:", error);
+    console.error("[GET /api/admin/audit-logs] unexpected error:", error);
     return jsonResponse({ error: "internal server error" }, 500, request, cloudflareEnv);
   }
 }

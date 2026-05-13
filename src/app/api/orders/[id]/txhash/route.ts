@@ -2,10 +2,12 @@
 // POST /api/orders/:id/txhash — 提交交易哈希，将订单状态从 pending_payment 改为 payment_confirming
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
+import { formatOrder } from "@/lib/api/formatters";
 import type { OrderRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -20,6 +22,7 @@ export async function POST(
   const { env } = await getCloudflareContext();
   const cloudflareEnv = env as CloudflareEnv;
   const db = cloudflareEnv.DB;
+  await ensureDatabaseReady(db);
 
   try {
     const { id } = await params;
@@ -92,7 +95,7 @@ export async function POST(
       .bind(order.id)
       .first<OrderRow>();
 
-    return jsonResponse(updated, 200, request, cloudflareEnv);
+    return jsonResponse(updated ? formatOrder(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

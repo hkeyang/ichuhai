@@ -2,19 +2,25 @@
 // PATCH /api/admin/orders/[id]/status — 更新订单状态（需 admin token），写 audit_log
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
+import { formatOrder } from "@/lib/api/formatters";
 import type { OrderRow } from "@/lib/api/types";
 
 const ALLOWED_STATUSES = new Set([
+  "created",
   "pending_payment",
+  "payment_confirming",
   "paid",
   "delivering",
   "completed",
-  "cancelled",
+  "expired",
+  "failed",
+  "refunding",
   "refunded",
 ]);
 
@@ -40,6 +46,7 @@ export async function PATCH(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     const body = await parseBody<{ status?: unknown; adminNote?: unknown }>(request);
     const newStatus = String(body.status ?? "").trim();
@@ -88,7 +95,7 @@ export async function PATCH(
       .bind(id)
       .first<OrderRow>();
 
-    return jsonResponse(updated, 200, request, cloudflareEnv);
+    return jsonResponse(updated ? formatOrder(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

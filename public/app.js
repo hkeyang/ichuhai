@@ -48,6 +48,12 @@ const LINE_ICONS = {
   software: '<rect width="18" height="12" x="3" y="4" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/>',
   gift: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 1 1 2.5-2.5V8"/><path d="M14 8V5.5A2.5 2.5 0 1 1 16.5 8"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  card: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/><path d="M6 15h3"/>',
+  receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>',
+  lightning: '<path d="m13 2-10 12h9l-1 8 10-12h-9z"/>',
+  refund: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/>',
+  headset: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2Z"/><path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2Z"/><path d="M13 21h3a3 3 0 0 0 3-3"/>',
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>'
 };
@@ -76,7 +82,7 @@ const HOME_FAQS = [
     answer: '需要。我们通过 Telegram 登录，订单与发货信息将安全绑定到您的账户，方便查询与售后。'
   },
   {
-    icon: 'credit-card',
+    icon: 'card',
     question: '支持哪些支付方式？',
     answer: '我们支持 USDT（TRC20）等主流加密货币支付，安全便捷，到账迅速。'
   },
@@ -251,6 +257,7 @@ const state = {
   walletMode: localStorage.getItem('walletMode') || 'browser',
   lookupResult: null,
   adminTab: 'dashboard',
+  adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [] },
   config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } },
   telegramPanelOpen: false,
   noticeTab: 'basic',
@@ -323,33 +330,46 @@ async function adminFetch(url, options = {}) {
   return response;
 }
 
+function parseMaybeJson(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function normalizeServerOrder(order) {
   if (!order) return null;
-  const productSnapshot = order.productSnapshot || products.find((item) => item.id === order.productId) || { name: order.productId };
-  const skuSnapshot = order.skuSnapshot || {};
+  const productId = order.productId || order.product_id;
+  const skuId = order.skuId || order.sku_id;
+  const productSnapshot = parseMaybeJson(order.productSnapshot ?? order.product_snapshot, products.find((item) => item.id === productId) || { name: productId });
+  const skuSnapshot = parseMaybeJson(order.skuSnapshot ?? order.sku_snapshot, {});
   const options = skuSnapshot.optionValues || {};
-  const amountUsdt = Number(order.amountUsdt || skuSnapshot.priceUsdt || 0);
+  const amountUsdt = Number(order.amountUsdt ?? order.amount_usdt ?? skuSnapshot.priceUsdt ?? 0);
+  const fiatCurrency = order.fiatCurrency || order.fiat_currency || 'USD';
   return {
-    id: order.id,
-    orderNo: order.orderNo,
-    productId: order.productId,
-    skuId: order.skuId,
-    productName: productSnapshot.name,
+    id: order.id || order.orderId,
+    orderNo: order.orderNo || order.order_no,
+    productId,
+    skuId,
+    productName: productSnapshot.name || productId,
     options,
-    telegramUsername: order.telegramUsername,
+    telegramUsername: order.telegramUsername || order.telegram_username,
     email: order.email,
     amountUsdt,
-    fiatCurrency: order.fiatCurrency || 'USD',
-    fiatAmount: money(amountUsdt, order.fiatCurrency || 'USD'),
-    paymentNetwork: order.paymentNetwork,
-    paymentAddress: order.paymentAddress,
+    fiatCurrency,
+    fiatAmount: money(amountUsdt, fiatCurrency),
+    paymentNetwork: order.paymentNetwork || order.payment_network,
+    paymentAddress: order.paymentAddress || order.payment_address,
     status: order.status,
-    deliveryType: skuSnapshot.deliveryType || order.deliveryType || 'manual',
-    createdAt: order.createdAt,
-    expiresAt: new Date(order.expiresAt).getTime(),
-    paidAt: order.paidAt,
-    deliveredAt: order.deliveredAt,
-    updatedAt: order.updatedAt,
+    deliveryType: skuSnapshot.deliveryType || order.deliveryType || order.delivery_type || 'manual',
+    createdAt: order.createdAt || order.created_at,
+    expiresAt: new Date(order.expiresAt || order.expires_at).getTime(),
+    paidAt: order.paidAt || order.paid_at,
+    deliveredAt: order.deliveredAt || order.delivered_at,
+    updatedAt: order.updatedAt || order.updated_at,
     events: order.events || [],
     raw: order
   };
@@ -373,10 +393,27 @@ function notify(message) {
   setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
+function normalizeTelegramBotUsername(value = '') {
+  return String(value)
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?t\.me\//i, '')
+    .replace(/^@+/, '')
+    .split(/[/?#]/)[0]
+    .trim();
+}
+
+function normalizeTelegramUsername(value = '') {
+  return String(value).trim().replace(/^@+/, '');
+}
+
 async function loadConfig() {
   try {
     const response = await fetch('/api/config');
-    if (response.ok) state.config = { ...state.config, ...(await response.json()) };
+    if (response.ok) {
+      state.config = { ...state.config, ...(await response.json()) };
+      state.config.telegram.botUsername = normalizeTelegramBotUsername(state.config.telegram.botUsername);
+      state.config.telegram.loginMode = state.config.telegram.botUsername ? 'widget' : 'mock';
+    }
   } catch {
     state.config = { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } };
   }
@@ -424,12 +461,13 @@ async function submitTelegramAuth(authData) {
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Telegram 登录失败');
+  const telegramUsername = normalizeTelegramUsername(result.user.telegramUsername);
   state.user = {
     id: result.user.id,
-    username: result.user.telegramUsername,
+    username: telegramUsername,
     defaultCurrency: result.user.defaultCurrency
   };
-  state.telegramUsername = `@${result.user.telegramUsername}`;
+  state.telegramUsername = `@${telegramUsername}`;
   state.telegramPanelOpen = false;
   persist();
   notify('Telegram 登录成功');
@@ -442,7 +480,7 @@ window.onTelegramAuth = (authData) => {
 
 function renderTelegramWidget() {
   const host = document.querySelector('#telegram-widget-host');
-  const botUsername = state.config.telegram.botUsername;
+  const botUsername = normalizeTelegramBotUsername(state.config.telegram.botUsername);
   if (!host || !botUsername || host.dataset.ready) return;
   host.dataset.ready = 'true';
   host.innerHTML = '';
@@ -477,8 +515,9 @@ function icon(type) {
 }
 
 function header() {
+  const isDetail = location.hash.startsWith('#/product/') || location.hash.startsWith('#/products/');
   return `
-    <header class="topbar">
+    <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
       <nav class="nav">
         <a href="#/products">${navIcon('A02_products.png', '商品')} 商品</a>
@@ -486,12 +525,12 @@ function header() {
         <a href="#/orders/lookup">${navIcon('A04_orders_lookup.png', '订单查询')} 订单查询</a>
       </nav>
       <div class="top-actions">
-        <button class="pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}${state.user ? '@' + state.user.username : 'Telegram 登录'}</button>
-        <div class="currency">
+        <button class="pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}${state.user ? '@' + state.user.username : isDetail ? '登录 / 注册' : 'Telegram 登录'}</button>
+        <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
           <button class="pill" data-action="toggleCurrency">${navIcon('A08_language_currency.png', '语言货币')} ${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency}⌄</button>
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
-        <a class="pill cart" href="#/account">${navIcon('A06_shopping_cart.png', '订单')} 我的订单</a>
+        <a class="pill cart ${isDetail ? 'detail-hide-action' : ''}" href="#/account">${navIcon('A06_shopping_cart.png', '订单')} 我的订单</a>
       </div>
     </header>
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
@@ -502,8 +541,8 @@ function telegramLoginPanel() {
   const configured = !!state.config.telegram.botUsername;
   return `
     <div class="modal-backdrop" data-action="closeTelegramPanel">
-      <section class="glass telegram-panel" onclick="event.stopPropagation()">
-        <button class="modal-close" onclick="event.stopPropagation(); (function(){state.telegramPanelOpen=false;route();})()">×</button>
+      <section class="glass telegram-panel">
+        <button class="modal-close" data-action="closeTelegramPanel" type="button" aria-label="关闭 Telegram 登录">×</button>
         <h2>Telegram 登录</h2>
         <p>${configured ? '请通过 Telegram 官方授权登录。授权成功后，服务端会校验签名并同步您的 Telegram 账号。' : '当前未配置 TELEGRAM_BOT_USERNAME，本地环境使用模拟登录。'}</p>
         ${configured ? '<div id="telegram-widget-host" class="telegram-widget-host"></div>' : '<button class="primary small" data-action="mockTelegramLogin">使用本地模拟登录</button>'}
@@ -547,29 +586,22 @@ function chevronIcon() {
 }
 
 function home() {
-  const item = product();
-  const sku = findSku(item);
   shell(`
-    <section class="home-grid">
-      <div class="home-main">
-        <section class="hero">
-          <div>
-            <h1>全球数字商品，<span>一站式秒发</span></h1>
-            <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
-            <div class="hero-tags">
-              <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
-              <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
-              <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
-            </div>
-          </div>
-        </section>
-        ${productBrowser()}
-        ${optionPanel(item)}
-        ${noticePanel(item)}
-        ${flowStrip()}
+    <section class="hero">
+      <div>
+        <h1>全球数字商品，<span>一站式秒发</span></h1>
+        <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
+        <div class="hero-tags">
+          <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
+          <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
+          <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
+        </div>
       </div>
-      ${quickOrder(item, sku)}
     </section>
+    ${productBrowser()}
+    ${platformGuarantee()}
+    ${homeFaq()}
+    ${siteFooter()}
   `, 'page');
 }
 
@@ -600,7 +632,7 @@ function productBrowser(full = false) {
   const categories = ['全部', '社交', '音乐', '视频', '游戏', '软件', '礼品卡', '更多'];
   const visible = visibleProducts(full);
   return `
-    <section class="glass panel product-browser">
+    <section class="product-section product-browser">
       <div class="tabs">
         ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${categoryIcon(c)}${c}</button>`).join('')}
         <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称" /></label>
@@ -612,9 +644,67 @@ function productBrowser(full = false) {
       </div>` : ''}
       <div class="product-row">
         ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
-        ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="#/products">查看全部商品 →</a></div>' : ''}
+      </div>
+      ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="#/products">查看全部商品 →</a></div>' : ''}
+    </section>
+  `;
+}
+
+function platformGuarantee() {
+  return `
+    <section class="platform-guarantee">
+      <h2 class="guarantee-title">平台保障</h2>
+      <div class="guarantee-list">
+        ${GUARANTEE_ITEMS.map((item) => `
+          <div class="guarantee-item">
+            ${featureIcon(item.icon, item.title)}
+            <div>
+              <h3>${item.title}</h3>
+              <p>${item.desc}</p>
+            </div>
+          </div>
+        `).join('')}
       </div>
     </section>
+  `;
+}
+
+function homeFaq() {
+  return `
+    <section class="home-faq">
+      <div class="faq-left">
+        <h2>常见问题</h2>
+        <p>我们致力于为全球用户提供安全、快速、可靠的数字商品服务。</p>
+        <div class="faq-trust-list">
+          <div class="faq-trust-item">${lineIcon('shield-check', '安全交易保障', 'faq-trust-icon')}<div><b>安全交易保障</b><span>多重风控机制，守护每一笔交易</span></div></div>
+          <div class="faq-trust-item">${lineIcon('lightning', '自动化订单处理', 'faq-trust-icon')}<div><b>自动化订单处理</b><span>系统自动化，秒级完成交付</span></div></div>
+          <div class="faq-trust-item">${lineIcon('headset', '全天候客服支持', 'faq-trust-icon')}<div><b>全天候客服支持</b><span>专业团队，随时为您服务</span></div></div>
+        </div>
+        <a class="faq-contact" href="#/faq">还有问题？联系我们 <span>→</span></a>
+      </div>
+      <div class="faq-list">
+        ${HOME_FAQS.map((faq, index) => `
+          <button class="faq-item ${state.homeFaqActive === index ? 'active' : ''}" data-action="toggleHomeFaq" data-index="${index}" type="button">
+            <span class="faq-icon-wrap">${lineIcon(faq.icon, faq.question, 'faq-icon')}</span>
+            <span class="faq-copy">
+              <strong>${faq.question}</strong>
+              <span>${faq.answer}</span>
+            </span>
+            ${lineIcon('chevron', '展开', 'faq-chevron')}
+          </button>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function siteFooter() {
+  return `
+    <footer class="site-footer">
+      <span class="footer-brand">ichuhai</span>
+      <span class="footer-slogan">全球数字商品，一站式秒发</span>
+      <span class="footer-copyright">© 2026 ichuhai</span>
+    </footer>
   `;
 }
 
@@ -624,7 +714,7 @@ function card(item) {
   const deliveryClass = item.deliveryType === 'auto' ? 'auto' : item.deliveryType === 'mixed' ? 'mixed' : 'manual';
   const stock = sku.stockStatus || sku.stock;
   return `
-    <a class="product-card" href="#/products/${item.slug}">
+    <a class="product-card" href="#/product/${item.slug}">
       ${icon(item.icon)}
       <b>${item.name}</b>
       <span class="product-spec">${spec}</span>
@@ -744,10 +834,10 @@ function noticePanel(item) {
   const sku = findSku(item);
   const profile = productProfile(item, sku);
   const tabs = [
-    { key: 'basic', label: '基础信息' },
-    { key: 'delivery', label: '发货与售后' },
-    { key: 'limits', label: '使用限制' },
-    { key: 'risk', label: '风险说明' }
+    { key: 'basic', label: `${featureIcon('B01_lightning_instant_delivery.png', '基础信息')} 基础信息` },
+    { key: 'delivery', label: `${featureIcon('B03_headset_support.png', '发货与售后')} 发货与售后` },
+    { key: 'limits', label: `${featureIcon('B08_warranty_guarantee.png', '使用限制')} 使用限制` },
+    { key: 'risk', label: `${featureIcon('B07_warning_triangle.png', '风险说明')} 风险说明` }
   ];
   const active = tabs.some((tab) => tab.key === state.noticeTab) ? state.noticeTab : 'basic';
   const content = {
@@ -793,6 +883,7 @@ function noticePanel(item) {
       <div class="account-binding-note">
         <strong>${featureIcon('B02_shield_secure_payment.png', '订单绑定')} 订单信息自动绑定当前登录账号</strong>
         <p>登录购买后，订单将自动绑定您的账号，便于查询与售后服务。</p>
+        <span class="binding-shield">${featureIcon('B02_shield_secure_payment.png', '订单绑定')}</span>
       </div>
       ${['usageGuide', 'warrantyDetail', 'attention'].map((key) => `<details><summary>${{ usageGuide: '使用说明', warrantyDetail: '保质期详情', attention: '注意事项' }[key]}</summary><p>${item.notice[key]}</p></details>`).join('')}
     </section>
@@ -825,7 +916,13 @@ function flowStrip() {
 
 function detail(slug = 'discord-nitro') {
   const item = products.find((p) => p.slug === slug) || product();
+  const wasDifferentProduct = state.selectedProductId !== item.id;
+  const isNewDetailVisit = state.lastDetailSlug !== item.slug;
   state.selectedProductId = item.id;
+  if (wasDifferentProduct || isNewDetailVisit || !state.selectedOptions[item.id]) {
+    state.selectedOptions[item.id] = defaultOptions(item);
+  }
+  state.lastDetailSlug = item.slug;
   const sku = findSku(item);
   const opts = selectedOptions(item);
   const related = products.filter((p) => p.id !== item.id).slice(0, 3);
@@ -842,6 +939,7 @@ function detail(slug = 'discord-nitro') {
           <div class="product-tags"><span>${featureIcon('B09_auto_delivery.png', '自动发货')} ${item.notice.deliverySummary}</span><span>${featureIcon('B06_check_circle_success.png', '库存充足')} 库存充足</span><span>${featureIcon('B02_shield_secure_payment.png', '安全可靠')} 安全可靠</span></div>
         </div>
       </div>
+      <div class="product-hero-art" aria-hidden="true"><span></span><i></i><b></b></div>
       <div class="product-price">${sku ? price(sku.priceUsdt) : '<span>暂不可购买</span>'}</div>
     </section>
     ${optionPanel(item, true)}
@@ -867,6 +965,7 @@ function detail(slug = 'discord-nitro') {
       <button class="sticky-pay-button" data-action="paySelected" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} ${payText}</button>
     </div>
   `, 'page detail-page');
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 }
 
 function checkout() {
@@ -1303,27 +1402,30 @@ async function adminLogin() {
   renderAdmin();
 }
 
-function renderAdmin() {
+async function renderAdmin() {
   if (isAdminLocked()) {
     shell(adminLoginPanel(), 'page');
     return;
   }
+  await loadAdminData();
   const tab = state.adminTab;
   shell(`
     <section class="admin-shell">
-      <aside class="glass admin-nav"><h2>后台管理</h2>${['dashboard|运营看板', 'products|商品与 SKU', 'orders|订单管理', 'payments|支付配置', 'delivery|发货队列', 'support|售后工单'].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
+      <aside class="glass admin-nav"><h2>后台管理</h2>${['dashboard|运营看板', 'products|商品与 SKU', 'orders|订单管理', 'payments|支付配置', 'delivery|发货队列', 'support|售后工单', 'notifications|通知记录', 'audit|审计日志'].map((x) => { const [key, label] = x.split('|'); return `<button class="${tab === key ? 'active' : ''}" data-action="adminTab" data-tab="${key}">${label}</button>`; }).join('')}</aside>
       <section class="glass admin-content">${adminContent(tab)}</section>
     </section>
   `, 'page');
 }
 
 function adminContent(tab) {
-  const orderList = orders();
+  const orderList = adminOrders();
+  const productList = adminProducts();
+  const networkList = adminNetworks();
   if (tab === 'dashboard') {
     const paid = orderList.filter((o) => ['paid', 'delivering', 'completed'].includes(o.status));
     const revenue = paid.reduce((sum, order) => sum + Number(order.amountUsdt || 0), 0);
     const failedDelivery = orderList.filter((o) => ['failed', 'delivering'].includes(o.status));
-    const lowStock = products.flatMap((p) => p.skus.filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock').map((sku) => `${p.name} ${Object.values(sku.optionValues).join('/')}`));
+    const lowStock = productList.flatMap((p) => (p.skus || []).filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock').map((sku) => `${p.name} ${Object.values(sku.optionValues || {}).join('/')}`));
     return `<h1>运营看板</h1><div class="metric-grid">${[
       ['今日订单', orderList.length],
       ['成交金额', `${revenue.toFixed(2)} USDT`],
@@ -1332,10 +1434,12 @@ function adminContent(tab) {
     ].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div><h2>处理队列</h2><div class="admin-table">${failedDelivery.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">处理发货</button><a href="#/order/${o.id}">查看</a></div>`).join('') || '暂无积压订单'}</div><h2>库存预警</h2><p class="warning">${lowStock.join('、') || '暂无库存预警'}</p>`;
   }
   if (tab === 'orders') return `<h1>订单管理</h1><div class="admin-table">${orderList.map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${statusLabel(o.status)}</span><button data-action="adminMarkPaid" data-id="${o.id}">手动标记已支付</button><button data-action="adminDeliver" data-id="${o.id}">手动补发</button><a href="#/order/${o.id}">详情</a></div>`).join('') || '暂无订单'}</div>`;
-  if (tab === 'payments') return `<h1>支付配置</h1><div class="admin-table">${networks.map((n) => `<div><b>${n.displayName}</b><span>${n.tokenStandard}</span><span>${(n.enabled ?? n.isEnabled) ? '已启用' : '已关闭'} / ${(n.recommended ?? n.isRecommended) ? '推荐' : '普通'}</span><button data-action="adminToggleNetwork" data-code="${n.code}">${(n.enabled ?? n.isEnabled) ? '关闭网络' : '启用网络'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}">设为推荐</button></div>`).join('')}</div><p class="warning">自动监听校验：地址、网络、USDT 合约、到账金额、确认数、订单有效期与交易 Hash 唯一性。</p>`;
-  if (tab === 'delivery') return `<h1>发货队列</h1><div class="admin-table">${orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${deliveryLabel(o.deliveryType)} / ${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">补发/完成</button><a href="#/order/${o.id}">发货记录</a></div>`).join('') || '暂无待发货订单'}</div><h2>发货能力</h2><div class="admin-table">${products.map((p) => `<div><b>${p.name}</b><span>${deliveryLabel(p.deliveryType)}</span><span>卡密库存 / Webhook / 人工队列</span><button>配置库存来源</button><button>查看日志</button></div>`).join('')}</div>`;
-  if (tab === 'support') return `<h1>售后工单</h1><div class="admin-table">${(JSON.parse(localStorage.getItem('gfTickets') || '[]')).map((t) => `<div><b>${t.ticketNo}</b><span>${t.type}</span><span>${t.status}</span><button>补发</button><button>关闭</button></div>`).join('') || '暂无售后工单'}</div>`;
-  return `<h1>商品与 SKU 配置</h1><div class="admin-table">${products.map((p) => `<div><b>${p.name}</b><span>${p.category}</span><span>${p.skus.length} 个 SKU / ${p.status === 'hidden' ? '已隐藏' : '已上架'}</span><button data-action="selectProduct" data-id="${p.id}">编辑规格</button><button data-action="adminToggleProduct" data-id="${p.id}">${p.status === 'hidden' ? '上架' : '下架'}</button></div>`).join('')}</div>`;
+  if (tab === 'payments') return `<h1>支付配置</h1><div class="admin-table">${networkList.map((n) => `<div><b>${n.displayName}</b><span>${n.tokenStandard}</span><span>${(n.enabled ?? n.isEnabled) ? '已启用' : '已关闭'} / ${(n.recommended ?? n.isRecommended) ? '推荐' : '普通'}</span><button data-action="adminToggleNetwork" data-code="${n.code}">${(n.enabled ?? n.isEnabled) ? '关闭网络' : '启用网络'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}">设为推荐</button></div>`).join('')}</div><p class="warning">自动监听校验：地址、网络、USDT 合约、到账金额、确认数、订单有效期与交易 Hash 唯一性。</p>`;
+  if (tab === 'delivery') return `<h1>发货队列</h1><div class="admin-table">${orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => `<div><b>${o.orderNo}</b><span>${o.productName}</span><span>${deliveryLabel(o.deliveryType)} / ${statusLabel(o.status)}</span><button data-action="adminDeliver" data-id="${o.id}">补发/完成</button><a href="#/order/${o.id}">发货记录</a></div>`).join('') || '暂无待发货订单'}</div><h2>发货能力</h2><div class="admin-table">${productList.map((p) => `<div><b>${p.name}</b><span>${deliveryLabel(p.deliveryType)}</span><span>${(p.skus || []).length} 个 SKU / 卡密库存 / 人工队列</span><button data-action="selectProduct" data-id="${p.id}">配置库存来源</button><button data-action="adminTab" data-tab="audit">查看日志</button></div>`).join('')}</div>`;
+  if (tab === 'support') return `<h1>售后工单</h1><div class="admin-table">${(state.adminData.supportTickets.length ? state.adminData.supportTickets : JSON.parse(localStorage.getItem('gfTickets') || '[]')).map((t) => `<div><b>${t.ticketNo}</b><span>${t.type}</span><span>${t.status}</span><button data-action="adminDeliver" data-id="${t.orderId}">补发</button><a href="#/order/${t.orderId}">订单</a></div>`).join('') || '暂无售后工单'}</div>`;
+  if (tab === 'notifications') return `<h1>通知记录</h1><div class="admin-table">${state.adminData.notifications.map((n) => `<div><b>${n.type}</b><span>${n.channel} / ${n.provider}</span><span>${n.status}</span><span>${timeFrom(n.createdAt)}</span></div>`).join('') || '暂无通知记录'}</div>`;
+  if (tab === 'audit') return `<h1>审计日志</h1><div class="admin-table">${state.adminData.auditLogs.map((log) => `<div><b>${log.action}</b><span>${log.actorRole}:${escapeHtml(log.actorId)}</span><span>${log.target} / ${escapeHtml(log.targetId)}</span><span>${timeFrom(log.createdAt)}</span></div>`).join('') || '暂无审计日志'}</div>`;
+  return `<h1>商品与 SKU 配置</h1><div class="admin-table">${productList.map((p) => `<div><b>${p.name}</b><span>${p.category}</span><span>${(p.skus || []).length} 个 SKU / ${p.status === 'hidden' ? '已隐藏' : p.status === 'archived' ? '已归档' : '已上架'}</span><button data-action="selectProduct" data-id="${p.id}">编辑规格</button><button data-action="adminToggleProduct" data-id="${p.id}">${p.status === 'hidden' ? '上架' : '下架'}</button></div>`).join('')}</div>`;
 }
 
 function faq() {
@@ -1384,14 +1488,72 @@ function paymentSummaryText(order) {
 
 function syncLocalNetwork(local, server) {
   if (!local || !server) return local;
-  local.enabled = server.isEnabled ?? server.enabled ?? local.enabled;
-  local.recommended = server.isRecommended ?? server.recommended ?? local.recommended;
+  local.displayName = server.displayName ?? server.display_name ?? local.displayName;
+  local.tokenStandard = server.tokenStandard ?? server.token_standard ?? local.tokenStandard;
+  local.enabled = server.isEnabled ?? server.is_enabled ?? server.enabled ?? local.enabled;
+  local.recommended = server.isRecommended ?? server.is_recommended ?? server.recommended ?? local.recommended;
   local.isEnabled = local.enabled;
   local.isRecommended = local.recommended;
   local.address = server.address ?? local.address;
   local.confirmations = server.confirmations ?? local.confirmations;
-  local.warning = server.warningText ?? server.warning ?? local.warning;
+  local.warning = server.warningText ?? server.warning_text ?? server.warning ?? local.warning;
   return local;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function hydrateAdminProduct(serverProduct) {
+  const local = products.find((item) => item.id === serverProduct.id || item.slug === serverProduct.slug);
+  return {
+    ...(local || {}),
+    ...serverProduct,
+    category: local?.category || serverProduct.category || serverProduct.categoryId || '更多',
+    skus: Array.isArray(serverProduct.skus) ? serverProduct.skus : (local?.skus || [])
+  };
+}
+
+function adminProducts() {
+  return state.adminData.products.length ? state.adminData.products.map(hydrateAdminProduct) : products;
+}
+
+function adminOrders() {
+  return state.adminData.orders.length ? state.adminData.orders.map(normalizeServerOrder).filter(Boolean) : orders();
+}
+
+function adminNetworks() {
+  const source = state.adminData.paymentNetworks.length ? state.adminData.paymentNetworks : networks;
+  return source.map((network) => ({ ...network, enabled: network.isEnabled ?? network.enabled, recommended: network.isRecommended ?? network.recommended }));
+}
+
+async function loadAdminData(force = false) {
+  if (isAdminLocked() || state.adminData.loading || (state.adminData.loaded && !force)) return;
+  state.adminData.loading = true;
+  try {
+    const entries = await Promise.all([
+      ['products', '/api/admin/products'],
+      ['orders', '/api/admin/orders'],
+      ['paymentNetworks', '/api/admin/payment-networks'],
+      ['deliveries', '/api/admin/deliveries'],
+      ['notifications', '/api/admin/notifications'],
+      ['supportTickets', '/api/admin/support-tickets'],
+      ['auditLogs', '/api/admin/audit-logs']
+    ].map(async ([key, url]) => {
+      const response = await adminFetch(url);
+      if (!response.ok) return [key, []];
+      return [key, await response.json().catch(() => [])];
+    }));
+    for (const [key, value] of entries) state.adminData[key] = Array.isArray(value) ? value : [];
+    state.adminData.loaded = true;
+    for (const network of state.adminData.paymentNetworks) {
+      syncLocalNetwork(networks.find((item) => item.code === network.code), network);
+    }
+  } catch {
+    notify('后台数据拉取失败，已保留本地缓存视图');
+  } finally {
+    state.adminData.loading = false;
+  }
 }
 
 function statusLabel(status) {
@@ -1425,6 +1587,7 @@ async function route() {
   ];
   const staticRoute = routes.find(([path]) => path === hash);
   if (staticRoute) return staticRoute[1]();
+  if (hash.startsWith('/products/')) return detail(hash.split('/').pop());
   if (hash.startsWith('/product/')) return detail(hash.split('/').pop());
   if (hash.startsWith('/pay/')) return pay(hash.split('/').pop());
   if (hash.startsWith('/order/') && hash.endsWith('/success')) return success(hash.split('/')[2]);
@@ -1461,9 +1624,14 @@ document.addEventListener('click', async (event) => {
   if (action === 'setCurrency') { state.fiatCurrency = el.dataset.code; state.currencyOpen = false; persist(); return route(); }
   if (action === 'telegramLogin') { state.telegramPanelOpen = true; route(); return renderTelegramWidget(); }
   if (action === 'mockTelegramLogin') return mockTelegramLogin();
-  if (action === 'closeTelegramPanel') { state.telegramPanelOpen = false; return route(); }
+  if (action === 'closeTelegramPanel') {
+    if (el.classList.contains('modal-backdrop') && event.target !== el) return;
+    state.telegramPanelOpen = false;
+    return route();
+  }
   if (action === 'openProduct') { location.hash = `#/product/${el.dataset.slug}`; return; }
   if (action === 'filterCategory') { state.categoryFilter = el.dataset.category; return route(); }
+  if (action === 'toggleHomeFaq') { state.homeFaqActive = Number(el.dataset.index || 0); return route(); }
   if (action === 'stockOnly') { state.stockFilter = event.target.checked; return route(); }
   if (action === 'selectProduct') { state.selectedProductId = el.dataset.id; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
   if (action === 'setOption') { const item = products.find((p) => p.id === el.dataset.product); state.selectedOptions[item.id] = { ...selectedOptions(item), [el.dataset.key]: el.dataset.value }; persist(); return route(); }
@@ -1553,6 +1721,7 @@ document.addEventListener('click', async (event) => {
     if (!response.ok) return notify(result.error || '更新订单状态失败');
     const order = normalizeServerOrder(result);
     if (order) saveOrder(order);
+    state.adminData.orders = state.adminData.orders.map((item) => (item.id === result.id ? result : item));
     notify('已标记为已支付');
     return renderAdmin();
   }
@@ -1565,11 +1734,13 @@ document.addEventListener('click', async (event) => {
     if (!response.ok) return notify(result.error || '手动补发失败');
     const order = normalizeServerOrder(result.order);
     if (order) saveOrder(order);
+    if (result.order) state.adminData.orders = state.adminData.orders.map((item) => (item.id === result.order.id ? result.order : item));
+    if (result.delivery) state.adminData.deliveries.unshift(result.delivery);
     notify('已写入手动补发记录');
     return renderAdmin();
   }
   if (action === 'adminToggleProduct') {
-    const item = products.find((p) => p.id === el.dataset.id);
+    const item = adminProducts().find((p) => p.id === el.dataset.id);
     const nextStatus = item.status === 'hidden' ? 'active' : 'hidden';
     const response = await adminFetch(`/api/admin/products/${item.id}`, {
       method: 'PATCH',
@@ -1577,12 +1748,14 @@ document.addEventListener('click', async (event) => {
     });
     const updated = await response.json().catch(() => ({}));
     if (!response.ok) return notify(updated.error || '商品更新失败');
-    Object.assign(item, updated);
-    notify(item.status === 'hidden' ? '商品已下架' : '商品已上架');
+    const local = products.find((p) => p.id === item.id);
+    if (local) Object.assign(local, updated);
+    state.adminData.products = state.adminData.products.map((product) => (product.id === updated.id ? { ...product, ...updated } : product));
+    notify(updated.status === 'hidden' ? '商品已下架' : '商品已上架');
     return renderAdmin();
   }
   if (action === 'adminToggleNetwork') {
-    const network = networks.find((n) => n.code === el.dataset.code);
+    const network = networks.find((n) => n.code === el.dataset.code) || state.adminData.paymentNetworks.find((n) => n.code === el.dataset.code);
     const nextEnabled = !network.enabled;
     const response = await adminFetch(`/api/admin/payment-networks/${network.code}`, {
       method: 'PATCH',
@@ -1591,6 +1764,7 @@ document.addEventListener('click', async (event) => {
     const updated = await response.json().catch(() => ({}));
     if (!response.ok) return notify(updated.error || '支付网络更新失败');
     syncLocalNetwork(network, updated);
+    state.adminData.paymentNetworks = state.adminData.paymentNetworks.map((item) => (item.code === updated.code ? updated : item));
     notify(network.enabled ? '支付网络已启用' : '支付网络已关闭');
     return renderAdmin();
   }
@@ -1603,6 +1777,7 @@ document.addEventListener('click', async (event) => {
     if (!response.ok) return notify(updated.error || '推荐网络更新失败');
     networks.forEach((network) => { network.recommended = network.code === el.dataset.code; network.isRecommended = network.recommended; });
     syncLocalNetwork(networks.find((network) => network.code === el.dataset.code), updated);
+    state.adminData.paymentNetworks = state.adminData.paymentNetworks.map((item) => ({ ...item, isRecommended: item.code === updated.code }));
     notify('推荐支付网络已更新');
     return renderAdmin();
   }

@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   const { env } = await getCloudflareContext();
   try {
     const db = (env as CloudflareEnv).DB;
+    await ensureDatabaseReady(db);
     const body = await parseBody<LookupBody>(request);
 
     const orderNo = body.orderNo ? String(body.orderNo).trim() : "";

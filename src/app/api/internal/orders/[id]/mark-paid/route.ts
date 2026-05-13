@@ -2,11 +2,13 @@
 // POST /api/internal/orders/[id]/mark-paid — 内部标记订单已支付（需 x-internal-token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { timingSafeEqual } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
+import { formatOrder } from "@/lib/api/formatters";
 import type { OrderRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -41,6 +43,7 @@ export async function POST(
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
 
     const body = await parseBody<{ txHash?: unknown }>(request);
     const txHash = body.txHash !== undefined ? String(body.txHash).trim() : null;
@@ -80,7 +83,7 @@ export async function POST(
       .bind(id)
       .first<OrderRow>();
 
-    return jsonResponse(updated, 200, request, cloudflareEnv);
+    return jsonResponse(updated ? formatOrder(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse(

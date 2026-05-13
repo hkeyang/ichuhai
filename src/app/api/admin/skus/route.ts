@@ -2,11 +2,13 @@
 // POST /api/admin/skus — 创建 SKU（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { cleanEnum, cleanPrice, cleanOptionValues } from "@/lib/api/validators";
+import { formatSku } from "@/lib/api/formatters";
 import type { SkuRow, ProductRow } from "@/lib/api/types";
 
 const STOCK_STATUSES = new Set(["in_stock", "low_stock", "sold_out"]);
@@ -15,6 +17,37 @@ const DELIVERY_TYPES = new Set(["auto", "manual", "mixed"]);
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
   return optionsResponse(request, env as CloudflareEnv);
+}
+
+export async function GET(request: Request) {
+  const { env } = await getCloudflareContext();
+  const cloudflareEnv = env as CloudflareEnv;
+
+  try {
+    const token = request.headers.get("x-admin-token") || "";
+    const isProduction = cloudflareEnv.NODE_ENV === "production";
+    if (isProduction) {
+      const valid = await verifyAdminSessionToken(token, cloudflareEnv);
+      if (!valid) return jsonResponse({ error: "admin auth required" }, 401, request, cloudflareEnv);
+    }
+
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get("productId");
+    const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
+    const query = productId
+      ? db.prepare("SELECT * FROM skus WHERE product_id = ? ORDER BY created_at ASC").bind(productId)
+      : db.prepare("SELECT * FROM skus ORDER BY product_id, created_at ASC");
+    const { results } = await query.all<SkuRow>();
+
+    return jsonResponse(results.map(formatSku), 200, request, cloudflareEnv);
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
+    }
+    console.error("[GET /api/admin/skus] unexpected error:", error);
+    return jsonResponse({ error: "internal server error" }, 500, request, cloudflareEnv);
+  }
 }
 
 export async function POST(request: Request) {
@@ -30,6 +63,7 @@ export async function POST(request: Request) {
     }
 
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
     const body = await parseBody<{
       productId?: unknown;
       optionValues?: unknown;
@@ -83,7 +117,7 @@ export async function POST(request: Request) {
       .bind(id)
       .first<SkuRow>();
 
-    return jsonResponse(sku, 201, request, cloudflareEnv);
+    return jsonResponse(sku ? formatSku(sku) : null, 201, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

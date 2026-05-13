@@ -2,9 +2,11 @@
 // GET /api/admin/payment-networks — 查询所有支付网络（需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
+import { formatPaymentNetwork } from "@/lib/api/formatters";
 import type { PaymentNetworkRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -25,11 +27,12 @@ export async function GET(request: Request) {
     }
 
     const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
     const { results } = await db
       .prepare("SELECT * FROM payment_networks ORDER BY created_at ASC")
       .all<PaymentNetworkRow>();
 
-    return jsonResponse(results, 200, request, cloudflareEnv);
+    return jsonResponse(results.map(formatPaymentNetwork), 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
