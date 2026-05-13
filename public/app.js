@@ -120,8 +120,8 @@ function assetImg(src, alt, className) {
   return `<img class="${className}" src="${src}" alt="${alt}" loading="lazy" />`;
 }
 
-function navIcon(file, alt) {
-  return assetImg(`${ASSETS.nav}${file}`, alt, 'nav-icon');
+function navIcon(file, alt, className = 'nav-icon') {
+  return assetImg(`${ASSETS.nav}${file}`, alt, className);
 }
 
 function featureIcon(file, alt) {
@@ -529,12 +529,12 @@ function header() {
       ${logo()}
       <div class="top-actions">
         <a class="pill header-help ${isDetail ? 'detail-hide-action' : ''}" href="#/faq">${navIcon('A03_faq_help.png', '帮助中心')} 帮助中心</a>
-        <button class="pill telegram-pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}Telegram 登录</button>
         <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
-          <button class="pill" data-action="toggleCurrency">${navIcon('A08_language_currency.png', '语言货币')} ${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency}⌄</button>
+          <button class="pill currency-pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency} ${navIcon('A10_shaixuan.png', '展开货币', 'currency-chevron')}</button>
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
         <a class="pill cart ${isDetail ? 'detail-hide-action' : ''}" href="#/account">${navIcon('A06_shopping_cart.png', '订单')} 我的订单</a>
+        <button class="pill telegram-pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}Telegram 登录</button>
       </div>
     </header>
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
@@ -561,7 +561,7 @@ function currencyMenu() {
       <small>Auto-pricing by IP</small>
       ${Object.entries(CURRENCIES).map(([code, item]) => `
         <button class="${code === state.fiatCurrency ? 'active' : ''}" data-action="setCurrency" data-code="${code}">
-          <span>${item.flag} ${code}</span>${code === state.fiatCurrency ? '<b>✓</b>' : ''}
+          <span>${item.flag} ${code}</span>${code === state.fiatCurrency ? navIcon('A11_huilvxuanzhong.png', '已选中', 'currency-check') : ''}
         </button>
       `).join('')}
     </div>

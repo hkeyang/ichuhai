@@ -3428,6 +3428,34 @@ body {
   border-color: rgba(93, 103, 255, 0.28);
 }
 
+.telegram-pill .nav-icon {
+  /*
+   * 原始 A07 图标颜色偏浅，在醒目的 #3152ff 文字旁边显得像次要元素。
+   * 使用 CSS filter 把线条重着色到与文字一致的深蓝，提高对比度。
+   * brightness(0) 先把图像压成纯黑，再通过 invert/sepia/saturate/hue-rotate
+   * 调到目标蓝 #3152ff；实际色值依图标原色可能略有偏差，但视觉上已足够贴近。
+   */
+  filter: brightness(0) saturate(100%) invert(26%) sepia(94%) saturate(2630%) hue-rotate(220deg) brightness(98%) contrast(105%);
+}
+
+.currency-pill {
+  gap: 6px;
+}
+
+.currency-chevron {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  opacity: 0.85;
+}
+
+.currency-menu .currency-check {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .page {
   width: min(1200px, calc(100vw - 64px));
   padding: 28px 0 0;
