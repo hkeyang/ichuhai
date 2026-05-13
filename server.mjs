@@ -3,6 +3,23 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, createReadStream } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { createCipheriv, createHmac, createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+
+// Load .env file if present (Node 20.6+ built-in dotenv support)
+try {
+  const { readFileSync } = await import('node:fs');
+  const envPath = new URL('.env', import.meta.url).pathname;
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq < 1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+      if (!(key in process.env)) process.env[key] = val;
+    }
+  }
+} catch { /* ignore */ }
 import { scanUsdtPayments } from './src/integrations/usdt-listener.mjs';
 import { sendDeliveryEmail, sendOrderCreatedEmail } from './src/integrations/mailer.mjs';
 

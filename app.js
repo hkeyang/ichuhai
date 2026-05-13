@@ -1244,7 +1244,7 @@ async function route() {
     ['/checkout', () => checkout()],
     ['/orders/lookup', () => lookup()],
     ['/account', () => account()],
-    ['/admin', () => renderAdmin()],
+    ['/manage-x0509y', () => renderAdmin()],
     ['/faq', () => faq()]
   ];
   const staticRoute = routes.find(([path]) => path === hash);

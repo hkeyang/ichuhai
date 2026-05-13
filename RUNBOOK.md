@@ -63,7 +63,7 @@ artifacts/visual-audit/*.png
 - 支付演示：`http://localhost:4174/#/pay/demo`
 - 完成演示：`http://localhost:4174/#/order/demo/success`
 - 订单查询：`http://localhost:4174/#/orders/lookup`
-- 后台管理：`http://localhost:4174/#/admin`
+- 后台管理：`http://localhost:4174/#/manage-x0509y`
 
 ## 数据文件
 
