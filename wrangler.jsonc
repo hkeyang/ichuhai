@@ -26,7 +26,7 @@
     {
       "binding": "DB",
       "database_name": "ichuhai-db",
-      "database_id": "REPLACE_WITH_ACTUAL_ID",
+      "database_id": "3d131a6d-db08-4296-b70d-5c7ca7b9906e",
       "migrations_dir": "migrations"
     }
   ],
