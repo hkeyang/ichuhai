@@ -115,3 +115,103 @@ npm run worker:orders
 ## 当前边界
 
 本仓库当前交付的是本地可运行 MVP。链上交易、Telegram Login Widget、邮件投递、生产数据库和后台权限需要真实外部凭据与部署环境后才能上线。
+
+---
+
+## Cloudflare Workers 部署（新架构）
+
+本节说明迁移至 Cloudflare Workers + D1 后的开发与部署流程。
+
+### 本地开发
+
+```bash
+# 1. 首次初始化：创建本地 D1 数据库并执行迁移（含 seed 数据）
+wrangler d1 migrations apply ichuhai-db --local
+
+# 2. 启动本地开发服务器（含 D1 本地模拟，端口默认 8787）
+wrangler dev
+```
+
+本地环境变量通过 `.dev.vars` 文件配置（已在 `.gitignore` 中排除）：
+
+```ini
+TELEGRAM_BOT_TOKEN=dev_bot_token
+ADMIN_PASSWORD=dev_admin_password_12
+ADMIN_SESSION_SECRET=dev_admin_session_secret_32_chars_
+INTERNAL_API_SECRET=dev_internal_api_secret_32_chars__
+INVENTORY_ENCRYPTION_KEY=dev_inventory_encryption_key_32ch
+DKIM_PRIVATE_KEY=
+```
+
+### 生产部署
+
+```bash
+# 1. 首次部署：创建 D1 数据库（仅需执行一次）
+wrangler d1 create ichuhai-db
+# 将输出的 database_id 填入 wrangler.jsonc 的 d1_databases[0].database_id
+
+# 2. 执行生产数据库迁移（含 seed 数据）
+wrangler d1 migrations apply ichuhai-db --remote
+
+# 3. 构建并部署 Worker
+wrangler deploy
+# 或使用 opennextjs-cloudflare 构建流程：
+npx opennextjs-cloudflare build && wrangler deploy
+```
+
+### 设置 Secrets
+
+所有敏感配置通过 `wrangler secret put` 设置，不存入代码仓库：
+
+```bash
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put ADMIN_PASSWORD          # 最小长度 12 位
+wrangler secret put ADMIN_SESSION_SECRET    # 最小长度 32 位
+wrangler secret put INTERNAL_API_SECRET     # 最小长度 32 位
+wrangler secret put INVENTORY_ENCRYPTION_KEY # 最小长度 32 位
+wrangler secret put DKIM_PRIVATE_KEY        # MailChannels DKIM 私钥（PEM 格式）
+```
+
+### 冒烟测试
+
+部署后运行冒烟测试验证所有 30 个 API 端点：
+
+```bash
+# 生产环境
+BASE_URL=https://ichuhai.shop \
+ADMIN_PASSWORD=<生产密码> \
+INTERNAL_API_SECRET=<内部密钥> \
+bash scripts/smoke-test.sh
+
+# 本地开发环境
+BASE_URL=http://localhost:8787 \
+ADMIN_PASSWORD=dev_admin_password_12 \
+INTERNAL_API_SECRET=dev_internal_api_secret_32_chars__ \
+bash scripts/smoke-test.sh
+```
+
+### 数据库管理
+
+```bash
+# 查看本地数据库内容
+wrangler d1 execute ichuhai-db --local --command "SELECT * FROM products"
+
+# 查看生产数据库内容
+wrangler d1 execute ichuhai-db --remote --command "SELECT COUNT(*) FROM orders"
+
+# 新增迁移文件后应用
+wrangler d1 migrations apply ichuhai-db --local   # 本地
+wrangler d1 migrations apply ichuhai-db --remote  # 生产
+```
+
+### 架构说明
+
+| 组件 | 旧架构 | 新架构 |
+|---|---|---|
+| API 服务 | `server.mjs`（Node.js HTTP） | Next.js Route Handlers（Cloudflare Workers） |
+| 数据库 | `data/db.json`（本地文件） | Cloudflare D1（边缘 SQLite） |
+| 邮件发送 | nodemailer + SMTP | MailChannels HTTP API |
+| 加密 | Node `crypto` | Web Crypto API |
+| 部署 | 独立 Node 进程 | `wrangler deploy` |
+
+> **注意**：`server.mjs` 已标记为 `@deprecated`，仅作本地开发回退保留。生产环境请使用 `wrangler dev` / `wrangler deploy`。

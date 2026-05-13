@@ -1,3 +1,9 @@
+/**
+ * @deprecated 此文件已被 Next.js Route Handlers（src/app/api/**/route.ts）替代。
+ * 迁移至 Cloudflare Workers + D1 后，所有 API 逻辑均通过 Route Handlers 提供服务。
+ * 本文件仅作为本地开发回退和迁移参考保留，请勿在生产环境中使用。
+ * 参见：.kiro/specs/cloudflare-backend-migration/design.md
+ */
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, createReadStream } from 'node:fs';

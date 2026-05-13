@@ -21,5 +21,22 @@
   },
   "observability": {
     "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ichuhai-db",
+      "database_id": "REPLACE_WITH_ACTUAL_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "TELEGRAM_BOT_USERNAME": "ichuhai_bot",
+    "PUBLIC_SITE_URL": "https://ichuhai.shop",
+    "ALLOWED_ORIGINS": "https://ichuhai.shop,https://www.ichuhai.shop",
+    "MAIL_FROM": "noreply@ichuhai.shop",
+    "DKIM_DOMAIN": "ichuhai.shop",
+    "DKIM_SELECTOR": "mailchannels",
+    "NODE_ENV": "production"
   }
 }

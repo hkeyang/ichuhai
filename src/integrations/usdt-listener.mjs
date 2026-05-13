@@ -1,3 +1,9 @@
+/**
+ * @deprecated Phase 2 参考实现。
+ * 此文件为链上 USDT 监听集成的参考实现，将在 Phase 2 通过 Cloudflare Cron Trigger 替代。
+ * Phase 1 使用管理员手动标记已付（/api/internal/orders/:id/mark-paid）。
+ * 参见：.kiro/specs/cloudflare-backend-migration/design.md — "Phase 2 延迟项"章节
+ */
 const TRON_USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const EVM_USDT_CONTRACTS = {
   ETH: '0xdAC17F958D2ee523a2206206994597C13D831ec7',

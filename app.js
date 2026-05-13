@@ -39,16 +39,74 @@ const PRODUCT_ICONS = {
   playstation: 'E11_playstation_gift_card.png'
 };
 
-const CATEGORY_ICONS = {
-  '全部': 'D01_all.png',
-  '社交': 'D02_social.png',
-  '音乐': 'D03_music.png',
-  '视频': 'D04_video.png',
-  '游戏': 'D05_gaming.png',
-  '软件': 'D06_software.png',
-  '礼品卡': 'D07_gift_card.png',
-  '更多': 'D08_more.png'
+const LINE_ICONS = {
+  all: '<path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><path d="M14 14h6v6h-6z"/>',
+  social: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  video: '<circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/>',
+  game: '<line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="6"/>',
+  software: '<rect width="18" height="12" x="3" y="4" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/>',
+  gift: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 1 1 2.5-2.5V8"/><path d="M14 8V5.5A2.5 2.5 0 1 1 16.5 8"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  'user': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  'receipt': '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 10h8"/><path d="M8 14h4"/>',
+  'lightning': '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+  'refund': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  'headset': '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>',
+  'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>'
 };
+
+const CATEGORY_ICON_KEYS = {
+  '全部': 'all',
+  '社交': 'social',
+  '音乐': 'music',
+  '视频': 'video',
+  '游戏': 'game',
+  '软件': 'software',
+  '礼品卡': 'gift',
+  '更多': 'more'
+};
+
+const GUARANTEE_ITEMS = [
+  { icon: 'B02_shield_secure_payment.png', title: '安全可靠', desc: '资金加密托管，交易安全有保障' },
+  { icon: 'B01_lightning_instant_delivery.png', title: '极速秒发', desc: '自动化系统，秒级交付到手' },
+  { icon: 'B03_headset_support.png', title: '专业服务', desc: '7×24 小时在线客服支持' }
+];
+
+const HOME_FAQS = [
+  {
+    icon: 'user',
+    question: '购买需要登录吗？',
+    answer: '需要。我们通过 Telegram 登录，订单与发货信息将安全绑定到您的账户，方便查询与售后。'
+  },
+  {
+    icon: 'credit-card',
+    question: '支持哪些支付方式？',
+    answer: '我们支持 USDT（TRC20）等主流加密货币支付，安全便捷，到账迅速。'
+  },
+  {
+    icon: 'receipt',
+    question: '如何查询订单？',
+    answer: '登录后点击右上角「我的订单」，即可查看全部订单状态与发货信息。'
+  },
+  {
+    icon: 'lightning',
+    question: '发货速度有多快？',
+    answer: '大部分商品为自动发货，秒级到账；部分商品需要人工处理，通常不超过 5–15 分钟。'
+  },
+  {
+    icon: 'refund',
+    question: '可以退款吗？',
+    answer: '支持未发货订单退款；已发货商品因虚拟商品特性，一般不支持退款，具体请以商品页说明为准。'
+  },
+  {
+    icon: 'headset',
+    question: '遇到问题如何联系客服？',
+    answer: '您可以通过 Telegram 联系在线客服，我们 7×24 小时为您提供专业帮助。'
+  }
+];
 
 function assetImg(src, alt, className) {
   return `<img class="${className}" src="${src}" alt="${alt}" loading="lazy" />`;
@@ -66,8 +124,12 @@ function paymentIcon(file, alt, className = 'payment-icon') {
   return assetImg(`${ASSETS.payment}${file}`, alt, className);
 }
 
+function lineIcon(name, alt, className) {
+  return `<svg class="${className}" viewBox="0 0 24 24" aria-label="${alt}" role="img" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${LINE_ICONS[name] || LINE_ICONS.more}</svg>`;
+}
+
 function categoryIcon(label) {
-  return assetImg(`${ASSETS.category}${CATEGORY_ICONS[label] || CATEGORY_ICONS['更多']}`, `${label}分类`, 'category-icon');
+  return lineIcon(CATEGORY_ICON_KEYS[label] || 'more', `${label}分类`, 'category-icon');
 }
 
 function statusIcon(file, alt) {
@@ -196,7 +258,9 @@ const state = {
   lookupResult: null,
   adminTab: 'dashboard',
   config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } },
-  telegramPanelOpen: false
+  telegramPanelOpen: false,
+  noticeTab: 'basic',
+  homeFaqActive: 0
 };
 
 const app = document.querySelector('#app');
@@ -445,7 +509,7 @@ function telegramLoginPanel() {
   return `
     <div class="modal-backdrop" data-action="closeTelegramPanel">
       <section class="glass telegram-panel" onclick="event.stopPropagation()">
-        <button class="modal-close" data-action="closeTelegramPanel">×</button>
+        <button class="modal-close" onclick="event.stopPropagation(); (function(){state.telegramPanelOpen=false;route();})()">×</button>
         <h2>Telegram 登录</h2>
         <p>${configured ? '请通过 Telegram 官方授权登录。授权成功后，服务端会校验签名并同步您的 Telegram 账号。' : '当前未配置 TELEGRAM_BOT_USERNAME，本地环境使用模拟登录。'}</p>
         ${configured ? '<div id="telegram-widget-host" class="telegram-widget-host"></div>' : '<button class="primary small" data-action="mockTelegramLogin">使用本地模拟登录</button>'}
@@ -469,32 +533,115 @@ function currencyMenu() {
 
 function shell(content, className = '') {
   app.innerHTML = `${header()}<main class="${className}">${content}</main>`;
+  enhanceSelects();
+}
+
+function enhanceSelects() {
+  document.querySelectorAll('select').forEach((select) => {
+    if (select.parentElement?.classList.contains('select-shell')) return;
+    const shell = document.createElement('span');
+    shell.className = 'select-shell';
+    select.replaceWith(shell);
+    shell.append(select, chevronIcon());
+  });
+}
+
+function chevronIcon() {
+  const template = document.createElement('template');
+  template.innerHTML = lineIcon('chevron', '展开选项', 'select-chevron').trim();
+  return template.content.firstElementChild;
+}
+
+function platformGuarantee() {
+  return `
+    <section class="platform-guarantee glass">
+      <h3 class="guarantee-title">平台保障</h3>
+      <div class="guarantee-items">
+        ${GUARANTEE_ITEMS.map((item, i) => `
+          ${i > 0 ? '<div class="guarantee-divider"></div>' : ''}
+          <div class="guarantee-item">
+            ${featureIcon(item.icon, item.title)}
+            <b>${item.title}</b>
+            <p>${item.desc}</p>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function footer() {
+  return `
+    <footer class="site-footer">
+      <span class="footer-brand">ichuhai</span>
+      <span class="footer-slogan">全球数字商品，一站式秒发</span>
+      <span class="footer-copyright">© 2024 ichuhai.com All rights reserved.</span>
+    </footer>
+  `;
+}
+
+function homeFaq() {
+  const activeIndex = state.homeFaqActive;
+  return `
+    <section class="home-faq" id="faq">
+      <div class="faq-left">
+        <h2>常见问题</h2>
+        <p>我们致力于为全球用户提供安全、快速、可靠的数字商品服务。</p>
+        <div class="faq-trust-stats">
+          <div class="trust-stat">
+            ${lineIcon('shield-check', '安全交易', 'trust-icon')}
+            <b>100%</b>
+            <span>安全交易保障</span>
+            <small>多重风控机制，守护每一笔交易</small>
+          </div>
+          <div class="trust-stat">
+            ${lineIcon('lightning', '订单处理', 'trust-icon')}
+            <b>12,000+</b>
+            <span>每日订单处理</span>
+            <small>系统自动化，秒级完成交付</small>
+          </div>
+          <div class="trust-stat">
+            ${lineIcon('headset', '客服支持', 'trust-icon')}
+            <b>24/7</b>
+            <span>全天候客服支持</span>
+            <small>专业团队，随时为您服务</small>
+          </div>
+        </div>
+        <a class="faq-contact" href="https://t.me/ichuhai_support" target="_blank" rel="noopener">还有问题？联系我们 →</a>
+      </div>
+      <div class="faq-right">
+        ${HOME_FAQS.map((faq, i) => `
+          <div class="faq-item ${i === activeIndex ? 'active' : ''}" data-action="toggleFaq" data-index="${i}">
+            <div class="faq-header">
+              ${lineIcon(faq.icon, faq.question, 'faq-icon')}
+              <span class="faq-question">${faq.question}</span>
+              ${lineIcon('chevron', '展开', 'faq-chevron')}
+            </div>
+            ${i === activeIndex ? `<div class="faq-answer"><p>${faq.answer}</p></div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
 }
 
 function home() {
-  const item = product();
-  const sku = findSku(item);
   shell(`
-    <section class="home-grid">
-      <div class="home-main">
-        <section class="hero">
-          <div>
-            <h1>全球数字商品，<span>一站式秒发</span></h1>
-            <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
-            <div class="hero-tags">
-              <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
-              <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
-              <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
-            </div>
-          </div>
-        </section>
-        ${productBrowser()}
-        ${optionPanel(item)}
-        ${noticePanel(item)}
-        ${flowStrip()}
+    <section class="hero">
+      <div>
+        <h1>全球数字商品，<span>一站式秒发</span></h1>
+        <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
+        <div class="hero-tags">
+          <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
+          <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
+          <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
+        </div>
       </div>
-      ${quickOrder(item, sku)}
     </section>
+    ${productBrowser()}
+    ${platformGuarantee()}
+    ${homeFaq()}
+    ${footer()}
   `, 'page');
 }
 
@@ -537,7 +684,7 @@ function productBrowser(full = false) {
       </div>` : ''}
       <div class="product-row">
         ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
-        ${!full ? '<a class="round-next" href="#/products">›</a>' : ''}
+        ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="#/products">查看全部商品 →</a></div>' : ''}
       </div>
     </section>
   `;
@@ -549,14 +696,13 @@ function card(item) {
   const deliveryClass = item.deliveryType === 'auto' ? 'auto' : item.deliveryType === 'mixed' ? 'mixed' : 'manual';
   const stock = sku.stockStatus || sku.stock;
   return `
-    <button class="product-card ${item.id === state.selectedProductId ? 'selected' : ''}" data-action="openProduct" data-slug="${item.slug}">
-      ${item.id === state.selectedProductId ? '<span class="check">✓</span>' : ''}
+    <a class="product-card" href="#/products/${item.slug}">
       ${icon(item.icon)}
       <b>${item.name}</b>
       <span class="product-spec">${spec}</span>
       ${price(sku.priceUsdt)}
       <span class="product-badges"><small>${item.category}</small><em class="${deliveryClass}">${deliveryLabel(item.deliveryType)}</em><i class="stock ${stock}">${stockLabel(stock)}</i></span>
-    </button>
+    </a>
   `;
 }
 
@@ -585,16 +731,49 @@ function productProfile(item, sku = findSku(item)) {
   };
 }
 
-function optionPanel(item) {
+function optionPanel(item, purchaseMode = false) {
   const opts = selectedOptions(item);
+  if (!purchaseMode) {
+    return `
+      <section class="glass panel">
+        <h3>选择购买选项 <span>（${item.name}）</span></h3>
+        <div class="option-grid">
+          ${item.optionGroups.map((group, idx) => `
+            <div class="option-group">
+              <h4><span>${idx + 1}</span>${group.name}</h4>
+              <div class="choice-list ${group.displayType}">
+                ${group.options.map((option) => {
+                  const next = { ...opts, [group.key]: option };
+                  const possible = item.skus.some((sku) => {
+                    if (sku.optionValues[group.key] !== option) return false;
+                    return Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined);
+                  });
+                  const active = opts[group.key] === option;
+                  const matching = item.skus.find((sku) => sku.optionValues[group.key] === option && Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined));
+                  return `<button class="${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : '当前组合暂不可购买'}" ${possible ? '' : 'disabled'}>
+                    ${optionLabel(option)}
+                    ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
+                    ${group.displayType === 'cards' && matching ? `<small>${matching.priceUsdt.toFixed(2)} USDT<br/>≈ ${money(matching.priceUsdt)}</small>` : ''}
+                  </button>`;
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `;
+  }
+  const sku = findSku(item, opts);
+  const network = networks.find((n) => n.code === state.paymentNetwork) || networks[0];
+  const disabled = !sku || (sku.stockStatus || sku.stock) === 'sold_out';
+  const buttonText = state.user ? `立即支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
   return `
-    <section class="glass panel">
-      <h3>选择购买选项 <span>（${item.name}）</span></h3>
-      <div class="option-grid">
+    <section class="purchase-card">
+      <div class="purchase-options-grid">
         ${item.optionGroups.map((group, idx) => `
           <div class="option-group">
             <h4><span>${idx + 1}</span>${group.name}</h4>
-            <div class="choice-list ${group.displayType}">
+            <div class="choice-list ${group.displayType} ${group.key === 'duration' ? 'plans' : ''}">
               ${group.options.map((option) => {
                 const next = { ...opts, [group.key]: option };
                 const possible = item.skus.some((sku) => {
@@ -603,7 +782,7 @@ function optionPanel(item) {
                 });
                 const active = opts[group.key] === option;
                 const matching = item.skus.find((sku) => sku.optionValues[group.key] === option && Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined));
-                return `<button class="${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : '当前组合暂不可购买'}">
+                return `<button class="${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : '当前组合暂不可购买'}" ${possible ? '' : 'disabled'}>
                   ${optionLabel(option)}
                   ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
                   ${group.displayType === 'cards' && matching ? `<small>${matching.priceUsdt.toFixed(2)} USDT<br/>≈ ${money(matching.priceUsdt)}</small>` : ''}
@@ -612,7 +791,18 @@ function optionPanel(item) {
             </div>
           </div>
         `).join('')}
+        <div class="option-group payment-group">
+          <h4><span>${item.optionGroups.length + 1}</span>支付方式</h4>
+          <div class="payment-list">
+            <button class="active" type="button">${paymentIcon('C01_usdt.png', 'USDT')} USDT</button>
+            ${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}" type="button">${paymentIcon(n.code === 'TRON' ? 'C02_tron_trc20.png' : 'C03_wallet.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}
+          </div>
+        </div>
       </div>
+      <div class="login-order-note">${featureIcon('B04_lock_encryption.png', '订单绑定')} 订单数据将自动保存至「我的订单」，登录后可随时查看订单状态与发货信息。</div>
+      <button class="primary-pay-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} ${buttonText}</button>
+      <div class="security-note">${featureIcon('B02_shield_secure_payment.png', '安全支付')} 安全加密支付，保障您的隐私与资产安全</div>
+      <span class="sr-only">当前支付网络：${network.displayName} ${network.tokenStandard}</span>
     </section>
   `;
 }
@@ -625,25 +815,56 @@ function optionLabel(value) {
 function noticePanel(item) {
   const sku = findSku(item);
   const profile = productProfile(item, sku);
+  const tabs = [
+    { key: 'basic', label: '基础信息' },
+    { key: 'delivery', label: '发货与售后' },
+    { key: 'limits', label: '使用限制' },
+    { key: 'risk', label: '风险说明' }
+  ];
+  const active = tabs.some((tab) => tab.key === state.noticeTab) ? state.noticeTab : 'basic';
+  const content = {
+    basic: [
+      ['B09_auto_delivery.png', '发货方式', item.notice.deliverySummary, '付款完成后，系统将自动为您开通服务。'],
+      ['B01_lightning_instant_delivery.png', '预计发货', profile.delivery, '高峰期可能略有延迟，请耐心等待。'],
+      ['B08_warranty_guarantee.png', '保质期', item.notice.warrantySummary, '自开通成功起算，按所选套餐持续生效。'],
+      ['shield-check', '售后规则', item.notice.refundSummary, '虚拟商品一经开通，无法退换，请谨慎购买。']
+    ],
+    delivery: [
+      ['B01_lightning_instant_delivery.png', '自动处理', '付款确认后系统自动处理订单', '通常 1-3 分钟完成发货，异常订单会进入人工队列。'],
+      ['B03_headset_support.png', '保期协助', '保期内失效可申请补发或人工协助', '请在订单详情提交售后工单并补充必要说明。'],
+      ['B06_check_circle_success.png', '发货记录', '订单状态可在「我的订单」查看', '发货进度、支付状态与售后记录会持续归档。'],
+      ['shield-check', '退款规则', '已发货且信息无误通常不支持无理由退款', '请在购买前确认规格、地区与支付网络。']
+    ],
+    limits: [
+      ['B02_shield_secure_payment.png', '地区限制', profile.limits, 'Global 地区通常适配范围更广，特殊地区请按说明使用。'],
+      ['B04_lock_encryption.png', '账号状态', '请确认账号状态正常后再购买', '新号请勿频繁切换设备、地区或 IP。'],
+      ['B08_warranty_guarantee.png', '套餐匹配', '不同账号类型可选套餐可能不同', '如组合不可选，请切换地区、账号类型或周期。'],
+      ['B03_headset_support.png', '使用协助', '遇到限制可提交售后工单', '客服会根据订单记录与发货状态协助排查。']
+    ],
+    risk: [
+      ['B07_warning_triangle.png', '不可撤销', '虚拟商品发货后不可撤销', '发货完成后无法回收权益或兑换码。'],
+      ['C10_countdown_timer.png', '异常支付', '异常支付会进入人工处理', '少付、多付、错链、超时付款都需要人工核验。'],
+      ['C02_tron_trc20.png', '网络确认', `当前支付网络：${networkText(state.paymentNetwork)}`, '转账前请确认钱包网络与订单完全一致。'],
+      ['B04_lock_encryption.png', '规格确认', '购买前请确认规格、地区和支付网络', '订单创建后金额与网络会被锁定。']
+    ]
+  }[active];
   return `
-    <section class="glass panel notice">
-      <h3>商品说明 <span>（${item.name}）</span></h3>
-      <div class="notice-summary">
-        <span>${featureIcon(item.notice.deliverySummary.includes('手动') ? 'B10_manual_processing.png' : item.notice.deliverySummary.includes('自动') ? 'B09_auto_delivery.png' : 'B01_lightning_instant_delivery.png', '发货方式')} 发货方式：${item.notice.deliverySummary}</span>
-        <span>${featureIcon('B08_warranty_guarantee.png', '质保')} 保质期：${item.notice.warrantySummary}</span>
-        <span>${featureIcon('B07_warning_triangle.png', '售后规则')} 售后规则：${item.notice.refundSummary}</span>
+    <section class="notice-card">
+      <div class="notice-header"><h2>购买须知</h2><span>（${item.name}）</span></div>
+      <div class="notice-tabs">${tabs.map((tab) => `<button class="${active === tab.key ? 'active' : ''}" data-action="setNoticeTab" data-tab="${tab.key}" type="button">${tab.label}</button>`).join('')}</div>
+      <div class="notice-grid">
+        ${content.map(([iconFile, label, title, text]) => `
+          <div class="notice-item">
+            <div class="notice-icon">${iconFile.startsWith('C') ? paymentIcon(iconFile, label) : iconFile === 'shield-check' ? lineIcon('shield-check', label, 'feature-icon support-rule-icon') : featureIcon(iconFile, label)}</div>
+            <h3>${label}</h3>
+            <strong>${title}</strong>
+            <p>${text}</p>
+          </div>
+        `).join('')}
       </div>
-      <div class="structured-detail">
-        ${[
-          ['商品类型', profile.type],
-          ['你将收到', profile.receives],
-          ['预计发货', profile.delivery],
-          ['有效期', profile.duration],
-          ['使用限制', profile.limits],
-          ['用户需提供', profile.required],
-          ['售后范围', profile.afterSales],
-          ['风险提示', profile.risk]
-        ].map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}
+      <div class="account-binding-note">
+        <strong>${featureIcon('B02_shield_secure_payment.png', '订单绑定')} 订单信息自动绑定当前登录账号</strong>
+        <p>登录购买后，订单将自动绑定您的账号，便于查询与售后服务。</p>
       </div>
       ${['usageGuide', 'warrantyDetail', 'attention'].map((key) => `<details><summary>${{ usageGuide: '使用说明', warrantyDetail: '保质期详情', attention: '注意事项' }[key]}</summary><p>${item.notice[key]}</p></details>`).join('')}
     </section>
@@ -678,26 +899,46 @@ function detail(slug = 'discord-nitro') {
   const item = products.find((p) => p.slug === slug) || product();
   state.selectedProductId = item.id;
   const sku = findSku(item);
+  const opts = selectedOptions(item);
+  const related = products.filter((p) => p.id !== item.id).slice(0, 3);
+  const payText = state.user ? `立即支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
   persist();
   shell(`
     <div class="breadcrumb">首页 / 商品 / ${item.name}</div>
-    <section class="detail-grid">
-      <div class="glass product-visual">
+    <section class="product-hero-card">
+      <div class="product-main-info">
         ${icon(item.icon)}
-        <div class="thumbs"><button>‹</button><span>${icon(item.icon)}</span><span>${assetImg(`${ASSETS.logo}ichuhai-logo-icon-color.png`, 'ichuhai 图标', 'logo-icon')}</span><span>${featureIcon('B08_warranty_guarantee.png', '质保')}</span><button>›</button></div>
+        <div>
+          <h1>${item.name}</h1>
+          <p>${item.short}</p>
+          <div class="product-tags"><span>${featureIcon('B09_auto_delivery.png', '自动发货')} ${item.notice.deliverySummary}</span><span>${featureIcon('B06_check_circle_success.png', '库存充足')} 库存充足</span><span>${featureIcon('B02_shield_secure_payment.png', '安全可靠')} 安全可靠</span></div>
+        </div>
       </div>
-      <div class="glass detail-panel">
-        <h1>${item.name}</h1>
-        <p>${item.short}</p>
-        <div class="mini-tags"><span>${featureIcon('B02_shield_secure_payment.png', '安全保障')} ${item.notice.deliverySummary}</span><span>${featureIcon('B06_check_circle_success.png', '库存充足')} 库存充足</span><span>${featureIcon('B03_headset_support.png', '售后咨询')} 支持售后咨询</span></div>
-        <div class="detail-price">${sku ? price(sku.priceUsdt) : ''}</div>
-        ${optionPanel(item)}
-      </div>
-      ${quickOrder(item, sku)}
+      <div class="product-price">${sku ? price(sku.priceUsdt) : '<span>暂不可购买</span>'}</div>
     </section>
+    ${optionPanel(item, true)}
     ${noticePanel(item)}
-    <section class="glass panel related"><h3>相关推荐</h3><div class="product-row">${products.filter((p) => p.id !== item.id).slice(0, 4).map(card).join('')}</div></section>
-  `, 'page');
+    <section class="recommend-card">
+      <div class="section-header"><div><h2>相关推荐</h2><p>更多优质数字商品推荐</p></div><a href="#/products">查看全部 ›</a></div>
+      <div class="recommend-list">
+        ${related.map((p) => {
+          const relatedSku = findSku(p, defaultOptions(p)) || p.skus[0];
+          const spec = relatedSku ? Object.values(relatedSku.optionValues).join(' · ') : '规格待选';
+          return `<button class="recommend-item" data-action="openProduct" data-slug="${p.slug}">${icon(p.icon)}<div><h3>${p.name}</h3><p>${spec}</p><strong>${relatedSku.priceUsdt.toFixed(2)} USDT</strong></div></button>`;
+        }).join('')}
+      </div>
+    </section>
+    <div class="sticky-checkout-bar">
+      <div class="sticky-product">${icon(item.icon)}<div><strong>${item.name}</strong><p>${Object.values(opts).join(' · ')}</p></div></div>
+      <div class="sticky-meta">
+        <div><span>套餐周期</span><strong>${opts.duration || opts.plan || opts.amount || '已选择'}</strong></div>
+        <div><span>支付方式</span><strong>${networkText(state.paymentNetwork)}</strong></div>
+        <div><span>应付金额</span><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
+      </div>
+      <div class="sticky-mobile-price"><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
+      <button class="sticky-pay-button" data-action="paySelected" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} ${payText}</button>
+    </div>
+  `, 'page detail-page');
 }
 
 function checkout() {
@@ -721,8 +962,11 @@ function checkout() {
           <div class="preview-row">${icon(item.icon)}<b>${item.name}</b>${Object.entries(selectedOptions(item)).map(([k, v]) => `<span>${v}</span>`).join('')}<span>${deliveryLabel(sku.deliveryType)}</span><span>${stockLabel(sku.stockStatus || sku.stock)}</span></div>
         </section>
         <section class="glass panel">
-          <h3>联系信息</h3>
-          <div class="form-row"><label>Telegram 用户名 *<input data-field="telegram" value="${state.telegramUsername}" placeholder="例如 @username" /></label><label>邮箱 *<input data-field="email" value="${state.email}" placeholder="例如 name@example.com" /></label></div>
+          <h3>账号绑定</h3>
+          <div class="account-binding-note checkout-binding">
+            <strong>${featureIcon('B02_shield_secure_payment.png', '订单绑定')} 订单信息自动绑定当前登录账号</strong>
+            <p>${state.user ? `当前登录账号：@${state.user.username}` : '请先登录后再创建订单，发货与售后信息会归档到「我的订单」。'}</p>
+          </div>
         </section>
         <section class="glass panel">
           <h3>支付信息</h3>
@@ -746,10 +990,10 @@ function checkout() {
         <div class="line"><span>商品单价</span>${price(sku.priceUsdt)}</div>
         <div class="line"><span>参考金额</span><b>${money(sku.priceUsdt)}（仅供参考）</b></div>
         <div class="line total"><span>应付金额</span>${price(sku.priceUsdt)}</div>
-        <p class="summary-note">订单创建时锁定 USDT 金额，链上手续费由用户承担。</p>
+        <p class="summary-note">订单创建时锁定 USDT 金额，链上手续费由用户承担。登录后，订单及发货信息将自动保存至「我的订单」。</p>
         <label class="agree"><input type="checkbox" id="agree" /> 我已阅读并同意 <a>购买须知</a> 与 <a>售后规则</a></label>
-        <button class="primary" data-action="createOrder">${paymentIcon('C01_usdt.png', 'USDT')} 确认并支付</button>
-        <p class="secure">支付通知与发货结果将同时发送至 Telegram 与邮箱</p>
+        <button class="primary" data-action="createOrder">${paymentIcon('C01_usdt.png', 'USDT')} ${state.user ? '确认并支付' : '登录后支付'}</button>
+        <p class="secure">订单数据将自动保存至「我的订单」，登录后可随时查看订单状态与发货信息。</p>
       </aside>
     </section>
   `, 'page');
@@ -759,8 +1003,7 @@ function summaryRows(item, sku) {
   const rows = [
     ['商品', item.name],
     ['规格', Object.values(selectedOptions(item)).join(' / ')],
-    ['Telegram 用户名', state.telegramUsername || '@username'],
-    ['邮箱', state.email || 'name@example.com'],
+    ['订单归属', state.user ? `当前账号 @${state.user.username}` : '登录后自动绑定'],
     ['支付网络', networkText(state.paymentNetwork)],
     ['应付金额', `${sku.priceUsdt.toFixed(2)} USDT ≈ ${money(sku.priceUsdt)}`]
   ];
@@ -773,10 +1016,13 @@ function stepper(items, active) {
 
 async function createOrder() {
   syncInputs();
-  const validTg = /^@?[a-zA-Z0-9_]{5,32}$/.test(state.telegramUsername);
-  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email);
-  if (!validTg) return notify('请填写正确的 Telegram 用户名');
-  if (!validEmail) return notify('请填写正确的邮箱');
+  if (!state.user) {
+    state.telegramPanelOpen = true;
+    persist();
+    route();
+    renderTelegramWidget();
+    return notify('请先登录后再支付');
+  }
   const agree = document.querySelector('#agree');
   if (agree && !agree.checked) return notify('请先勾选购买须知与售后规则');
   const item = product();
@@ -785,6 +1031,8 @@ async function createOrder() {
   let serverOrder = null;
   const networkConfirm = document.querySelector('#networkConfirm');
   if (networkConfirm && !networkConfirm.checked) return notify('请先确认支付网络风险');
+  const accountUsername = state.telegramUsername || `@${state.user.username}`;
+  const accountEmail = state.email || `${state.user.username || state.user.id}@telegram.local`;
   try {
     const response = await fetch('/api/orders', {
       method: 'POST',
@@ -792,8 +1040,8 @@ async function createOrder() {
       body: JSON.stringify({
         productId: item.id,
         skuId: sku.id,
-        telegramUsername: state.telegramUsername,
-        email: state.email,
+        telegramUsername: accountUsername,
+        email: accountEmail,
         paymentNetwork: state.paymentNetwork,
         fiatCurrency: state.fiatCurrency
       })
@@ -1244,7 +1492,7 @@ async function route() {
     ['/checkout', () => checkout()],
     ['/orders/lookup', () => lookup()],
     ['/account', () => account()],
-    ['/manage-x0509y', () => renderAdmin()],
+    ['/admin', () => renderAdmin()],
     ['/faq', () => faq()]
   ];
   const staticRoute = routes.find(([path]) => path === hash);
@@ -1287,10 +1535,16 @@ document.addEventListener('click', async (event) => {
   if (action === 'mockTelegramLogin') return mockTelegramLogin();
   if (action === 'closeTelegramPanel') { state.telegramPanelOpen = false; return route(); }
   if (action === 'openProduct') { location.hash = `#/product/${el.dataset.slug}`; return; }
+  if (action === 'toggleFaq') {
+    const index = Number(el.closest('[data-index]').dataset.index);
+    state.homeFaqActive = state.homeFaqActive === index ? null : index;
+    return route();
+  }
   if (action === 'filterCategory') { state.categoryFilter = el.dataset.category; return route(); }
   if (action === 'stockOnly') { state.stockFilter = event.target.checked; return route(); }
   if (action === 'selectProduct') { state.selectedProductId = el.dataset.id; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
   if (action === 'setOption') { const item = products.find((p) => p.id === el.dataset.product); state.selectedOptions[item.id] = { ...selectedOptions(item), [el.dataset.key]: el.dataset.value }; persist(); return route(); }
+  if (action === 'setNoticeTab') { state.noticeTab = el.dataset.tab || 'basic'; persist(); return route(); }
   if (action === 'quickProduct') { state.selectedProductId = event.target.value; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
   if (action === 'quickSku') { const sku = product().skus.find((s) => s.id === event.target.value); state.selectedOptions[product().id] = sku.optionValues; persist(); return route(); }
   if (action === 'setNetwork' || action === 'chooseNetwork') { state.paymentNetwork = event.target.value || el.dataset.code; persist(); return route(); }
@@ -1303,6 +1557,7 @@ document.addEventListener('click', async (event) => {
     return notify('支付信息已复制');
   }
   if (action === 'goCheckout') { syncInputs(); location.hash = '#/checkout'; }
+  if (action === 'paySelected') return createOrder();
   if (action === 'createOrder') return createOrder();
   if (action === 'markPaid') return markPaid(el.dataset.id);
   if (action === 'submitTicket') {
