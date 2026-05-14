@@ -373,6 +373,20 @@ CREATE TABLE IF NOT EXISTS system_settings (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS telegram_login_sessions (
+  token TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed','consumed','expired')),
+  telegram_id TEXT,
+  telegram_username TEXT,
+  telegram_first_name TEXT,
+  telegram_last_name TEXT,
+  user_id TEXT,
+  issued_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tg_login_sessions_expires ON telegram_login_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_tg_login_sessions_status ON telegram_login_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_purchase_fields_product ON purchase_fields(product_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(match_status);

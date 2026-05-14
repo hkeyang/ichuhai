@@ -31,7 +31,7 @@
     }
   ],
   "vars": {
-    "TELEGRAM_BOT_USERNAME": "ichuhai_bot",
+    "TELEGRAM_BOT_USERNAME": "ichuhailoginbot",
     "PUBLIC_SITE_URL": "https://ichuhai.shop",
     "ALLOWED_ORIGINS": "https://ichuhai.shop,https://www.ichuhai.shop",
     "MAIL_FROM": "noreply@ichuhai.shop",
