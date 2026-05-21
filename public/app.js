@@ -976,9 +976,9 @@ function home() {
         <h1>全球数字商品，<span>一站式秒发</span></h1>
         <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
         <div class="hero-tags">
-          <span>${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b><small>秒级交付</small></span>
-          <span>${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b><small>加密保障</small></span>
-          <span>${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b><small>全时在线</small></span>
+          <span><span class="hero-tag-title">${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b></span><small>秒级交付</small></span>
+          <span><span class="hero-tag-title">${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b></span><small>加密保障</small></span>
+          <span><span class="hero-tag-title">${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b></span><small>全时在线</small></span>
         </div>
         <div class="hero-actions">
           <a class="primary-button" href="#products">立即选购 →</a>
@@ -1994,63 +1994,156 @@ async function orderDetail(id) {
   if (!order) return lookup();
   const item = products.find((p) => p.id === order.productId) || products[0];
   const canPay = ['created', 'pending_payment', 'payment_confirming'].includes(order.status);
+  const action = orderPrimaryAction(order);
+  const events = order.events && order.events.length
+    ? order.events
+    : [
+        { label: '订单创建', time: timeFrom(order.createdAt) },
+        { label: statusLabel(order.status), time: timeFrom(order.updatedAt || order.paidAt || order.createdAt) },
+        { label: order.status === 'completed' ? '交付完成' : '等待下一步', time: timeFrom(order.deliveredAt || order.updatedAt) }
+      ];
   shell(`
-    <section class="pay-head">
-      <div><h1>订单详情</h1><p>这里汇总支付状态、发货状态、交付记录和售后入口，便于追踪问题。</p></div>
-      ${statusTracker(['已创建', '等待付款', '链上确认', '发货中', '已完成'], order.status)}
-    </section>
-    <section class="success-grid order-detail-grid">
-      <section class="glass panel">
-        <h3>订单信息</h3>
-        <div class="summary-product">${icon(item.icon)}<div><b>${order.productName}</b><small>${Object.values(order.options).join(' / ')}</small></div></div>
-        ${[
-          ['订单号', order.orderNo],
-          ['订单状态', statusLabel(order.status)],
-          ['应付金额', `${order.amountUsdt.toFixed(2)} USDT（${order.fiatAmount} 仅供参考）`],
-          ['支付网络', networkText(order.paymentNetwork)],
-          ['Telegram', order.telegramUsername],
-          ['邮箱', order.email]
-        ].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
-        ${canPay ? `<a class="primary small link-button" href="#/pay/${order.id}">继续支付</a>` : ''}
-      </section>
-      <section class="glass panel">
-        <h3>发货与通知</h3>
-        <div class="delivery-ok"><b>${order.status === 'completed' ? '发货已完成' : order.status === 'delivering' ? '发货处理中' : '等待付款后发货'}</b><span>${deliveryLabel(order.deliveryType)}</span></div>
-        <div class="secret">
-          <small>交付内容</small>
-          <p>${order.status === 'completed' ? '激活码 / 链接已发送至邮箱与 Telegram（敏感内容已隐藏）' : '付款确认后展示发货进度，自动发货失败会进入人工队列。'}</p>
+    <section class="order-detail-page pro-page">
+      <header class="pro-hero order-detail-hero">
+        <div>
+          <span class="pro-kicker">Order Detail</span>
+          <h1>${escapeHtml(order.orderNo)}</h1>
+          <p>${escapeHtml(order.productName)} · ${escapeHtml(Object.values(order.options || {}).join(' / ') || '标准规格')}</p>
         </div>
-        <div class="structured-detail compact">
-          <div><span>通知记录</span><b>订单创建、支付成功、发货成功/失败都会记录发送状态</b></div>
-          <div><span>异常处理</span><b>少付、多付、错链、超时付款均可通过 TxID 进入人工核验</b></div>
+        <div class="pro-hero-actions">
+          <a class="primary small link-button" href="${action.href}">${action.label}</a>
+          <a class="secondary" href="#/orders/lookup">返回查询</a>
         </div>
+      </header>
+
+      <section class="order-state-panel">
+        <div>
+          <span>当前状态</span>
+          <b class="order-status ${escapeHtml(order.status)}">${statusLabel(order.status)}</b>
+          <small>${canPay ? '请在订单有效期内完成支付，超时需重新下单。' : '支付、发货和售后记录均会关联到该订单。'}</small>
+        </div>
+        ${statusTracker(['已创建', '等待付款', '链上确认', '发货中', '已完成'], order.status)}
       </section>
-      <section class="glass panel support-ticket">
-        <h3>售后工单</h3>
-        <label>问题类型<select id="ticketType"><option>未收到发货</option><option>卡密无效</option><option>账号无法登录</option><option>少付/多付/错链</option><option>填写信息错误</option></select></label>
-        <label>问题描述<textarea id="ticketBody" placeholder="描述问题并补充截图链接、TxID 或账号信息"></textarea></label>
-        <button class="primary" data-action="submitTicket" data-id="${order.id}">提交售后</button>
+
+      <section class="order-detail-layout">
+        <div class="order-detail-main">
+          <section class="detail-panel-block">
+            <div class="account-section-head"><div><h2>商品与金额</h2><p>下单时的商品快照和支付金额。</p></div></div>
+            <div class="summary-product">${icon(item.icon)}<div><b>${escapeHtml(order.productName)}</b><small>${escapeHtml(Object.values(order.options || {}).join(' / '))}</small></div></div>
+            <div class="detail-kv-grid">
+              ${[
+                ['订单金额', `${Number(order.amountUsdt || 0).toFixed(2)} USDT`],
+                ['折合法币', order.fiatAmount || money(order.amountUsdt || 0, order.fiatCurrency)],
+                ['支付网络', networkText(order.paymentNetwork)],
+                ['发货方式', deliveryLabel(order.deliveryType)]
+              ].map(([a, b]) => `<div><span>${a}</span><b>${escapeHtml(b)}</b></div>`).join('')}
+            </div>
+          </section>
+
+          <section class="detail-panel-block">
+            <div class="account-section-head"><div><h2>进度时间线</h2><p>用于排查支付识别、发货和售后节点。</p></div></div>
+            <div class="detail-timeline">${events.map((event) => `<div><b>${escapeHtml(event.label)}</b><span>${escapeHtml(event.time || '-')}</span></div>`).join('')}</div>
+          </section>
+
+          <section class="detail-panel-block">
+            <div class="account-section-head"><div><h2>交付与通知</h2><p>虚拟商品敏感内容会隐藏展示，完整内容通过 Telegram / 邮箱发送。</p></div></div>
+            <div class="delivery-ok"><b>${order.status === 'completed' ? '发货已完成' : order.status === 'delivering' ? '发货处理中' : '等待付款后发货'}</b><span>${deliveryLabel(order.deliveryType)}</span></div>
+            <div class="secret ${order.status === 'completed' ? 'revealed' : ''}">
+              <small>交付摘要</small>
+              <p>${order.status === 'completed' ? '激活码 / 链接已发送，敏感字段已隐藏展示。' : '付款确认后展示发货进度；自动发货失败会进入后台人工队列。'}</p>
+            </div>
+          </section>
+
+          <section class="detail-panel-block">
+            <div class="account-section-head"><div><h2>售后记录</h2><p>这里提交的工单会进入后台售后中心。</p></div></div>
+            <div class="ticket-list">${ticketCardsForOrder(order)}</div>
+          </section>
+        </div>
+
+        <aside class="order-detail-side">
+          <section class="detail-panel-block">
+            <h2>订单资料</h2>
+            ${[
+              ['订单号', order.orderNo],
+              ['Telegram', order.telegramUsername],
+              ['邮箱', order.email || '-'],
+              ['创建时间', timeFrom(order.createdAt)],
+              ['更新时间', timeFrom(order.updatedAt)]
+            ].map(([a, b]) => `<div class="account-field"><span>${a}</span><b>${escapeHtml(b)}</b></div>`).join('')}
+            ${canPay ? `<a class="primary small link-button" href="#/pay/${order.id}">继续支付</a>` : ''}
+          </section>
+          <section class="detail-panel-block support-ticket">
+            <h2>提交售后</h2>
+            <label>问题类型<select id="ticketType"><option>未收到发货</option><option>卡密无效</option><option>账号无法登录</option><option>少付/多付/错链</option><option>填写信息错误</option></select></label>
+            <label>问题描述<textarea id="ticketBody" placeholder="描述问题，并补充截图链接、TxID 或账号信息"></textarea></label>
+            <button class="primary" data-action="submitTicket" data-id="${order.id}" type="button">提交售后工单</button>
+          </section>
+        </aside>
       </section>
     </section>
-  `, 'page');
+  `, 'page order-detail-shell');
 }
 
 async function lookup() {
   const result = state.lookupResult;
+  const savedOrders = state.user ? accountOrders() : orders();
   shell(`
-    <section class="lookup-page">
-      <div class="glass panel lookup-box">
-        <h1>订单查询</h1>
-        <p>支持订单号 + 邮箱/Telegram，或直接用 TxID 找回支付异常订单。登录后可查看本机已保存订单。</p>
-        <label>订单号<input id="lookupOrder" placeholder="GF20240527000123" /></label>
-        <label>邮箱 / Telegram 用户名<input id="lookupContact" placeholder="name@example.com 或 @username" /></label>
-        <label>TxID / 交易 Hash<input id="lookupTxHash" placeholder="支付后未自动识别时可填写" /></label>
-        <button class="primary" data-action="lookupOrder">查询订单</button>
-        ${state.user ? `<h3>我的订单</h3><div class="order-list">${orders().map(orderItem).join('') || '<p>暂无订单</p>'}</div>` : ''}
-      </div>
-      ${result ? `<div class="glass panel lookup-result"><h2>查询结果</h2>${orderItem(result, true)}</div>` : ''}
+    <section class="lookup-page pro-page">
+      <header class="pro-hero lookup-hero">
+        <div>
+          <span class="pro-kicker">Order Service</span>
+          <h1>订单查询与异常处理</h1>
+          <p>用订单号、Telegram、邮箱或 TxID 找回订单；查询结果可直接继续支付、查看发货或提交售后。</p>
+        </div>
+        <div class="pro-hero-actions">
+          <a class="secondary" href="#/account">返回个人中心</a>
+          <a class="primary small link-button" href="#/faq">联系支持</a>
+        </div>
+      </header>
+
+      <section class="lookup-workbench">
+        <div class="lookup-card">
+          <div class="lookup-card-head">
+            <div><h2>查询条件</h2><p>订单号与联系方式组合查询更安全；只有 TxID 时也可以走异常订单找回。</p></div>
+            <span>支持前台订单接口</span>
+          </div>
+          <div class="lookup-form-grid">
+            <label>订单号<input id="lookupOrder" autocomplete="off" placeholder="GF20240527000123" /></label>
+            <label>邮箱 / Telegram 用户名<input id="lookupContact" autocomplete="off" placeholder="name@example.com 或 @username" /></label>
+            <label class="wide">TxID / 交易 Hash<input id="lookupTxHash" autocomplete="off" placeholder="支付后未自动识别时填写，可直接进入人工核验" /></label>
+          </div>
+          <button class="primary lookup-submit" data-action="lookupOrder" type="button">查询订单</button>
+          <div class="lookup-rules">
+            <span><b>1</b> 待付款订单可回到支付页</span>
+            <span><b>2</b> 已发货订单可查看交付摘要</span>
+            <span><b>3</b> 异常订单可提交售后工单</span>
+          </div>
+        </div>
+
+        <aside class="lookup-side">
+          <section>
+            <h2>处理范围</h2>
+            <div class="support-route"><b>未到账 / 少付 / 多付</b><span>提交 TxID 后进入支付核验。</span></div>
+            <div class="support-route"><b>未收到发货</b><span>订单详情内提交售后，后台售后中心承接。</span></div>
+            <div class="support-route"><b>信息填写错误</b><span>未发货前可申请人工修改。</span></div>
+          </section>
+        </aside>
+      </section>
+
+      ${result ? `<section class="lookup-result pro-section">
+        <div class="account-section-head"><div><h2>查询结果</h2><p>已匹配到订单，可继续处理当前状态。</p></div><a href="#/order/${result.id}">查看完整详情</a></div>
+        ${accountOrderCard(result)}
+      </section>` : ''}
+
+      <section class="pro-section">
+        <div class="account-section-head">
+          <div><h2>${state.user ? '我的订单' : '本机订单'}</h2><p>${state.user ? '展示当前登录账号与本机缓存订单。' : '登录后可同步当前 Telegram 账号的线上订单。'}</p></div>
+          ${state.user ? '<button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>' : '<button class="secondary" data-action="telegramLogin" type="button">Telegram 登录</button>'}
+        </div>
+        <div class="account-order-stack">${savedOrders.length ? savedOrders.slice(0, 8).map(accountOrderCard).join('') : accountEmptyOrders()}</div>
+      </section>
     </section>
-  `, 'page');
+  `, 'page lookup-shell');
 }
 
 function orderItem(order, detail = false) {
@@ -2065,6 +2158,72 @@ function orderItem(order, detail = false) {
   </a>`;
 }
 
+function orderPrimaryAction(order) {
+  if (!order) return { label: '查看详情', href: '#/orders/lookup', tone: 'neutral' };
+  if (['created', 'pending_payment', 'payment_confirming'].includes(order.status)) return { label: '继续支付', href: `#/pay/${order.id}`, tone: 'warning' };
+  if (['paid', 'delivering'].includes(order.status)) return { label: '查看发货', href: `#/order/${order.id}`, tone: 'info' };
+  if (order.status === 'completed') return { label: '查看交付', href: `#/order/${order.id}`, tone: 'success' };
+  return { label: '处理异常', href: `#/order/${order.id}`, tone: 'danger' };
+}
+
+function accountTimeline(orderList) {
+  const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]');
+  const orderEvents = orderList.slice(0, 4).map((order) => ({
+    title: statusLabel(order.status),
+    text: `${order.orderNo} · ${order.productName}`,
+    time: order.updatedAt || order.createdAt,
+    tone: orderPrimaryAction(order).tone
+  }));
+  const ticketEvents = tickets.slice(0, 2).map((ticket) => ({
+    title: '售后工单',
+    text: `${ticket.ticketNo || ticket.id} · ${ticket.orderNo || ticket.orderId || '订单待关联'}`,
+    time: ticket.updatedAt || ticket.createdAt,
+    tone: 'info'
+  }));
+  return [...orderEvents, ...ticketEvents]
+    .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0))
+    .slice(0, 5);
+}
+
+function accountOrderCard(order) {
+  const action = orderPrimaryAction(order);
+  const specs = Object.values(order.options || {}).filter(Boolean).join(' / ') || '标准规格';
+  return `<article class="account-order-card">
+    <div class="account-order-top">
+      <div><span>${escapeHtml(timeFrom(order.createdAt))}</span><b>${escapeHtml(order.orderNo)}</b></div>
+      <em class="order-status ${escapeHtml(order.status)}">${statusLabel(order.status)}</em>
+    </div>
+    <div class="account-order-body">
+      <div>
+        <strong>${escapeHtml(order.productName)}</strong>
+        <small>${escapeHtml(specs)}</small>
+      </div>
+      <div class="account-order-money"><b>${Number(order.amountUsdt || 0).toFixed(2)} USDT</b><span>${escapeHtml(order.fiatAmount || money(order.amountUsdt || 0, order.fiatCurrency))}</span></div>
+    </div>
+    <div class="account-order-meta">
+      <span>网络 ${escapeHtml(networkText(order.paymentNetwork || state.paymentNetwork))}</span>
+      <span>发货 ${escapeHtml(deliveryLabel(order.deliveryType))}</span>
+      <span>${escapeHtml(order.telegramUsername || '-')}</span>
+      <a class="${action.tone}" href="${action.href}">${action.label}</a>
+    </div>
+  </article>`;
+}
+
+function ticketCardsForOrder(order) {
+  const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]')
+    .filter((ticket) => {
+      const ticketOrderId = ticket.orderId || ticket.order_id;
+      const ticketOrderNo = ticket.orderNo || ticket.order_no;
+      return [ticketOrderId, ticketOrderNo].includes(order.id) || [ticketOrderId, ticketOrderNo].includes(order.orderNo);
+    });
+  if (!tickets.length) return '<div class="detail-empty">暂无售后工单，遇到发货、兑换或支付问题可在右侧提交。</div>';
+  return tickets.map((ticket) => `<div class="ticket-card">
+    <b>${escapeHtml(ticket.ticketNo || ticket.ticket_no || ticket.id)}</b>
+    <span>${escapeHtml(ticket.type || '售后问题')} · ${escapeHtml(ticket.status || 'open')}</span>
+    <small>${escapeHtml(ticket.description || '')}</small>
+  </div>`).join('');
+}
+
 function productsPage() {
   shell(`<section class="page-title"><h1>商品列表</h1><p>浏览全部数字商品，按分类、交付方式和库存状态快速筛选。</p></section>${productBrowser(true)}`, 'page');
 }
@@ -2072,20 +2231,24 @@ function productsPage() {
 function account() {
   if (!state.user) {
     shell(`
-      <section class="account-page">
-        <div class="account-guest">
+      <section class="account-page pro-page">
+        <div class="account-guest pro-hero">
           <div>
+            <span class="pro-kicker">Account Center</span>
             <h1>用户中心</h1>
-            <p>登录后可查看订单、继续支付、提交售后，并管理通知偏好。</p>
+            <p>登录后进入完整账户工作台：订单、支付、发货、售后、通知偏好和安全会话都集中管理。</p>
           </div>
-          <button class="primary account-login" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')} Telegram 登录</button>
+          <div class="pro-hero-actions">
+            <button class="primary account-login" data-action="telegramLogin" type="button">${navIcon('A07_user_login.png', '登录')} Telegram 登录</button>
+            <a class="secondary" href="#/orders/lookup">订单找回</a>
+          </div>
         </div>
         <div class="account-plan">
           ${[
-            ['订单追踪', '集中查看待付款、发货中、已完成和异常订单。'],
-            ['售后处理', '从订单详情直接提交工单，补充 TxID、截图或账号问题。'],
-            ['通知偏好', '管理 Telegram、邮件、支付和发货提醒。'],
-            ['会话安全', '随时退出登录，清理本机 Telegram 登录态。']
+            ['订单总览', '按待付款、处理中、已完成和异常状态聚合。'],
+            ['支付恢复', '从个人中心直接回到未完成支付页。'],
+            ['售后工单', '订单详情提交后同步进入后台售后中心。'],
+            ['偏好安全', '管理币种、通知渠道和当前设备登录态。']
           ].map(([title, text]) => `<div><b>${title}</b><span>${text}</span></div>`).join('')}
         </div>
       </section>
@@ -2096,6 +2259,9 @@ function account() {
   const list = accountOrders();
   const visibleOrders = filteredAccountOrders();
   const stats = accountStats(list);
+  const latestOrder = list[0];
+  const primaryAction = orderPrimaryAction(latestOrder);
+  const timeline = accountTimeline(list);
   const currencyOptions = Object.keys(CURRENCIES).map((code) => `<option value="${code}" ${code === state.fiatCurrency ? 'selected' : ''}>${CURRENCIES[code].flag} ${code}</option>`).join('');
   const prefRows = [
     ['telegram', 'Telegram 通知', '登录、支付、发货和售后状态同步到 Telegram'],
@@ -2106,32 +2272,53 @@ function account() {
   ];
 
   shell(`
-    <section class="account-page">
-      <section class="account-hero">
-        <div class="account-avatar">${state.user.username.slice(0, 2).toUpperCase()}</div>
-        <div class="account-identity">
-          <span>Telegram 已绑定</span>
-          <h1>@${state.user.username}</h1>
-          <p>订单、发货、售后记录会归档到当前账号，默认收货 Telegram 为 @${state.user.username}。</p>
-        </div>
-        <div class="account-actions">
-          <a class="secondary account-action-link" href="#/products">${navIcon('A02_products.png', '商品')}继续选购</a>
-          <button class="secondary" data-action="refreshAccountOrders" type="button">刷新订单</button>
-          <button class="danger-outline" data-action="logoutAccount" type="button">退出登录</button>
-        </div>
-      </section>
+    <section class="account-page pro-page">
+      <section class="account-dashboard">
+        <aside class="account-nav-card">
+          <div class="account-avatar">${state.user.username.slice(0, 2).toUpperCase()}</div>
+          <h2>@${state.user.username}</h2>
+          <p>Telegram 已绑定</p>
+          <nav>
+            <a class="active" href="#/account">账户总览</a>
+            <a href="#/orders/lookup">订单查询</a>
+            <a href="#/faq">帮助与售后</a>
+            <a href="#/products">继续选购</a>
+          </nav>
+          <button class="danger-outline" data-action="logoutAccount" type="button">退出当前设备</button>
+        </aside>
 
-      <section class="account-metrics">
-        <div><span>全部订单</span><b>${stats.total}</b></div>
-        <div><span>待处理支付</span><b>${stats.paying}</b></div>
-        <div><span>已完成</span><b>${stats.completed}</b></div>
-        <div><span>售后工单</span><b>${stats.support}</b></div>
+        <div class="account-workspace">
+          <header class="account-hero pro-hero">
+            <div>
+              <span class="pro-kicker">Account Center</span>
+              <h1>个人中心</h1>
+              <p>当前账号的订单、支付、发货、售后与通知设置。需要处理的事项会优先显示在这里。</p>
+            </div>
+            <div class="pro-hero-actions">
+              <a class="primary small link-button" href="${primaryAction.href}">${primaryAction.label}</a>
+              <button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>
+            </div>
+          </header>
+
+          <section class="account-metrics">
+            <div><span>全部订单</span><b>${stats.total}</b><small>线上 + 本机</small></div>
+            <div><span>待支付</span><b>${stats.paying}</b><small>需继续处理</small></div>
+            <div><span>已完成</span><b>${stats.completed}</b><small>可查看交付</small></div>
+            <div><span>售后工单</span><b>${stats.support}</b><small>后台可跟进</small></div>
+          </section>
+
+          <section class="account-action-grid">
+            <a href="#/products"><b>继续购买</b><span>进入商品中心选择新套餐</span></a>
+            <a href="#/orders/lookup"><b>找回订单</b><span>通过订单号、联系方式或 TxID 查询</span></a>
+            <a href="#/faq"><b>联系客服</b><span>查看规则并进入售后咨询</span></a>
+          </section>
+        </div>
       </section>
 
       <section class="account-grid">
         <div class="account-main">
           <div class="account-section-head">
-            <div><h2>我的订单</h2><p>${state.accountOrders.loading ? '正在同步线上订单…' : state.accountOrders.error ? `同步失败：${state.accountOrders.error}` : '展示当前 Telegram 账号关联订单和本机保存订单。'}</p></div>
+            <div><h2>订单工作台</h2><p>${state.accountOrders.loading ? '正在同步线上订单…' : state.accountOrders.error ? `同步失败：${state.accountOrders.error}` : '按状态处理当前账号关联订单，支付、发货和售后入口在同一行。'}</p></div>
             <a href="#/orders/lookup">按订单号查询</a>
           </div>
           <div class="account-tabs">
@@ -2142,8 +2329,8 @@ function account() {
               ['issue', '异常 / 退款']
             ].map(([key, label]) => `<button class="${state.accountOrderFilter === key ? 'active' : ''}" data-action="accountOrderFilter" data-filter="${key}" type="button">${label}</button>`).join('')}
           </div>
-          <div class="order-list account-order-list">
-            ${visibleOrders.length ? visibleOrders.map((order) => orderItem(order, true)).join('') : accountEmptyOrders()}
+          <div class="account-order-stack">
+            ${visibleOrders.length ? visibleOrders.map(accountOrderCard).join('') : accountEmptyOrders()}
           </div>
         </div>
 
@@ -2153,6 +2340,12 @@ function account() {
             <div class="account-field"><span>Telegram</span><b>@${state.user.username}</b></div>
             <label class="account-field editable"><span>默认币种</span><select data-action="accountCurrency">${currencyOptions}</select></label>
             <button class="primary small" data-action="saveAccountPrefs" type="button">保存偏好</button>
+          </section>
+          <section>
+            <h2>最近动态</h2>
+            <div class="account-timeline">
+              ${timeline.length ? timeline.map((item) => `<div class="${item.tone}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.text)}</span><small>${escapeHtml(timeFrom(item.time))}</small></div>`).join('') : '<p class="muted">暂无订单动态</p>'}
+            </div>
           </section>
           <section>
             <h2>通知偏好</h2>
@@ -3004,7 +3197,7 @@ document.addEventListener('click', async (event) => {
     const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]').filter((ticket) => ticket.id !== result.id);
     tickets.unshift(result);
     localStorage.setItem('gfTickets', JSON.stringify(tickets));
-    notify(`售后工单已创建：${result.ticketNo}`);
+    notify(`售后工单已创建：${result.ticketNo || result.ticket_no || result.id}`);
     return orderDetail(el.dataset.id);
   }
   if (action === 'submitTxHash') {
@@ -3040,7 +3233,12 @@ document.addEventListener('click', async (event) => {
         if (response.ok) {
           const apiOrder = await response.json();
           state.lookupResult = normalizeServerOrder(apiOrder);
-          if (state.lookupResult) saveOrder(state.lookupResult);
+          if (state.lookupResult) {
+            if (!state.lookupResult.telegramUsername && contact && !contact.includes('@')) state.lookupResult.telegramUsername = `@${contact}`;
+            if (!state.lookupResult.telegramUsername && contact?.startsWith('@')) state.lookupResult.telegramUsername = contact;
+            if (!state.lookupResult.email && contact?.includes('@') && contact.includes('.')) state.lookupResult.email = contact;
+            saveOrder(state.lookupResult);
+          }
         }
       } catch {
         state.lookupResult = null;

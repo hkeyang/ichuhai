@@ -1,11 +1,37 @@
 import Script from 'next/script';
+import { itemListJsonLd, organizationJsonLd, websiteJsonLd } from '@/lib/seo/json-ld';
+import { siteConfig } from '@/lib/seo/products';
+import { JsonLd, SeoHomeContent, ToastRegion } from './seo-components';
+
+export const metadata = {
+  title: {
+    absolute: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城'
+  },
+  description: siteConfig.description,
+  alternates: {
+    canonical: '/'
+  },
+  openGraph: {
+    title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
+    description: siteConfig.description,
+    url: siteConfig.url,
+    siteName: 'ichuhai',
+    type: 'website',
+    images: [siteConfig.logo]
+  }
+};
 
 export default function HomePage() {
   return (
-    <main>
-      <div id="app" />
-      <div id="toast" className="toast" role="status" aria-live="polite" />
-      <Script src="/app.js?v=homepage-refresh-20260514a" type="module" strategy="afterInteractive" />
-    </main>
+    <>
+      <JsonLd id="organization-jsonld" data={organizationJsonLd()} />
+      <JsonLd id="website-jsonld" data={websiteJsonLd()} />
+      <JsonLd id="item-list-jsonld" data={itemListJsonLd()} />
+      <div id="app">
+        <SeoHomeContent />
+      </div>
+      <ToastRegion />
+      <Script src="/app.js?v=seo-routes-20260521a" type="module" strategy="afterInteractive" />
+    </>
   );
 }

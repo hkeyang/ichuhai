@@ -2,8 +2,31 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata = {
-  title: 'ichuhai',
-  description: 'Digital products, instant delivery, secure crypto payment',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://ichuhai.com'),
+  applicationName: 'ichuhai',
+  title: {
+    default: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
+    template: '%s | ichuhai'
+  },
+  description: 'ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT 支付与自动发货。',
+  keywords: ['数字商品', '虚拟商品商城', 'USDT 支付', 'Discord Nitro', 'Spotify Premium', 'YouTube Premium', 'Steam Wallet', 'Microsoft 365'],
+  alternates: {
+    canonical: '/'
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'zh_CN',
+    siteName: 'ichuhai',
+    title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
+    description: '购买数字商品，支持 USDT 支付、自动发货、订单查询与售后处理。',
+    images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
+    description: '购买数字商品，支持 USDT 支付、自动发货、订单查询与售后处理。',
+    images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
+  },
   icons: {
     icon: [
       { url: '/assets/brand/logo/ichuhai-logo-icon-color.png', type: 'image/png' },
