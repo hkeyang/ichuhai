@@ -180,10 +180,14 @@ export async function POST(request: Request) {
       return jsonResponse({ ok: true }, 200, request, cloudflareEnv);
     }
 
+    const siteUrl = (cloudflareEnv.PUBLIC_SITE_URL || "https://ichuhai.shop").replace(/\/+$/, "");
     await tgSendMessage(
       cloudflareEnv.TELEGRAM_BOT_TOKEN,
       chatId,
-      `✅ 登录已确认，正在跳回 <b>ichuhai.shop</b>，你可以关闭这个对话窗口。`
+      `✅ 登录已确认，请返回 <b>ichuhai.shop</b> 查看用户中心。`,
+      {
+        inline_keyboard: [[{ text: "返回 ichuhai.shop", url: `${siteUrl}/#/account` }]],
+      }
     );
 
     return jsonResponse({ ok: true }, 200, request, cloudflareEnv);

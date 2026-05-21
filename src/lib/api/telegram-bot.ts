@@ -15,6 +15,10 @@ export interface TelegramSendMessageResult {
   description?: string;
 }
 
+type TelegramReplyMarkup = {
+  inline_keyboard: Array<Array<{ text: string; url: string }>>;
+};
+
 /**
  * 给指定 chat_id 发送一条文本消息。
  *
@@ -23,7 +27,8 @@ export interface TelegramSendMessageResult {
 export async function tgSendMessage(
   botToken: string,
   chatId: string | number,
-  text: string
+  text: string,
+  replyMarkup?: TelegramReplyMarkup
 ): Promise<TelegramSendMessageResult> {
   if (!botToken) return { ok: false, description: "missing bot token" };
   try {
@@ -35,6 +40,7 @@ export async function tgSendMessage(
         text,
         parse_mode: "HTML",
         disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
     const data = (await response.json().catch(() => ({}))) as TelegramSendMessageResult;
