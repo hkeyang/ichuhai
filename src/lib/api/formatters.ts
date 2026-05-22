@@ -101,6 +101,8 @@ export function formatDelivery(delivery: DeliveryRow) {
     operator: delivery.operator,
     channel: parseJson<string[]>(delivery.channel, []),
     maskedContent: delivery.masked_content,
+    status: delivery.status ?? "sent",
+    failureReason: delivery.failure_reason ?? null,
     createdAt: delivery.created_at,
   };
 }

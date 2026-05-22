@@ -83,6 +83,9 @@ export interface DeliveryRow {
   operator: string | null;
   channel: string; // JSON array
   masked_content: string;
+  encrypted_content: string | null;
+  status: string;
+  failure_reason: string | null;
   created_at: string;
 }
 

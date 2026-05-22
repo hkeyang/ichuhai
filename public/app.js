@@ -254,12 +254,13 @@ const state = {
   selectedProductId: localStorage.getItem('selectedProductId') || 'discord-nitro',
   selectedOptions: JSON.parse(localStorage.getItem('selectedOptions') || '{}'),
   cart: JSON.parse(localStorage.getItem('gfCart') || '[]'),
-  fiatCurrency: localStorage.getItem('preferredCurrency') || 'CNY',
+  fiatCurrency: localStorage.getItem('preferredCurrency') || 'USD',
   paymentNetwork: localStorage.getItem('paymentNetwork') || 'TRON',
   telegramUsername: localStorage.getItem('telegramUsername') || '',
   email: localStorage.getItem('email') || '',
   user: JSON.parse(localStorage.getItem('gfUser') || 'null'),
   adminToken: localStorage.getItem('adminToken') || '',
+  adminUsername: localStorage.getItem('adminUsername') || 'admin',
   currencyOpen: false,
   categoryFilter: '全部',
   searchQuery: '',
@@ -398,6 +399,7 @@ function persist() {
   if (state.user) localStorage.setItem('gfUser', JSON.stringify(state.user));
   else localStorage.removeItem('gfUser');
   localStorage.setItem('adminToken', state.adminToken);
+  localStorage.setItem('adminUsername', state.adminUsername || 'admin');
   localStorage.setItem('adminFilters', JSON.stringify(state.adminFilters));
   localStorage.setItem('accountPrefs', JSON.stringify(state.accountPrefs));
   localStorage.setItem('walletMode', state.walletMode);
@@ -519,6 +521,7 @@ function normalizeServerOrder(order) {
     paymentAddress: order.paymentAddress || order.payment_address,
     status: order.status,
     deliveryType: skuSnapshot.deliveryType || order.deliveryType || order.delivery_type || 'manual',
+    delivery: order.delivery || null,
     createdAt: order.createdAt || order.created_at,
     expiresAt: new Date(order.expiresAt || order.expires_at).getTime(),
     paidAt: order.paidAt || order.paid_at,
@@ -867,8 +870,12 @@ function header() {
   return `
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
+      <nav class="header-nav">
+        <a href="#/products">数字商品</a>
+        <a href="#/faq">解决方案</a>
+        <a href="#/faq">帮助中心</a>
+      </nav>
       <div class="top-actions">
-        <a class="pill header-help ${isDetail ? 'detail-hide-action' : ''}" href="#/faq">${navIcon('A03_faq_help.png', '帮助中心')} 帮助中心</a>
         <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
           <button class="pill currency-pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency} ${navIcon('A10_shaixuan.png', '展开货币', 'currency-chevron')}</button>
           ${state.currencyOpen ? currencyMenu() : ''}
@@ -1911,8 +1918,16 @@ async function markPaid(id) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ txHash: `mock_tx_${Date.now()}` })
       });
-      await fetch(`/api/internal/orders/${order.id}/deliver`, { method: 'POST' });
+      const deliveryResponse = await fetch(`/api/internal/orders/${order.id}/deliver`, { method: 'POST' });
+      const deliveryResult = await deliveryResponse.json().catch(() => ({}));
       const refreshed = (await loadServerOrder(order.id)) || order;
+      if (!deliveryResponse.ok || deliveryResult.nextAction === 'manual_delivery_required') {
+        refreshed.status = deliveryResult.order?.status || refreshed.status || 'paid';
+        saveOrder(refreshed);
+        notify('订单已支付，当前 SKU 需要人工发货');
+        location.hash = `#/order/${refreshed.id}`;
+        return;
+      }
       refreshed.status = 'completed';
       refreshed.paidAt = refreshed.paidAt || new Date().toISOString();
       refreshed.deliveredAt = refreshed.deliveredAt || new Date().toISOString();
@@ -1924,6 +1939,7 @@ async function markPaid(id) {
         { label: '已完成', time: now(57) }
       ];
       saveOrder(refreshed);
+      refreshed.delivery = refreshed.delivery || deliveryResult.delivery || null;
       notify('链上确认完成，系统已自动发货');
       location.hash = `#/order/${refreshed.id}/success`;
       return;
@@ -1949,6 +1965,8 @@ async function success(id) {
     : (await loadServerOrder(id)) || findExactOrder(id);
   if (!order) return home();
   const item = products.find((p) => p.id === order.productId) || products[0];
+  const deliveryContent = order.delivery?.deliveryContent || '';
+  const deliveryPreview = order.delivery?.maskedContent || (deliveryContent ? deliveryContent.slice(0, 3) + '***' : '等待发货记录');
   const events = order.events && order.events.length
     ? order.events
     : [
@@ -1975,13 +1993,11 @@ async function success(id) {
         <div class="delivery-ok"><b>发货状态：已发送至 Telegram 与邮箱</b><span>已完成</span></div>
         <div class="pay-row"><span>Telegram</span><b>已发送至 ${order.telegramUsername}</b></div>
         <div class="pay-row"><span>邮箱</span><b>已发送至 ${order.email}</b></div>
-        <div class="secret">
-          <small>交付内容预览（部分信息已隐藏）</small>
-          <p>激活链接：https://discord.com/billing/promo/************** ⧉</p>
-          <p>激活码：********-****-****-******** ⧉</p>
-          <p>有效期：${order.options.duration || order.options.plan || order.options.amount}</p>
+        <div class="secret ${deliveryContent ? 'revealed' : ''}">
+          <small>交付内容</small>
+          <pre>${escapeHtml(deliveryContent || deliveryPreview)}</pre>
         </div>
-        <button class="primary small" data-action="revealSecret">◎ 查看完整交付内容</button>
+        ${deliveryContent ? `<button class="secondary small" data-copy="${escapeHtml(deliveryContent)}" type="button">复制交付内容</button>` : '<a class="primary small link-button" href="#/order/' + order.id + '">查看订单详情</a>'}
       </section>
       <section class="glass panel next-actions">
         <h3>后续操作</h3>
@@ -1998,6 +2014,8 @@ async function orderDetail(id) {
   const item = products.find((p) => p.id === order.productId) || products[0];
   const canPay = ['created', 'pending_payment', 'payment_confirming'].includes(order.status);
   const action = orderPrimaryAction(order);
+  const deliveryContent = order.delivery?.deliveryContent || '';
+  const deliverySummary = order.delivery?.maskedContent || (order.status === 'completed' ? '发货内容已发送，请联系售后补查。' : '付款确认后展示发货进度；自动发货失败会进入后台人工队列。');
   const events = order.events && order.events.length
     ? order.events
     : [
@@ -2053,7 +2071,7 @@ async function orderDetail(id) {
             <div class="delivery-ok"><b>${order.status === 'completed' ? '发货已完成' : order.status === 'delivering' ? '发货处理中' : '等待付款后发货'}</b><span>${deliveryLabel(order.deliveryType)}</span></div>
             <div class="secret ${order.status === 'completed' ? 'revealed' : ''}">
               <small>交付摘要</small>
-              <p>${order.status === 'completed' ? '激活码 / 链接已发送，敏感字段已隐藏展示。' : '付款确认后展示发货进度；自动发货失败会进入后台人工队列。'}</p>
+              ${deliveryContent ? `<pre>${escapeHtml(deliveryContent)}</pre><button class="secondary small" data-copy="${escapeHtml(deliveryContent)}" type="button">复制交付内容</button>` : `<p>${escapeHtml(deliverySummary)}</p>`}
             </div>
           </section>
 
@@ -2212,6 +2230,108 @@ function accountOrderCard(order) {
   </article>`;
 }
 
+function accountDemoOrders() {
+  return [
+    { icon: 'discord', productName: 'Discord Nitro', specs: 'Global · 1个月', orderNo: 'CH20250528D0001', createdAt: '2025-05-28 14:32:18', amountUsdt: 1.8, delivery: '自动发货', payMethod: 'USDT (TRC20)', status: '已完成', statusTone: 'success', deliveredAt: '2025-05-28 14:32:25' },
+    { icon: 'spotify', productName: 'Spotify Premium', specs: '个人版 · 1个月', orderNo: 'CH20250527Q0045', createdAt: '2025-05-27 11:08:36', amountUsdt: 2.2, delivery: '自动发货', payMethod: 'USDT (TRC20)', status: '已完成', statusTone: 'success' },
+    { icon: 'youtube', productName: 'YouTube Premium', specs: '个人版 · 1个月', orderNo: 'CH20250526Q0112', createdAt: '2025-05-26 09:16:05', amountUsdt: 2.5, delivery: '自动发货', payMethod: 'USDT (TRC20)', status: '已完成', statusTone: 'success' },
+    { icon: 'steam', productName: 'Steam Wallet', specs: '5 USD', orderNo: 'CH20250525Q0303', createdAt: '2025-05-25 18:42:31', amountUsdt: 5, delivery: '人工处理', payMethod: 'USDT (TRC20)', status: '处理中', statusTone: 'warning' },
+    { icon: 'office', productName: 'Microsoft 365', specs: '个人版 · 1年', orderNo: 'CH20250524Q0777', createdAt: '2025-05-24 21:27:19', amountUsdt: 35, delivery: '自动发货', payMethod: 'USDT (TRC20)', status: '已完成', statusTone: 'success' }
+  ];
+}
+
+function accountStatCards() {
+  return [
+    ['receipt', '全部订单', '128', '所有时间'],
+    ['card', '待支付', '5', '等待支付'],
+    ['headset', '处理中', '12', '已付款，处理中'],
+    ['shield-check', '已完成', '98', '已发货，交易完成'],
+    ['refund', '售后', '3', '申请中或待处理']
+  ].map(([iconName, title, value, desc]) => `
+    <article class="member-stat-card">
+      <span>${lineIcon(iconName, title, 'member-stat-icon')}</span>
+      <div><b>${escapeHtml(title)}</b><strong>${escapeHtml(value)}</strong><small>${escapeHtml(desc)}</small></div>
+    </article>
+  `).join('');
+}
+
+function accountOverviewCards(userName) {
+  const cards = [
+    ['个人信息', `<div class="overview-profile">${navIcon('A07_user_login.png', '头像', 'overview-avatar')}<span><b>${escapeHtml(userName)}</b><em>高级会员</em><small>ID：12345678</small></span></div>`, '编辑资料'],
+    ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button type="button">充值</button><button type="button">提现</button></div>', ''],
+    ['邮箱绑定', '<b>user@example.com</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换邮箱'],
+    ['手机号绑定', '<b>+44 **** 8888</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换手机号'],
+    ['Telegram 绑定', '<b>@your_telegram</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换账号'],
+    ['默认货币', '<b>USD</b>', '更改货币'],
+    ['最近登录', '<b>2025-05-28 18:24</b><small>London, United Kingdom</small>', '查看登录记录'],
+    ['通知设置', '<b>邮箱通知、订单更新、活动提醒等</b><em class="bound">已开启</em><label class="overview-switch"><input checked type="checkbox" /><span></span></label>', '']
+  ];
+  return cards.map(([title, body, action]) => `
+    <article class="overview-card">
+      <h3>${title}</h3>
+      <div class="overview-body">${body}</div>
+      ${action ? `<button type="button">${action}</button>` : ''}
+    </article>
+  `).join('');
+}
+
+function accountOrderRows() {
+  return accountDemoOrders().map((order, index) => `
+    <div class="member-order-row ${index === 0 ? 'is-expanded' : ''}">
+      <div class="member-order-cells">
+        <div class="order-product">${icon(order.icon)}<span><b>${escapeHtml(order.productName)}</b><small>${escapeHtml(order.specs)}</small></span></div>
+        <span>${escapeHtml(order.orderNo)}</span>
+        <span>${escapeHtml(order.createdAt)}</span>
+        <strong>${Number(order.amountUsdt).toFixed(2)}<small>USDT</small></strong>
+        <em class="${order.delivery === '人工处理' ? 'manual' : ''}">${escapeHtml(order.delivery)}</em>
+        <i class="${order.statusTone}">• ${escapeHtml(order.status)}</i>
+        <button class="detail-button" type="button">${index === 0 ? '收起详情' : '查看详情'}</button>
+      </div>
+      ${index === 0 ? accountExpandedOrder(order) : ''}
+    </div>
+  `).join('');
+}
+
+function accountExpandedOrder(order) {
+  return `
+    <section class="expanded-detail">
+      <div class="detail-column">
+        <h3>订单信息</h3>
+        ${[
+          ['订单号', order.orderNo],
+          ['购买时间', order.createdAt],
+          ['支付方式', order.payMethod],
+          ['支付金额', `${Number(order.amountUsdt).toFixed(2)} USDT`],
+          ['交付方式', order.delivery],
+          ['订单状态', order.status],
+          ['发货时间', order.deliveredAt || '2025-05-28 14:32:25']
+        ].map(([label, value]) => `<p><span>${label}</span><b>${escapeHtml(value)}</b></p>`).join('')}
+      </div>
+      <div class="detail-column">
+        <h3>商品信息</h3>
+        <div class="detail-product">${icon(order.icon)}<span><b>${escapeHtml(order.productName)}</b><small>${escapeHtml(order.specs)}</small></span></div>
+      </div>
+      <div class="detail-column delivery-content">
+        <h3>自动发货内容</h3>
+        ${[
+          ['账号 / 邮箱', 'dis************@gmail.com', 'dis************@gmail.com', false],
+          ['密码', '••••••••••••••••', 'Discord-Nitro-2025!', true],
+          ['兑换链接', 'https://discord.com/billing/redeem', 'https://discord.com/billing/redeem', false],
+          ['卡密 / Redeem Code', 'DNBP-XXXX-XXXX-XXXX', 'DNBP-XXXX-XXXX-XXXX', false]
+        ].map(([label, masked, copy, secret]) => `
+          <label class="delivery-field">
+            <span>${label}</span>
+            <input ${secret ? 'data-secret-field' : ''} value="${escapeHtml(masked)}" data-secret-value="${escapeHtml(copy)}" readonly />
+            ${secret ? `<button class="icon-only" data-action="toggleAccountSecret" type="button">${lineIcon('user', '显示密码', 'field-icon')}</button>` : ''}
+            <button data-copy="${escapeHtml(copy)}" type="button">复制</button>
+          </label>
+        `).join('')}
+        <div class="delivery-actions"><button class="primary small" type="button">查看凭证</button><button class="secondary small" type="button">下载凭证</button><a class="secondary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></div>
+      </div>
+    </section>
+  `;
+}
+
 function ticketCardsForOrder(order) {
   const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]')
     .filter((ticket) => {
@@ -2232,162 +2352,70 @@ function productsPage() {
 }
 
 function account() {
-  if (!state.user) {
-    shell(`
-      <section class="account-console account-console-guest">
-        <div class="account-console-panel">
-          <span class="console-eyebrow">Account Center</span>
-          <h1>登录后管理订单、支付与售后</h1>
-          <p>账户中心会把待付款、发货进度、售后工单和通知偏好集中到一个工作台。</p>
-          <div class="console-actions">
-            <button class="primary account-login" data-action="telegramLogin" type="button">${navIcon('A07_user_login.png', '登录')} Telegram 登录</button>
-            <a class="secondary" href="#/orders/lookup">找回订单</a>
-          </div>
-        </div>
-        <div class="account-guest-modules">
-          ${[
-            ['订单', '查看待付款、发货中和已完成订单'],
-            ['支付', '继续支付或提交 TxID 人工核验'],
-            ['售后', '从订单详情创建工单并同步后台'],
-            ['偏好', '管理币种、通知和当前设备']
-          ].map(([title, text]) => `<div><b>${title}</b><span>${text}</span></div>`).join('')}
-        </div>
-      </section>
-    `, 'page account-console-shell');
-    return;
-  }
-
-  const list = accountOrders();
-  const visibleOrders = filteredAccountOrders();
-  const stats = accountStats(list);
-  const latestOrder = list[0];
-  const primaryAction = orderPrimaryAction(latestOrder);
-  const timeline = accountTimeline(list);
-  const pendingOrders = list.filter((order) => ['created', 'pending_payment', 'payment_confirming'].includes(order.status));
-  const activeOrders = list.filter((order) => ['paid', 'delivering'].includes(order.status));
-  const issueOrders = list.filter((order) => ['expired', 'failed', 'refunding', 'refunded'].includes(order.status));
-  const currencyOptions = Object.keys(CURRENCIES).map((code) => `<option value="${code}" ${code === state.fiatCurrency ? 'selected' : ''}>${CURRENCIES[code].flag} ${code}</option>`).join('');
-  const prefRows = [
-    ['telegram', 'Telegram 通知', '登录、支付、发货和售后状态同步到 Telegram'],
-    ['email', '邮件备份', '订单创建和发货结果同步发送到邮箱'],
-    ['payment', '支付提醒', '保留待付款和链上确认提醒'],
-    ['delivery', '发货提醒', '自动发货、人工处理和异常状态提醒'],
-    ['support', '售后提醒', '工单回复和补发进度提醒']
-  ];
-
+  const userName = state.user?.username || '用户昵称';
   shell(`
-    <section class="account-console">
-      <aside class="console-sidebar">
-        <a class="console-brand" href="#/account"><span>${state.user.username.slice(0, 2).toUpperCase()}</span><b>@${state.user.username}</b></a>
-        <small>Telegram 已绑定</small>
-        <nav>
-          <a class="active" href="#/account">总览</a>
-          <a href="#/orders/lookup">订单查询</a>
-          <a href="#/products">商品中心</a>
-          <a href="#/faq">帮助售后</a>
-        </nav>
-        <div class="console-sidebar-foot">
-          <span>默认币种</span>
-          <b>${CURRENCIES[state.fiatCurrency]?.flag || ''} ${state.fiatCurrency}</b>
-          <button class="danger-outline" data-action="logoutAccount" type="button">退出设备</button>
+    <section class="member-center">
+      <aside class="member-sidebar">
+        <div class="member-user">
+          <span class="member-avatar">IC</span>
+          <h2>${escapeHtml(userName)}</h2>
+          <em>高级会员</em>
+          <div class="member-balance"><span>账户余额</span><b>128.60 USDT</b></div>
+          <button type="button">充值</button>
         </div>
+        <nav class="member-nav">
+          ${['订单中心','我的内容','售后服务','账号绑定','安全中心','通知设置','帮助中心'].map((label, index) => `<a class="${index === 0 ? 'active' : ''}" href="${index === 0 ? '#/account' : '#/account'}">${lineIcon(index === 0 ? 'receipt' : index === 4 ? 'shield-check' : index === 5 ? 'headset' : 'card', label, 'member-nav-icon')}${label}</a>`).join('')}
+        </nav>
+        <button class="member-logout" data-action="logoutAccount" type="button">退出登录</button>
       </aside>
 
-      <section class="console-main">
-        <header class="console-top">
-          <div>
-            <span class="console-eyebrow">Account Overview</span>
-            <h1>账户工作台</h1>
-            <p>${state.accountOrders.loading ? '正在同步线上订单…' : state.accountOrders.error ? `同步失败：${state.accountOrders.error}` : '订单、支付、发货和售后集中处理。'}</p>
-          </div>
-          <div class="console-actions">
-            <a class="secondary" href="#/orders/lookup">查询订单</a>
-            <button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>
-            <a class="primary small link-button" href="${latestOrder ? primaryAction.href : '#/products'}">${latestOrder ? primaryAction.label : '去选购'}</a>
-          </div>
+      <section class="member-main">
+        <header class="member-title">
+          <h1>个人中心 / 我的订单</h1>
+          <p>查看与管理您的所有订单，轻松获取商品与售后支持。</p>
         </header>
 
-        <section class="console-status-grid">
-          <div><span>全部订单</span><b>${stats.total}</b><small>线上 + 本机缓存</small></div>
-          <div class="${pendingOrders.length ? 'is-hot' : ''}"><span>待支付</span><b>${pendingOrders.length}</b><small>${pendingOrders.length ? '建议优先处理' : '暂无待付款'}</small></div>
-          <div><span>发货处理中</span><b>${activeOrders.length}</b><small>支付后自动/人工履约</small></div>
-          <div class="${issueOrders.length ? 'is-risk' : ''}"><span>异常订单</span><b>${issueOrders.length}</b><small>可走售后核验</small></div>
+        <section class="member-stats">${accountStatCards()}</section>
+
+        <nav class="order-tabs">
+          ${['全部订单','待支付','自动发货','人工处理','已完成','售后记录'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
+        </nav>
+
+        <section class="order-filter-bar">
+          <label>${navIcon('A09_search.png', '搜索', 'filter-icon')}<input placeholder="搜索订单号或商品名称" /></label>
+          <input placeholder="开始日期" />
+          <input placeholder="结束日期" />
+          <select><option>全部状态</option></select>
+          <select><option>最新下单</option></select>
+          <button type="button">导出订单</button>
         </section>
 
-        <section class="console-layout">
-          <div class="console-primary">
-            <section class="console-panel console-todos">
-              <div class="console-panel-head">
-                <div><h2>待办事项</h2><p>系统按订单状态自动生成下一步操作。</p></div>
-                <a href="#/orders/lookup">找回订单</a>
-              </div>
-              <div class="todo-list">
-                ${pendingOrders.slice(0, 3).map((order) => `<a class="todo-item warning" href="#/pay/${order.id}"><b>继续支付</b><span>${escapeHtml(order.orderNo)} · ${escapeHtml(order.productName)}</span><em>${Number(order.amountUsdt || 0).toFixed(2)} USDT</em></a>`).join('')}
-                ${activeOrders.slice(0, 2).map((order) => `<a class="todo-item info" href="#/order/${order.id}"><b>查看发货</b><span>${escapeHtml(order.orderNo)} · ${statusLabel(order.status)}</span><em>${deliveryLabel(order.deliveryType)}</em></a>`).join('')}
-                ${issueOrders.slice(0, 2).map((order) => `<a class="todo-item danger" href="#/order/${order.id}"><b>处理异常</b><span>${escapeHtml(order.orderNo)} · ${statusLabel(order.status)}</span><em>提交售后</em></a>`).join('')}
-                ${!pendingOrders.length && !activeOrders.length && !issueOrders.length ? '<div class="todo-empty"><b>暂无待办</b><span>购买后，待支付、发货中和异常订单会出现在这里。</span><a href="#/products">去选购商品</a></div>' : ''}
-              </div>
-            </section>
+        <section class="member-order-list">
+          <div class="member-order-head"><span>商品</span><span>订单号</span><span>购买时间</span><span>金额</span><span>支付方式</span><span>状态</span><span>操作</span></div>
+          ${accountOrderRows()}
+        </section>
 
-            <section class="console-panel">
-              <div class="console-panel-head">
-                <div><h2>最近订单</h2><p>支持按状态筛选，操作会跳转到对应支付、详情或售后页面。</p></div>
-                <div class="account-tabs compact">
-                  ${[
-                    ['all', '全部'],
-                    ['paying', '待支付'],
-                    ['done', '进行中 / 已完成'],
-                    ['issue', '异常 / 退款']
-                  ].map(([key, label]) => `<button class="${state.accountOrderFilter === key ? 'active' : ''}" data-action="accountOrderFilter" data-filter="${key}" type="button">${label}</button>`).join('')}
-                </div>
-              </div>
-              <div class="account-order-table">
-                ${visibleOrders.length ? visibleOrders.map((order) => {
-                  const action = orderPrimaryAction(order);
-                  return `<a class="account-order-row" href="#/order/${order.id}">
-                    <span><b>${escapeHtml(order.orderNo)}</b><small>${escapeHtml(timeFrom(order.createdAt))}</small></span>
-                    <span><b>${escapeHtml(order.productName)}</b><small>${escapeHtml(Object.values(order.options || {}).filter(Boolean).join(' / ') || '标准规格')}</small></span>
-                    <em class="order-status ${escapeHtml(order.status)}">${statusLabel(order.status)}</em>
-                    <strong>${Number(order.amountUsdt || 0).toFixed(2)} USDT</strong>
-                    <i class="${action.tone}">${action.label}</i>
-                  </a>`;
-                }).join('') : accountEmptyOrders()}
-              </div>
-            </section>
+        <section class="member-pagination">
+          <span>共 128 条订单</span>
+          <div><button type="button">‹</button><button class="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><em>...</em><button type="button">13</button><button type="button">›</button></div>
+          <select><option>10 条/页</option></select>
+        </section>
+
+        <section class="account-overview">
+          <nav class="account-tabs">
+            ${['基础资料','账号绑定','通知偏好','帮助支持','安全中心'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
+          </nav>
+          <div class="profile-grid">${accountOverviewCards(userName)}</div>
+          <div class="security-entry">
+            <span>${lineIcon('shield-check', '安全中心', 'security-entry-icon')}<b>安全中心</b><small>修改密码、双重验证、设备管理等安全设置请前往安全中心管理。</small></span>
+            <a class="secondary small link-button" href="#/account">前往安全中心</a>
           </div>
-
-          <aside class="console-rail">
-            <section class="console-panel compact-panel">
-              <h2>账户资料</h2>
-              <div class="account-field"><span>Telegram</span><b>@${state.user.username}</b></div>
-              <label class="account-field editable"><span>默认币种</span><select data-action="accountCurrency">${currencyOptions}</select></label>
-              <button class="primary small" data-action="saveAccountPrefs" type="button">保存偏好</button>
-            </section>
-            <section class="console-panel compact-panel">
-              <h2>最近动态</h2>
-              <div class="account-timeline">
-                ${timeline.length ? timeline.map((item) => `<div class="${item.tone}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.text)}</span><small>${escapeHtml(timeFrom(item.time))}</small></div>`).join('') : '<p class="muted">暂无订单动态</p>'}
-              </div>
-            </section>
-            <section class="console-panel compact-panel">
-              <h2>通知偏好</h2>
-              <div class="account-pref-list compact">
-                ${prefRows.map(([key, title, text]) => `<label class="account-pref"><input type="checkbox" data-action="toggleAccountPref" data-pref="${key}" ${state.accountPrefs[key] ? 'checked' : ''}/><span><b>${title}</b><small>${text}</small></span></label>`).join('')}
-              </div>
-            </section>
-            <section class="console-panel support-panel">
-              <h2>售后与安全</h2>
-              <a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a>
-              <a href="#/orders/lookup">找回订单</a>
-              <button data-action="logoutAccount" type="button">退出当前设备</button>
-            </section>
-          </aside>
         </section>
       </section>
     </section>
-  `, 'page account-console-shell');
+  `, 'member-page');
 
-  queueMicrotask(() => loadAccountOrders());
+  if (state.user) queueMicrotask(() => loadAccountOrders());
 }
 
 function accountEmptyOrders() {
@@ -2409,35 +2437,48 @@ function adminLoginPanel() {
     <section class="admin-shell admin-login-shell">
       <div class="admin-login-visual">
         <a class="admin-brand login-brand" href="#/"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营控制台</span></a>
-        <h1>虚拟商品运营后台</h1>
-        <p>订单、库存、支付、发货、售后和审计集中在一个可操作工作台。</p>
+        <div class="admin-login-copy">
+          <span class="admin-login-eyebrow">Secure operation desk</span>
+          <h1>虚拟商品运营后台</h1>
+          <p>订单、库存、支付、发货、售后和审计集中在一个可操作工作台。</p>
+        </div>
+        <div class="admin-login-metrics" aria-label="后台状态">
+          <span><b>12h</b><small>会话有效期</small></span>
+          <span><b>HMAC</b><small>签名令牌</small></span>
+          <span><b>Audit</b><small>操作留痕</small></span>
+        </div>
         <div class="admin-login-points">
-          <span>真实数据校验</span>
-          <span>批量导入预览</span>
-          <span>高风险操作审计</span>
+          <span>${lineIcon('shield-check', '安全校验', 'admin-login-point-icon')}用户名密码校验</span>
+          <span>${lineIcon('receipt', '订单审计', 'admin-login-point-icon')}敏感操作审计</span>
+          <span>${lineIcon('lightning', '批量处理', 'admin-login-point-icon')}库存批量导入</span>
         </div>
       </div>
-      <div class="admin-login-card">
+      <form class="admin-login-card" data-action="adminLoginForm">
         <span class="admin-form-kicker">Admin Console</span>
         <h2>登录后台</h2>
-        <p>请输入管理员密码。登录后才能查看敏感运营数据和执行人工操作。</p>
-        <label>管理员密码<input id="adminPassword" type="password" placeholder="输入管理员密码" autocomplete="current-password" /></label>
-        <button class="primary" data-action="adminLogin" type="button">登录后台</button>
-      </div>
+        <p>使用管理员用户名和密码进入控制台。登录后才能查看敏感运营数据和执行人工操作。</p>
+        <label>用户名<input id="adminUsername" name="username" value="${escapeHtml(state.adminUsername || 'admin')}" type="text" placeholder="admin" autocomplete="username" /></label>
+        <label>密码<input id="adminPassword" name="password" type="password" placeholder="输入管理员密码" autocomplete="current-password" /></label>
+        <button class="primary" data-action="adminLogin" type="submit">登录后台</button>
+        <small class="admin-login-hint">生产环境请配置 ADMIN_USERNAME、ADMIN_PASSWORD 和 ADMIN_SESSION_SECRET。</small>
+      </form>
     </section>
   `;
 }
 
 async function adminLogin() {
+  const username = document.querySelector('#adminUsername')?.value.trim() || '';
   const password = document.querySelector('#adminPassword')?.value || '';
+  if (!username) return notify('请输入管理员用户名');
   if (!password) return notify('请输入管理员密码');
   const response = await fetch('/api/admin/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password })
+    body: JSON.stringify({ username, password })
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) return notify(result.error || '登录失败');
+  state.adminUsername = username;
   state.adminToken = result.token;
   persist();
   notify('后台登录成功');
@@ -3165,6 +3206,13 @@ document.addEventListener('click', async (event) => {
   if (action === 'refreshAccountOrders') return loadAccountOrders({ force: true });
   if (action === 'accountOrderFilter') { state.accountOrderFilter = el.dataset.filter || 'all'; return route(); }
   if (action === 'saveAccountPrefs') return saveAccountPreferences();
+  if (action === 'toggleAccountSecret') {
+    const field = el.closest('.delivery-field')?.querySelector('[data-secret-field]');
+    if (!field) return;
+    const hidden = field.value.includes('•');
+    field.value = hidden ? field.dataset.secretValue : '••••••••••••••••';
+    return notify(hidden ? '密码已显示' : '密码已隐藏');
+  }
   if (action === 'telegramDeeplinkReissue') { telegramDeeplinkIssue({ openImmediately: true }); return; }
   if (action === 'openTelegramDeeplink') {
     // <a href="tg://..."> 会尝试调起桌面客户端；浏览器未注册协议时会静默失败。
@@ -3286,7 +3334,10 @@ document.addEventListener('click', async (event) => {
     notify('已退出后台');
     return renderAdmin();
   }
-  if (action === 'adminLogin') return adminLogin();
+  if (action === 'adminLogin') {
+    event.preventDefault();
+    return adminLogin();
+  }
   if (action === 'adminMarkPaid') {
     const response = await adminFetch(`/api/admin/orders/${el.dataset.id}/status`, {
       method: 'PATCH',
@@ -3301,9 +3352,11 @@ document.addEventListener('click', async (event) => {
     return renderAdmin();
   }
   if (action === 'adminDeliver') {
+    const deliveryContent = prompt('请输入要发给用户的完整发货内容（任意格式，系统会加密保存并发送邮件）');
+    if (!deliveryContent || !deliveryContent.trim()) return notify('已取消人工发货');
     const response = await adminFetch(`/api/admin/orders/${el.dataset.id}/manual-deliver`, {
       method: 'POST',
-      body: JSON.stringify({ operator: 'admin', maskedContent: 'manual-********' })
+      body: JSON.stringify({ operator: 'admin', deliveryContent: deliveryContent.trim() })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return notify(result.error || '手动补发失败');
@@ -3374,6 +3427,12 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('submit', async (event) => {
+  const loginForm = event.target.closest('[data-action="adminLoginForm"]');
+  if (loginForm) {
+    event.preventDefault();
+    return adminLogin();
+  }
+
   const importForm = event.target.closest('[data-action="adminInventoryImport"]');
   if (importForm) {
     event.preventDefault();

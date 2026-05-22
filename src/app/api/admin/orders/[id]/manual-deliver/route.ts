@@ -10,8 +10,15 @@ import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { sendDeliveryEmail } from "@/lib/api/mailer";
+import { encryptInventoryValue } from "@/lib/api/inventory-crypto";
 import { formatDelivery, formatOrder } from "@/lib/api/formatters";
 import type { OrderRow, DeliveryRow } from "@/lib/api/types";
+
+function maskValue(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length <= 6) return "***";
+  return `${normalized.slice(0, 3)}***${normalized.slice(-3)}`;
+}
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -42,12 +49,20 @@ export async function POST(
       operator?: unknown;
       channel?: unknown;
       maskedContent?: unknown;
+      deliveryContent?: unknown;
     }>(request);
 
     const method = String(body.method ?? "manual").trim();
     const operator = String(body.operator ?? "admin").trim();
     const channel = Array.isArray(body.channel) ? body.channel : ["email"];
-    const maskedContent = String(body.maskedContent ?? "").trim();
+    const deliveryContent = String(body.deliveryContent ?? body.maskedContent ?? "").trim();
+    if (!deliveryContent) throw new HttpError(422, "deliveryContent is required");
+    if (deliveryContent.length > 4000) throw new HttpError(422, "deliveryContent is too long");
+    const maskedContent = maskValue(deliveryContent);
+    const encryptedDeliveryContent = await encryptInventoryValue(
+      deliveryContent,
+      cloudflareEnv.INVENTORY_ENCRYPTION_KEY
+    );
 
     // 1. 查询订单，验证存在
     const order = await db
@@ -60,7 +75,7 @@ export async function POST(
     // 2. UPDATE orders SET status='completed', delivered_at=datetime('now')
     await db
       .prepare(
-        "UPDATE orders SET status = 'completed', delivered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+        "UPDATE orders SET status = 'completed', delivery_status = 'delivered', delivered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
       )
       .bind(id)
       .run();
@@ -69,8 +84,8 @@ export async function POST(
     const deliveryId = crypto.randomUUID();
     await db
       .prepare(
-        `INSERT INTO deliveries (id, order_id, method, operator, channel, masked_content, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+        `INSERT INTO deliveries (id, order_id, method, operator, channel, masked_content, encrypted_content, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', datetime('now'))`
       )
       .bind(
         deliveryId,
@@ -78,7 +93,8 @@ export async function POST(
         method,
         operator,
         JSON.stringify(channel),
-        maskedContent || "********"
+        maskedContent,
+        encryptedDeliveryContent
       )
       .run();
 
@@ -100,7 +116,7 @@ export async function POST(
       try {
         mailResult = await sendDeliveryEmail(
           updatedOrder!,
-          maskedContent || "********",
+          deliveryContent,
           cloudflareEnv
         );
       } catch (err) {

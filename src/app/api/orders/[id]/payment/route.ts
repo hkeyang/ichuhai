@@ -2,7 +2,82 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
-import type { OrderRow } from "@/lib/api/types";
+import { decryptInventoryValue } from "@/lib/api/inventory-crypto";
+import type { DeliveryRow, OrderRow } from "@/lib/api/types";
+
+function parseJson<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function deliveryPayload(
+  db: D1Database,
+  orderId: string,
+  env: CloudflareEnv
+) {
+  const delivery = await db
+    .prepare("SELECT * FROM deliveries WHERE order_id = ? ORDER BY created_at DESC LIMIT 1")
+    .bind(orderId)
+    .first<DeliveryRow>();
+
+  if (!delivery) return null;
+
+  let deliveryContent: string | null = null;
+  if (delivery.encrypted_content) {
+    try {
+      deliveryContent = await decryptInventoryValue(
+        delivery.encrypted_content,
+        env.INVENTORY_ENCRYPTION_KEY
+      );
+    } catch {
+      deliveryContent = null;
+    }
+  }
+
+  return {
+    id: delivery.id,
+    method: delivery.method,
+    operator: delivery.operator,
+    channel: parseJson<string[]>(delivery.channel, []),
+    maskedContent: delivery.masked_content,
+    deliveryContent,
+    status: delivery.status ?? "sent",
+    failureReason: delivery.failure_reason ?? null,
+    createdAt: delivery.created_at,
+  };
+}
+
+async function orderPaymentPayload(
+  db: D1Database,
+  order: OrderRow,
+  statusOverride: string | null,
+  env: CloudflareEnv
+) {
+  return {
+    orderId: order.id,
+    orderNo: order.order_no,
+    status: statusOverride ?? order.status,
+    amountUsdt: order.amount_usdt,
+    fiatCurrency: order.fiat_currency,
+    fiatAmountSnapshot: order.fiat_amount_snapshot,
+    exchangeRateSnapshot: order.exchange_rate_snapshot,
+    paymentCurrency: order.payment_currency,
+    paymentNetwork: order.payment_network,
+    paymentAddress: order.payment_address,
+    txHash: order.tx_hash,
+    paidAt: order.paid_at,
+    deliveredAt: order.delivered_at,
+    expiresAt: order.expires_at,
+    createdAt: order.created_at,
+    updatedAt: order.updated_at,
+    productSnapshot: parseJson(order.product_snapshot, {}),
+    skuSnapshot: parseJson(order.sku_snapshot, {}),
+    delivery: await deliveryPayload(db, order.id, env),
+  };
+}
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -14,9 +89,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { env } = await getCloudflareContext();
+  const cloudflareEnv = env as CloudflareEnv;
   try {
     const { id } = await params;
-    const db = (env as CloudflareEnv).DB;
+    const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
 
     // 支持通过 id（UUID）或 orderNo 查询
@@ -48,56 +124,18 @@ export async function GET(
 
       // 返回时使用 expired 状态
       return jsonResponse(
-        {
-          orderId: order.id,
-          orderNo: order.order_no,
-          status: "expired",
-          amountUsdt: order.amount_usdt,
-          fiatCurrency: order.fiat_currency,
-          fiatAmountSnapshot: order.fiat_amount_snapshot,
-          exchangeRateSnapshot: order.exchange_rate_snapshot,
-          paymentCurrency: order.payment_currency,
-          paymentNetwork: order.payment_network,
-          paymentAddress: order.payment_address,
-          txHash: order.tx_hash,
-          paidAt: order.paid_at,
-          deliveredAt: order.delivered_at,
-          expiresAt: order.expires_at,
-          createdAt: order.created_at,
-          updatedAt: order.updated_at,
-          productSnapshot: JSON.parse(order.product_snapshot),
-          skuSnapshot: JSON.parse(order.sku_snapshot),
-        },
+        await orderPaymentPayload(db, order, "expired", cloudflareEnv),
         200,
         request,
-        env as CloudflareEnv
+        cloudflareEnv
       );
     }
 
     return jsonResponse(
-      {
-        orderId: order.id,
-        orderNo: order.order_no,
-        status: order.status,
-        amountUsdt: order.amount_usdt,
-        fiatCurrency: order.fiat_currency,
-        fiatAmountSnapshot: order.fiat_amount_snapshot,
-        exchangeRateSnapshot: order.exchange_rate_snapshot,
-        paymentCurrency: order.payment_currency,
-        paymentNetwork: order.payment_network,
-        paymentAddress: order.payment_address,
-        txHash: order.tx_hash,
-        paidAt: order.paid_at,
-        deliveredAt: order.delivered_at,
-        expiresAt: order.expires_at,
-        createdAt: order.created_at,
-        updatedAt: order.updated_at,
-        productSnapshot: JSON.parse(order.product_snapshot),
-        skuSnapshot: JSON.parse(order.sku_snapshot),
-      },
+      await orderPaymentPayload(db, order, null, cloudflareEnv),
       200,
       request,
-      env as CloudflareEnv
+      cloudflareEnv
     );
   } catch (error) {
     if (error instanceof HttpError) {
@@ -105,14 +143,14 @@ export async function GET(
         { error: error.message },
         error.status,
         request,
-        env as CloudflareEnv
+        cloudflareEnv
       );
     }
     return jsonResponse(
       { error: "internal server error" },
       500,
       request,
-      env as CloudflareEnv
+      cloudflareEnv
     );
   }
 }

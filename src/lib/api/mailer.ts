@@ -79,15 +79,15 @@ export async function sendOrderCreatedEmail(
 
 export async function sendDeliveryEmail(
   order: OrderRow,
-  maskedContent: string,
+  deliveryContent: string,
   env: CloudflareEnv
 ): Promise<MailResult> {
   return sendMail(
     {
       to: order.email,
       subject: `订单已发货：${order.order_no}`,
-      text: `您的订单 ${order.order_no} 已完成发货。交付内容：${maskedContent}`,
-      html: `<p>您的订单 <b>${order.order_no}</b> 已完成发货。</p><p>交付内容：${maskedContent}</p>`,
+      text: `您的订单 ${order.order_no} 已完成发货。\n\n交付内容：\n${deliveryContent}`,
+      html: `<p>您的订单 <b>${order.order_no}</b> 已完成发货。</p><pre style="white-space:pre-wrap;background:#f6f7f9;padding:12px;border-radius:8px">${deliveryContent.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] ?? char))}</pre>`,
     },
     env
   );

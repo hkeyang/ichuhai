@@ -2,7 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
-import type { OrderRow } from "@/lib/api/types";
+import type { DeliveryRow, OrderRow } from "@/lib/api/types";
 
 function userIdFromRequest(request: Request): string | null {
   const authHeader = request.headers.get("authorization") ?? "";
@@ -16,7 +16,15 @@ function userIdFromRequest(request: Request): string | null {
   }
 }
 
-function orderPayload(order: OrderRow) {
+function parseJson<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function orderPayload(order: OrderRow, delivery?: DeliveryRow) {
   return {
     orderId: order.id,
     orderNo: order.order_no,
@@ -36,8 +44,16 @@ function orderPayload(order: OrderRow) {
     expiresAt: order.expires_at,
     createdAt: order.created_at,
     updatedAt: order.updated_at,
-    productSnapshot: JSON.parse(order.product_snapshot),
-    skuSnapshot: JSON.parse(order.sku_snapshot),
+    productSnapshot: parseJson(order.product_snapshot, {}),
+    skuSnapshot: parseJson(order.sku_snapshot, {}),
+    delivery: delivery ? {
+      id: delivery.id,
+      method: delivery.method,
+      channel: parseJson<string[]>(delivery.channel, []),
+      maskedContent: delivery.masked_content,
+      status: delivery.status ?? "sent",
+      createdAt: delivery.created_at,
+    } : null,
   };
 }
 
@@ -79,8 +95,23 @@ export async function GET(request: Request) {
       .bind(username, usernameWithAt)
       .all<OrderRow>();
 
+    const deliveries = result.results.length
+      ? await db
+          .prepare(
+            `SELECT * FROM deliveries
+             WHERE order_id IN (${result.results.map(() => "?").join(",")})
+             ORDER BY created_at DESC`
+          )
+          .bind(...result.results.map((order) => order.id))
+          .all<DeliveryRow>()
+      : { results: [] as DeliveryRow[] };
+    const deliveryByOrder = new Map<string, DeliveryRow>();
+    for (const delivery of deliveries.results) {
+      if (!deliveryByOrder.has(delivery.order_id)) deliveryByOrder.set(delivery.order_id, delivery);
+    }
+
     return jsonResponse(
-      { orders: result.results.map(orderPayload) },
+      { orders: result.results.map((order) => orderPayload(order, deliveryByOrder.get(order.id))) },
       200,
       request,
       cloudflareEnv

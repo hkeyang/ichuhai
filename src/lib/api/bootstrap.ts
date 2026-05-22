@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
   operator TEXT,
   channel TEXT NOT NULL DEFAULT '["telegram","email"]',
   masked_content TEXT NOT NULL,
+  encrypted_content TEXT,
+  status TEXT NOT NULL DEFAULT 'sent',
+  failure_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_deliveries_order_id ON deliveries(order_id);
@@ -460,4 +463,7 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "orders", "delivery_status", "TEXT NOT NULL DEFAULT 'undelivered'");
   await addColumn(db, "orders", "after_sale_status", "TEXT NOT NULL DEFAULT 'none'");
   await addColumn(db, "orders", "user_input_json", "TEXT NOT NULL DEFAULT '{}'");
+  await addColumn(db, "deliveries", "encrypted_content", "TEXT");
+  await addColumn(db, "deliveries", "status", "TEXT NOT NULL DEFAULT 'sent'");
+  await addColumn(db, "deliveries", "failure_reason", "TEXT");
 }

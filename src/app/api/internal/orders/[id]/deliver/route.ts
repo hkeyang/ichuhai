@@ -9,9 +9,15 @@ import { timingSafeEqual } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { sendDeliveryEmail } from "@/lib/api/mailer";
-import { decryptInventoryValue } from "@/lib/api/inventory-crypto";
+import { decryptInventoryValue, encryptInventoryValue } from "@/lib/api/inventory-crypto";
 import { formatDelivery, formatOrder } from "@/lib/api/formatters";
-import type { OrderRow, DeliveryRow, InventoryItemRow } from "@/lib/api/types";
+import type { OrderRow, DeliveryRow, InventoryItemRow, SkuRow } from "@/lib/api/types";
+
+function maskValue(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length <= 6) return "***";
+  return `${normalized.slice(0, 3)}***${normalized.slice(-3)}`;
+}
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -55,54 +61,161 @@ export async function POST(
 
     if (!order) throw new HttpError(404, "order not found");
 
-    // 2. 从 inventory_items 查询 status='available' 的库存项（sku_id 匹配）
+    if (order.status === "completed") {
+      const delivery = await db
+        .prepare("SELECT * FROM deliveries WHERE order_id = ? ORDER BY created_at DESC LIMIT 1")
+        .bind(id)
+        .first<DeliveryRow>();
+      return jsonResponse(
+        {
+          order: formatOrder(order),
+          delivery: delivery ? formatDelivery(delivery) : null,
+          notification: null,
+        },
+        200,
+        request,
+        cloudflareEnv
+      );
+    }
+
+    const sku = await db
+      .prepare("SELECT * FROM skus WHERE id = ? LIMIT 1")
+      .bind(order.sku_id)
+      .first<SkuRow>();
+
+    const skuSnapshot = (() => {
+      try {
+        return JSON.parse(order.sku_snapshot) as { deliveryType?: string };
+      } catch {
+        return {};
+      }
+    })();
+    const deliveryType = sku?.delivery_type || skuSnapshot.deliveryType || "manual";
+
+    if (deliveryType !== "auto") {
+      await db
+        .prepare(
+          `UPDATE orders
+           SET status = 'paid', delivery_status = 'manual_required', updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .bind(id)
+        .run();
+
+      const updatedOrder = await db
+        .prepare("SELECT * FROM orders WHERE id = ?")
+        .bind(id)
+        .first<OrderRow>();
+
+      await writeAuditLog(
+        db,
+        request,
+        { actorId: "internal", role: "internal" },
+        "order.delivery_manual_required",
+        "order",
+        id,
+        { deliveryType }
+      );
+
+      return jsonResponse(
+        {
+          order: updatedOrder ? formatOrder(updatedOrder) : null,
+          delivery: null,
+          notification: null,
+          nextAction: "manual_delivery_required",
+        },
+        200,
+        request,
+        cloudflareEnv
+      );
+    }
+
+    // 2. 原子领取一个可用库存项，避免并发订单拿到同一条卡密。
     const inventoryItem = await db
       .prepare(
-        `SELECT * FROM inventory_items
-         WHERE sku_id = ? AND status = 'available'
-         LIMIT 1`
+        `UPDATE inventory_items
+         SET status = 'delivered', order_id = ?, sold_at = datetime('now')
+         WHERE id = (
+           SELECT id FROM inventory_items
+           WHERE sku_id = ? AND status = 'available'
+           ORDER BY created_at ASC
+           LIMIT 1
+         )
+         AND status = 'available'
+         RETURNING *`
       )
-      .bind(order.sku_id)
+      .bind(id, order.sku_id)
       .first<InventoryItemRow>();
 
     let decryptedValue: string | null = null;
     let deliveryId: string | null = null;
 
-    if (inventoryItem) {
-      // 3. 解密库存值
-      decryptedValue = await decryptInventoryValue(
-        inventoryItem.encrypted_value,
-        cloudflareEnv.INVENTORY_ENCRYPTION_KEY
-      );
-
-      // 4. UPDATE inventory_items SET status='delivered', order_id=?
+    if (!inventoryItem) {
       await db
         .prepare(
-          `UPDATE inventory_items
-           SET status = 'delivered', order_id = ?
+          `UPDATE orders
+           SET status = 'delivering', delivery_status = 'manual_required', updated_at = datetime('now')
            WHERE id = ?`
         )
-        .bind(id, inventoryItem.id)
+        .bind(id)
         .run();
+
+      await writeAuditLog(
+        db,
+        request,
+        { actorId: "internal", role: "internal" },
+        "order.delivery_stockout",
+        "order",
+        id,
+        { skuId: order.sku_id }
+      );
+
+      const updatedOrder = await db
+        .prepare("SELECT * FROM orders WHERE id = ?")
+        .bind(id)
+        .first<OrderRow>();
+
+      return jsonResponse(
+        {
+          order: updatedOrder ? formatOrder(updatedOrder) : null,
+          delivery: null,
+          notification: null,
+          nextAction: "manual_delivery_required",
+          error: "auto inventory is empty",
+        },
+        409,
+        request,
+        cloudflareEnv
+      );
     }
 
-    // 5. UPDATE orders SET status='completed', delivered_at=datetime('now')
+    // 3. 解密库存值并保存到发货记录（加密），邮件和订单详情均来自同一份内容。
+    decryptedValue = await decryptInventoryValue(
+      inventoryItem.encrypted_value,
+      cloudflareEnv.INVENTORY_ENCRYPTION_KEY
+    );
+    const encryptedDeliveryContent = await encryptInventoryValue(
+      decryptedValue,
+      cloudflareEnv.INVENTORY_ENCRYPTION_KEY
+    );
+    const maskedContent = maskValue(decryptedValue);
+
+    // 4. UPDATE orders SET status='completed', delivered_at=datetime('now')
     await db
       .prepare(
         `UPDATE orders
-         SET status = 'completed', delivered_at = datetime('now'), updated_at = datetime('now')
+         SET status = 'completed', delivery_status = 'delivered', delivered_at = datetime('now'), updated_at = datetime('now')
          WHERE id = ?`
       )
       .bind(id)
       .run();
 
-    // 6. INSERT INTO deliveries
+    // 5. INSERT INTO deliveries
     deliveryId = crypto.randomUUID();
-    const maskedContent = inventoryItem?.masked_value ?? "********";
     await db
       .prepare(
-        `INSERT INTO deliveries (id, order_id, method, operator, channel, masked_content, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+        `INSERT INTO deliveries (id, order_id, method, operator, channel, masked_content, encrypted_content, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', datetime('now'))`
       )
       .bind(
         deliveryId,
@@ -110,7 +223,8 @@ export async function POST(
         "auto",
         "internal",
         JSON.stringify(["email"]),
-        maskedContent
+        maskedContent,
+        encryptedDeliveryContent
       )
       .run();
 
@@ -124,7 +238,7 @@ export async function POST(
       .bind(id)
       .first<OrderRow>();
 
-    // 7. 发送发货邮件（fire-and-forget）+ 写 notification + audit_log
+    // 6. 发送发货邮件（fire-and-forget）+ 写 notification + audit_log
     const notificationId = crypto.randomUUID();
 
     const afterDeliver = (async () => {
@@ -137,7 +251,7 @@ export async function POST(
       try {
         mailResult = await sendDeliveryEmail(
           updatedOrder!,
-          maskedContent,
+          decryptedValue,
           cloudflareEnv
         );
       } catch (err) {
@@ -202,7 +316,7 @@ export async function POST(
       // waitUntil 不可用时忽略
     }
 
-    // 8. 返回 { order, delivery, notification }
+    // 7. 返回 { order, delivery, notification }
     return jsonResponse(
       {
         order: updatedOrder ? formatOrder(updatedOrder) : null,
