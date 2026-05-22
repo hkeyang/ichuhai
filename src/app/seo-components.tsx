@@ -32,7 +32,7 @@ export function SiteHeader() {
   return (
     <header className="topbar">
       <a className="brand" href="/" aria-label="ichuhai 首页">
-        <img src={siteConfig.logo} alt="ichuhai" />
+        <img className="logo-horizontal" src={siteConfig.logo} alt="ichuhai" width={600} height={200} />
       </a>
       <nav className="nav">
         <a href="/products">商品</a>

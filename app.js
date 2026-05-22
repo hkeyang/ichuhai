@@ -25,6 +25,9 @@ const ASSETS = {
   product: '/assets/icons/product/'
 };
 
+const SUPPORT_TELEGRAM_URL = 'https://t.me/ichuhaikefu';
+const SUPPORT_TELEGRAM_HANDLE = '@ichuhaikefu';
+
 const PRODUCT_ICONS = {
   discord: 'E01_discord_nitro.png',
   spotify: 'E02_spotify_premium.png',
@@ -1109,7 +1112,7 @@ function homeFaq() {
           <h3>还有问题？联系我们的客服团队</h3>
           <p>7x24 小时在线响应，为您提供专业、高效的帮助</p>
         </div>
-        <a class="support-button" href="#/faq">${navIcon('A07_user_login.png', '联系在线客服')} 联系在线客服</a>
+        <a class="support-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">${navIcon('A07_user_login.png', '联系在线客服')} 联系在线客服</a>
       </div>
     </section>
   `;
@@ -1134,7 +1137,7 @@ function siteFooter() {
           <h4>支持</h4>
           <a href="#/faq">新手指南</a>
           <a href="#/faq">常见问题</a>
-          <a href="#/faq">联系客服</a>
+          <a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a>
         </div>
         <div class="footer-column">
           <h4>支付方式</h4>
@@ -1871,7 +1874,7 @@ async function pay(id) {
           <button class="primary small" data-action="submitTxHash" data-id="${order.id}">${paymentIcon('C06_address.png', 'TxID')} 提交 TxID</button>
           <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
         </section>
-        <section class="glass panel support"><b>遇到问题？联系客服或前往订单查询</b><a href="#/orders/lookup">订单查询</a></section>
+        <section class="glass panel support"><b>遇到问题？联系 Telegram 客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
       </div>
     </section>
   `, 'page');
@@ -1982,7 +1985,7 @@ async function success(id) {
       </section>
       <section class="glass panel next-actions">
         <h3>后续操作</h3>
-        <a href="#/orders/lookup">查看订单详情</a><a href="#/">再次购买</a><a href="#/orders/lookup">前往订单查询</a><a href="#/faq">联系支持</a>
+        <a href="#/orders/lookup">查看订单详情</a><a href="#/">再次购买</a><a href="#/orders/lookup">前往订单查询</a><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
       </section>
     </section>
     <section class="glass bottom-help"><span>关于保质期<br/><b>查看保质期说明 ›</b></span><span>售后咨询<br/><b>提交工单 / 联系支持 ›</b></span><span>常见问题<br/><b>访问 FAQ ›</b></span></section>
@@ -2097,7 +2100,7 @@ async function lookup() {
         </div>
         <div class="pro-hero-actions">
           <a class="secondary" href="#/account">返回个人中心</a>
-          <a class="primary small link-button" href="#/faq">联系支持</a>
+          <a class="primary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
         </div>
       </header>
 
@@ -2231,28 +2234,26 @@ function productsPage() {
 function account() {
   if (!state.user) {
     shell(`
-      <section class="account-page pro-page">
-        <div class="account-guest pro-hero">
-          <div>
-            <span class="pro-kicker">Account Center</span>
-            <h1>用户中心</h1>
-            <p>登录后进入完整账户工作台：订单、支付、发货、售后、通知偏好和安全会话都集中管理。</p>
-          </div>
-          <div class="pro-hero-actions">
+      <section class="account-console account-console-guest">
+        <div class="account-console-panel">
+          <span class="console-eyebrow">Account Center</span>
+          <h1>登录后管理订单、支付与售后</h1>
+          <p>账户中心会把待付款、发货进度、售后工单和通知偏好集中到一个工作台。</p>
+          <div class="console-actions">
             <button class="primary account-login" data-action="telegramLogin" type="button">${navIcon('A07_user_login.png', '登录')} Telegram 登录</button>
-            <a class="secondary" href="#/orders/lookup">订单找回</a>
+            <a class="secondary" href="#/orders/lookup">找回订单</a>
           </div>
         </div>
-        <div class="account-plan">
+        <div class="account-guest-modules">
           ${[
-            ['订单总览', '按待付款、处理中、已完成和异常状态聚合。'],
-            ['支付恢复', '从个人中心直接回到未完成支付页。'],
-            ['售后工单', '订单详情提交后同步进入后台售后中心。'],
-            ['偏好安全', '管理币种、通知渠道和当前设备登录态。']
+            ['订单', '查看待付款、发货中和已完成订单'],
+            ['支付', '继续支付或提交 TxID 人工核验'],
+            ['售后', '从订单详情创建工单并同步后台'],
+            ['偏好', '管理币种、通知和当前设备']
           ].map(([title, text]) => `<div><b>${title}</b><span>${text}</span></div>`).join('')}
         </div>
       </section>
-    `, 'page account-shell');
+    `, 'page account-console-shell');
     return;
   }
 
@@ -2262,6 +2263,9 @@ function account() {
   const latestOrder = list[0];
   const primaryAction = orderPrimaryAction(latestOrder);
   const timeline = accountTimeline(list);
+  const pendingOrders = list.filter((order) => ['created', 'pending_payment', 'payment_confirming'].includes(order.status));
+  const activeOrders = list.filter((order) => ['paid', 'delivering'].includes(order.status));
+  const issueOrders = list.filter((order) => ['expired', 'failed', 'refunding', 'refunded'].includes(order.status));
   const currencyOptions = Object.keys(CURRENCIES).map((code) => `<option value="${code}" ${code === state.fiatCurrency ? 'selected' : ''}>${CURRENCIES[code].flag} ${code}</option>`).join('');
   const prefRows = [
     ['telegram', 'Telegram 通知', '登录、支付、发货和售后状态同步到 Telegram'],
@@ -2272,99 +2276,116 @@ function account() {
   ];
 
   shell(`
-    <section class="account-page pro-page">
-      <section class="account-dashboard">
-        <aside class="account-nav-card">
-          <div class="account-avatar">${state.user.username.slice(0, 2).toUpperCase()}</div>
-          <h2>@${state.user.username}</h2>
-          <p>Telegram 已绑定</p>
-          <nav>
-            <a class="active" href="#/account">账户总览</a>
-            <a href="#/orders/lookup">订单查询</a>
-            <a href="#/faq">帮助与售后</a>
-            <a href="#/products">继续选购</a>
-          </nav>
-          <button class="danger-outline" data-action="logoutAccount" type="button">退出当前设备</button>
-        </aside>
-
-        <div class="account-workspace">
-          <header class="account-hero pro-hero">
-            <div>
-              <span class="pro-kicker">Account Center</span>
-              <h1>个人中心</h1>
-              <p>当前账号的订单、支付、发货、售后与通知设置。需要处理的事项会优先显示在这里。</p>
-            </div>
-            <div class="pro-hero-actions">
-              <a class="primary small link-button" href="${primaryAction.href}">${primaryAction.label}</a>
-              <button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>
-            </div>
-          </header>
-
-          <section class="account-metrics">
-            <div><span>全部订单</span><b>${stats.total}</b><small>线上 + 本机</small></div>
-            <div><span>待支付</span><b>${stats.paying}</b><small>需继续处理</small></div>
-            <div><span>已完成</span><b>${stats.completed}</b><small>可查看交付</small></div>
-            <div><span>售后工单</span><b>${stats.support}</b><small>后台可跟进</small></div>
-          </section>
-
-          <section class="account-action-grid">
-            <a href="#/products"><b>继续购买</b><span>进入商品中心选择新套餐</span></a>
-            <a href="#/orders/lookup"><b>找回订单</b><span>通过订单号、联系方式或 TxID 查询</span></a>
-            <a href="#/faq"><b>联系客服</b><span>查看规则并进入售后咨询</span></a>
-          </section>
+    <section class="account-console">
+      <aside class="console-sidebar">
+        <a class="console-brand" href="#/account"><span>${state.user.username.slice(0, 2).toUpperCase()}</span><b>@${state.user.username}</b></a>
+        <small>Telegram 已绑定</small>
+        <nav>
+          <a class="active" href="#/account">总览</a>
+          <a href="#/orders/lookup">订单查询</a>
+          <a href="#/products">商品中心</a>
+          <a href="#/faq">帮助售后</a>
+        </nav>
+        <div class="console-sidebar-foot">
+          <span>默认币种</span>
+          <b>${CURRENCIES[state.fiatCurrency]?.flag || ''} ${state.fiatCurrency}</b>
+          <button class="danger-outline" data-action="logoutAccount" type="button">退出设备</button>
         </div>
-      </section>
+      </aside>
 
-      <section class="account-grid">
-        <div class="account-main">
-          <div class="account-section-head">
-            <div><h2>订单工作台</h2><p>${state.accountOrders.loading ? '正在同步线上订单…' : state.accountOrders.error ? `同步失败：${state.accountOrders.error}` : '按状态处理当前账号关联订单，支付、发货和售后入口在同一行。'}</p></div>
-            <a href="#/orders/lookup">按订单号查询</a>
+      <section class="console-main">
+        <header class="console-top">
+          <div>
+            <span class="console-eyebrow">Account Overview</span>
+            <h1>账户工作台</h1>
+            <p>${state.accountOrders.loading ? '正在同步线上订单…' : state.accountOrders.error ? `同步失败：${state.accountOrders.error}` : '订单、支付、发货和售后集中处理。'}</p>
           </div>
-          <div class="account-tabs">
-            ${[
-              ['all', '全部'],
-              ['paying', '待支付'],
-              ['done', '进行中 / 已完成'],
-              ['issue', '异常 / 退款']
-            ].map(([key, label]) => `<button class="${state.accountOrderFilter === key ? 'active' : ''}" data-action="accountOrderFilter" data-filter="${key}" type="button">${label}</button>`).join('')}
+          <div class="console-actions">
+            <a class="secondary" href="#/orders/lookup">查询订单</a>
+            <button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>
+            <a class="primary small link-button" href="${latestOrder ? primaryAction.href : '#/products'}">${latestOrder ? primaryAction.label : '去选购'}</a>
           </div>
-          <div class="account-order-stack">
-            ${visibleOrders.length ? visibleOrders.map(accountOrderCard).join('') : accountEmptyOrders()}
-          </div>
-        </div>
+        </header>
 
-        <aside class="account-side">
-          <section>
-            <h2>账户资料</h2>
-            <div class="account-field"><span>Telegram</span><b>@${state.user.username}</b></div>
-            <label class="account-field editable"><span>默认币种</span><select data-action="accountCurrency">${currencyOptions}</select></label>
-            <button class="primary small" data-action="saveAccountPrefs" type="button">保存偏好</button>
-          </section>
-          <section>
-            <h2>最近动态</h2>
-            <div class="account-timeline">
-              ${timeline.length ? timeline.map((item) => `<div class="${item.tone}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.text)}</span><small>${escapeHtml(timeFrom(item.time))}</small></div>`).join('') : '<p class="muted">暂无订单动态</p>'}
-            </div>
-          </section>
-          <section>
-            <h2>通知偏好</h2>
-            <div class="account-pref-list">
-              ${prefRows.map(([key, title, text]) => `<label class="account-pref"><input type="checkbox" data-action="toggleAccountPref" data-pref="${key}" ${state.accountPrefs[key] ? 'checked' : ''}/><span><b>${title}</b><small>${text}</small></span></label>`).join('')}
-            </div>
-          </section>
-          <section>
-            <h2>售后与安全</h2>
-            <div class="account-support-links">
-              <a href="#/faq">联系客服</a>
+        <section class="console-status-grid">
+          <div><span>全部订单</span><b>${stats.total}</b><small>线上 + 本机缓存</small></div>
+          <div class="${pendingOrders.length ? 'is-hot' : ''}"><span>待支付</span><b>${pendingOrders.length}</b><small>${pendingOrders.length ? '建议优先处理' : '暂无待付款'}</small></div>
+          <div><span>发货处理中</span><b>${activeOrders.length}</b><small>支付后自动/人工履约</small></div>
+          <div class="${issueOrders.length ? 'is-risk' : ''}"><span>异常订单</span><b>${issueOrders.length}</b><small>可走售后核验</small></div>
+        </section>
+
+        <section class="console-layout">
+          <div class="console-primary">
+            <section class="console-panel console-todos">
+              <div class="console-panel-head">
+                <div><h2>待办事项</h2><p>系统按订单状态自动生成下一步操作。</p></div>
+                <a href="#/orders/lookup">找回订单</a>
+              </div>
+              <div class="todo-list">
+                ${pendingOrders.slice(0, 3).map((order) => `<a class="todo-item warning" href="#/pay/${order.id}"><b>继续支付</b><span>${escapeHtml(order.orderNo)} · ${escapeHtml(order.productName)}</span><em>${Number(order.amountUsdt || 0).toFixed(2)} USDT</em></a>`).join('')}
+                ${activeOrders.slice(0, 2).map((order) => `<a class="todo-item info" href="#/order/${order.id}"><b>查看发货</b><span>${escapeHtml(order.orderNo)} · ${statusLabel(order.status)}</span><em>${deliveryLabel(order.deliveryType)}</em></a>`).join('')}
+                ${issueOrders.slice(0, 2).map((order) => `<a class="todo-item danger" href="#/order/${order.id}"><b>处理异常</b><span>${escapeHtml(order.orderNo)} · ${statusLabel(order.status)}</span><em>提交售后</em></a>`).join('')}
+                ${!pendingOrders.length && !activeOrders.length && !issueOrders.length ? '<div class="todo-empty"><b>暂无待办</b><span>购买后，待支付、发货中和异常订单会出现在这里。</span><a href="#/products">去选购商品</a></div>' : ''}
+              </div>
+            </section>
+
+            <section class="console-panel">
+              <div class="console-panel-head">
+                <div><h2>最近订单</h2><p>支持按状态筛选，操作会跳转到对应支付、详情或售后页面。</p></div>
+                <div class="account-tabs compact">
+                  ${[
+                    ['all', '全部'],
+                    ['paying', '待支付'],
+                    ['done', '进行中 / 已完成'],
+                    ['issue', '异常 / 退款']
+                  ].map(([key, label]) => `<button class="${state.accountOrderFilter === key ? 'active' : ''}" data-action="accountOrderFilter" data-filter="${key}" type="button">${label}</button>`).join('')}
+                </div>
+              </div>
+              <div class="account-order-table">
+                ${visibleOrders.length ? visibleOrders.map((order) => {
+                  const action = orderPrimaryAction(order);
+                  return `<a class="account-order-row" href="#/order/${order.id}">
+                    <span><b>${escapeHtml(order.orderNo)}</b><small>${escapeHtml(timeFrom(order.createdAt))}</small></span>
+                    <span><b>${escapeHtml(order.productName)}</b><small>${escapeHtml(Object.values(order.options || {}).filter(Boolean).join(' / ') || '标准规格')}</small></span>
+                    <em class="order-status ${escapeHtml(order.status)}">${statusLabel(order.status)}</em>
+                    <strong>${Number(order.amountUsdt || 0).toFixed(2)} USDT</strong>
+                    <i class="${action.tone}">${action.label}</i>
+                  </a>`;
+                }).join('') : accountEmptyOrders()}
+              </div>
+            </section>
+          </div>
+
+          <aside class="console-rail">
+            <section class="console-panel compact-panel">
+              <h2>账户资料</h2>
+              <div class="account-field"><span>Telegram</span><b>@${state.user.username}</b></div>
+              <label class="account-field editable"><span>默认币种</span><select data-action="accountCurrency">${currencyOptions}</select></label>
+              <button class="primary small" data-action="saveAccountPrefs" type="button">保存偏好</button>
+            </section>
+            <section class="console-panel compact-panel">
+              <h2>最近动态</h2>
+              <div class="account-timeline">
+                ${timeline.length ? timeline.map((item) => `<div class="${item.tone}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.text)}</span><small>${escapeHtml(timeFrom(item.time))}</small></div>`).join('') : '<p class="muted">暂无订单动态</p>'}
+              </div>
+            </section>
+            <section class="console-panel compact-panel">
+              <h2>通知偏好</h2>
+              <div class="account-pref-list compact">
+                ${prefRows.map(([key, title, text]) => `<label class="account-pref"><input type="checkbox" data-action="toggleAccountPref" data-pref="${key}" ${state.accountPrefs[key] ? 'checked' : ''}/><span><b>${title}</b><small>${text}</small></span></label>`).join('')}
+              </div>
+            </section>
+            <section class="console-panel support-panel">
+              <h2>售后与安全</h2>
+              <a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a>
               <a href="#/orders/lookup">找回订单</a>
               <button data-action="logoutAccount" type="button">退出当前设备</button>
-            </div>
-          </section>
-        </aside>
+            </section>
+          </aside>
+        </section>
       </section>
     </section>
-  `, 'page account-shell');
+  `, 'page account-console-shell');
 
   queueMicrotask(() => loadAccountOrders());
 }
@@ -2933,7 +2954,7 @@ function faq() {
           </div>
           <div class="faq-support-card">
             <span>找不到答案？</span>
-            <p>保留订单号、TxID 或收货信息，客服可以更快帮你核对。</p>
+            <p>保留订单号、TxID 或收货信息，Telegram 客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
             <a class="primary small" href="#/orders/lookup">查询订单</a>
           </div>
         </aside>
