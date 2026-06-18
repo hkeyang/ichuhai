@@ -21,6 +21,13 @@ export async function GET(request: Request) {
       admin: {
         authMode: cloudflareEnv.NODE_ENV === 'production' ? 'token' : 'dev-open',
       },
+      payments: {
+        provider: 'usdt-trc20-direct',
+        network: 'TRON',
+        token: 'USDT',
+        tokenStandard: 'TRC20',
+        confirmations: 3,
+      },
     };
     return jsonResponse(data, 200, request, cloudflareEnv);
   } catch (error) {

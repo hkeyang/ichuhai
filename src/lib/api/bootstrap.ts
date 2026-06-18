@@ -173,10 +173,10 @@ INSERT OR IGNORE INTO skus (id, product_id, option_values, price_usdt, stock_sta
   ('ms-personal','microsoft-365','{"plan":"个人版"}','3.50','in_stock','auto',1),
   ('ms-family','microsoft-365','{"plan":"家庭版"}','8.80','in_stock','auto',0);
 INSERT OR IGNORE INTO payment_networks (id, code, display_name, token_standard, is_enabled, is_recommended, address, confirmations) VALUES
-  ('net_tron','TRON','TRON','TRC20',1,1,'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',1),
-  ('net_eth','ETH','ETH','ERC20',1,0,'0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001',12),
-  ('net_bsc','BSC','BSC','BEP20',1,0,'0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002',15),
-  ('net_base','BASE','BASE','ERC20',1,0,'0xBA5E000000000000000000000000000000000001',12);
+  ('net_tron','TRON','TRON','TRC20',1,1,'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',3),
+  ('net_eth','ETH','ETH','ERC20',0,0,'0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001',12),
+  ('net_bsc','BSC','BSC','BEP20',0,0,'0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002',15),
+  ('net_base','BASE','USDC Base','Base',0,0,'0xBA5E000000000000000000000000000000000001',12);
 INSERT OR IGNORE INTO exchange_rates (currency, rate) VALUES
   ('USD','1'),('CNY','7.22'),('GBP','0.79'),('EUR','0.93'),('AUD','1.52'),('JPY','155'),('HKD','7.82'),('KRW','1360');
 `;
@@ -463,7 +463,15 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "orders", "delivery_status", "TEXT NOT NULL DEFAULT 'undelivered'");
   await addColumn(db, "orders", "after_sale_status", "TEXT NOT NULL DEFAULT 'none'");
   await addColumn(db, "orders", "user_input_json", "TEXT NOT NULL DEFAULT '{}'");
+  await addColumn(db, "orders", "payment_provider", "TEXT");
+  await addColumn(db, "orders", "provider_payment_id", "TEXT");
+  await addColumn(db, "orders", "provider_payment_status", "TEXT");
+  await addColumn(db, "orders", "provider_payment_url", "TEXT");
+  await addColumn(db, "orders", "provider_payload_json", "TEXT NOT NULL DEFAULT '{}'");
+  await addColumn(db, "payment_transactions", "exception_type", "TEXT");
   await addColumn(db, "deliveries", "encrypted_content", "TEXT");
   await addColumn(db, "deliveries", "status", "TEXT NOT NULL DEFAULT 'sent'");
   await addColumn(db, "deliveries", "failure_reason", "TEXT");
+
+  await db.prepare("UPDATE payment_networks SET is_enabled = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, is_recommended = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, confirmations = CASE WHEN code = 'TRON' THEN 3 ELSE confirmations END, updated_at = datetime('now')").run();
 }

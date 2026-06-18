@@ -80,11 +80,12 @@ data/db.json
 1. 配置正式域名和 HTTPS。
 2. 创建 Telegram Bot，并通过 BotFather `/setdomain` 绑定域名。
 3. 在 `.env` 中配置 `TELEGRAM_BOT_USERNAME` 和 `TELEGRAM_BOT_TOKEN`。
-4. 替换 `/api/internal/payment-listener/check` 的 mock 逻辑，接入 TronGrid、Alchemy、QuickNode、Moralis 或自建节点。
-5. 将 `data/db.json` 替换为 PostgreSQL + Prisma。
-6. 配置邮件服务，用真实 SMTP 或邮件 API 发送订单和发货通知。
-7. 为 `#/admin` 增加管理员登录、权限和审计日志。
-8. 配置日志、告警、备份、限流和支付风控。
+4. 配置 NOWPayments：`NOWPAYMENTS_API_KEY`、`NOWPAYMENTS_IPN_SECRET`，IPN 回调地址设为 `https://你的域名/api/nowpayments/ipn`。
+5. 当前只开放 `TRON -> USDTTRC20` 和 `BASE -> USDCBASE`；需要变更时修改 `NOWPAYMENTS_PAY_CURRENCY_MAP`。
+6. 将 `data/db.json` 替换为 PostgreSQL + Prisma。
+7. 配置邮件服务，用真实 SMTP 或邮件 API 发送订单和发货通知。
+8. 为 `#/admin` 增加管理员登录、权限和审计日志。
+9. 配置日志、告警、备份、限流和支付风控。
 
 ## 生产架构命令
 
@@ -165,6 +166,7 @@ npx opennextjs-cloudflare build && wrangler deploy
 
 ```bash
 wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put ADMIN_USERNAME          # 后台用户名，生产不要使用默认 admin
 wrangler secret put ADMIN_PASSWORD          # 最小长度 12 位
 wrangler secret put ADMIN_SESSION_SECRET    # 最小长度 32 位
 wrangler secret put INTERNAL_API_SECRET     # 最小长度 32 位
@@ -179,12 +181,14 @@ wrangler secret put DKIM_PRIVATE_KEY        # MailChannels DKIM 私钥（PEM 格
 ```bash
 # 生产环境
 BASE_URL=https://ichuhai.shop \
+ADMIN_USERNAME=<生产用户名> \
 ADMIN_PASSWORD=<生产密码> \
 INTERNAL_API_SECRET=<内部密钥> \
 bash scripts/smoke-test.sh
 
 # 本地开发环境
 BASE_URL=http://localhost:8787 \
+ADMIN_USERNAME=admin \
 ADMIN_PASSWORD=dev_admin_password_12 \
 INTERNAL_API_SECRET=dev_internal_api_secret_32_chars__ \
 bash scripts/smoke-test.sh

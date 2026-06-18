@@ -104,7 +104,7 @@ export async function PATCH(
 
     const updated = await db
       .prepare("SELECT * FROM payment_networks WHERE id = ?")
-      .bind(id)
+      .bind(existing.id)
       .first<PaymentNetworkRow>();
 
     return jsonResponse(updated ? formatPaymentNetwork(updated) : null, 200, request, cloudflareEnv);

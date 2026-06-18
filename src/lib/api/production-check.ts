@@ -13,10 +13,12 @@ export function requireProductionConfig(env: CloudflareEnv): void {
   if (env.NODE_ENV !== "production") return;
 
   const checks: [string, number][] = [
+    ["ADMIN_USERNAME", 3],
     ["ADMIN_PASSWORD", 12],
     ["ADMIN_SESSION_SECRET", 32],
     ["INTERNAL_API_SECRET", 32],
     ["INVENTORY_ENCRYPTION_KEY", 32],
+    ["TRON_GRID_API_KEY", 16],
   ];
 
   const missing = checks
@@ -35,6 +37,12 @@ export function requireProductionConfig(env: CloudflareEnv): void {
   if (env.ADMIN_PASSWORD === "admin") {
     throw new Error(
       "ADMIN_PASSWORD must not use the default value in production"
+    );
+  }
+
+  if (env.ADMIN_USERNAME === "admin") {
+    throw new Error(
+      "ADMIN_USERNAME must not use the default value in production"
     );
   }
 }

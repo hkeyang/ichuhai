@@ -8,7 +8,7 @@ export const metadata = {
     default: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
     template: '%s | ichuhai'
   },
-  description: 'ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT 支付与自动发货。',
+  description: 'ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT TRC20 支付与自动发货。',
   keywords: ['数字商品', '虚拟商品商城', 'USDT 支付', 'Discord Nitro', 'Spotify Premium', 'YouTube Premium', 'Steam Wallet', 'Microsoft 365'],
   alternates: {
     canonical: '/'
@@ -18,13 +18,13 @@ export const metadata = {
     locale: 'zh_CN',
     siteName: 'ichuhai',
     title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
-    description: '购买数字商品，支持 USDT 支付、自动发货、订单查询与售后处理。',
+    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、订单查询与售后处理。',
     images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
-    description: '购买数字商品，支持 USDT 支付、自动发货、订单查询与售后处理。',
+    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、订单查询与售后处理。',
     images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
   },
   icons: {

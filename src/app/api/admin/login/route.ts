@@ -1,5 +1,5 @@
 // src/app/api/admin/login/route.ts
-// POST /api/admin/login — 验证 ADMIN_PASSWORD，返回 HMAC session token
+// POST /api/admin/login — 验证 ADMIN_USERNAME / ADMIN_PASSWORD，返回 HMAC session token
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { parseBody } from "@/lib/api/body-parser";
@@ -17,16 +17,23 @@ export async function POST(request: Request) {
   const cloudflareEnv = env as CloudflareEnv;
 
   try {
-    const body = await parseBody<{ password?: unknown }>(request);
+    const body = await parseBody<{ username?: unknown; password?: unknown }>(request);
+    const username = String(body.username ?? "").trim();
     const password = String(body.password ?? "").trim();
+    const expectedUsername = cloudflareEnv.ADMIN_USERNAME || "admin";
 
+    if (!username) {
+      throw new HttpError(422, "username is required");
+    }
     if (!password) {
       throw new HttpError(422, "password is required");
     }
 
-    const isValid = timingSafeEqual(password, cloudflareEnv.ADMIN_PASSWORD);
+    const isValid =
+      timingSafeEqual(username, expectedUsername) &&
+      timingSafeEqual(password, cloudflareEnv.ADMIN_PASSWORD);
     if (!isValid) {
-      return jsonResponse({ error: "invalid password" }, 401, request, cloudflareEnv);
+      return jsonResponse({ error: "invalid username or password" }, 401, request, cloudflareEnv);
     }
 
     const token = await createAdminSessionToken(cloudflareEnv);

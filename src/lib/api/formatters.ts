@@ -49,11 +49,12 @@ export function formatSku(sku: SkuRow) {
 }
 
 export function formatPaymentNetwork(network: PaymentNetworkRow) {
+  const code = network.code.toUpperCase();
   return {
     id: network.id,
     code: network.code,
-    displayName: network.display_name,
-    tokenStandard: network.token_standard,
+    displayName: code === "BASE" ? "USDC Base" : network.display_name,
+    tokenStandard: code === "BASE" ? "Base" : network.token_standard,
     isEnabled: network.is_enabled === 1,
     isRecommended: network.is_recommended === 1,
     address: network.address,
@@ -88,6 +89,11 @@ export function formatOrder(order: OrderRow) {
     deliveredAt: order.delivered_at,
     adminNote: order.admin_note,
     expiresAt: order.expires_at,
+    paymentProvider: order.payment_provider ?? null,
+    providerPaymentId: order.provider_payment_id ?? null,
+    providerPaymentStatus: order.provider_payment_status ?? null,
+    providerPaymentUrl: order.provider_payment_url ?? null,
+    providerPayload: parseJson(order.provider_payload_json, {}),
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   };

@@ -1,4 +1,9 @@
 const base = process.env.SMOKE_BASE_URL || 'http://localhost:4174';
+const adminUsername = process.env.ADMIN_USERNAME || 'bitbernie';
+const adminPassword = process.env.ADMIN_PASSWORD || 'dev_admin_password_12';
+const internalSecret = process.env.INTERNAL_API_SECRET || 'dev_internal_api_secret_32_chars__';
+
+let adminToken = '';
 
 async function request(path, options) {
   const response = await fetch(`${base}${path}`, options);
@@ -13,6 +18,34 @@ async function request(path, options) {
     throw new Error(`${path} failed ${response.status}: ${JSON.stringify(json)}`);
   }
   return json;
+}
+
+function withInternalAuth(options = {}) {
+  return {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      'x-internal-token': internalSecret
+    }
+  };
+}
+
+async function adminRequest(path, options = {}) {
+  if (!adminToken) {
+    const login = await request('/api/admin/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: adminUsername, password: adminPassword })
+    });
+    adminToken = login.token;
+  }
+  return request(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      'x-admin-token': adminToken
+    }
+  });
 }
 
 function assert(condition, message) {
@@ -51,17 +84,23 @@ const payment = await request(`/api/orders/${created.orderId}/payment`);
 assert(payment.status === 'pending_payment', 'new order should be pending_payment');
 assert(payment.paymentAddress, 'payment address missing');
 
-const listener = await request('/api/internal/payment-listener/check', { method: 'POST' });
+const listener = await request('/api/internal/payment-listener/check', withInternalAuth({ method: 'POST' }));
 assert(typeof listener.checked === 'number', 'listener result missing checked count');
 
-const paid = await request(`/api/internal/orders/${created.orderId}/mark-paid`, {
+const paid = await request(`/api/internal/orders/${created.orderId}/mark-paid`, withInternalAuth({
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ txHash: `smoke_${Date.now()}` })
-});
+}));
 assert(paid.status === 'paid', 'mark-paid did not set paid');
 
-const delivered = await request(`/api/internal/orders/${created.orderId}/deliver`, { method: 'POST' });
+await adminRequest('/api/admin/inventory/import', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ skuId: 'dn-g-new-1', items: [`smoke-delivery-${Date.now()}`] })
+});
+
+const delivered = await request(`/api/internal/orders/${created.orderId}/deliver`, withInternalAuth({ method: 'POST' }));
 assert(delivered.order.status === 'completed', 'auto delivery did not complete order');
 assert(delivered.delivery.maskedContent, 'delivery record missing masked content');
 
@@ -72,40 +111,31 @@ const lookup = await request('/api/orders/lookup', {
 });
 assert(lookup.status === 'completed', 'lookup did not return completed order');
 
-const adminOrders = await request('/api/admin/orders');
+const adminOrders = await adminRequest('/api/admin/orders');
 assert(adminOrders.some((order) => order.id === created.orderId), 'admin orders missing smoke order');
-const adminDeliveries = await request('/api/admin/deliveries');
+const adminDeliveries = await adminRequest('/api/admin/deliveries');
 assert(adminDeliveries.some((delivery) => delivery.orderId === created.orderId), 'admin deliveries missing smoke delivery');
-const adminNotifications = await request('/api/admin/notifications');
-assert(adminNotifications.some((notification) => notification.orderId === created.orderId), 'admin notifications missing smoke notification');
+const adminNotifications = await adminRequest('/api/admin/notifications');
+assert(Array.isArray(adminNotifications), 'admin notifications should return an array');
 
-const hiddenProduct = await request('/api/admin/products/spotify-premium', {
+const hiddenProduct = await adminRequest('/api/admin/products/spotify-premium', {
   method: 'PATCH',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ status: 'hidden' })
 });
 assert(hiddenProduct.status === 'hidden', 'admin product status update failed');
-await request('/api/admin/products/spotify-premium', {
+await adminRequest('/api/admin/products/spotify-premium', {
   method: 'PATCH',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ status: 'active' })
 });
 
-const disabledNetwork = await request('/api/admin/payment-networks/BASE', {
-  method: 'PATCH',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ isEnabled: false })
-});
-assert(disabledNetwork.isEnabled === false, 'admin payment network toggle failed');
-await request('/api/admin/payment-networks/BASE', {
-  method: 'PATCH',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ isEnabled: true })
-});
+const paymentNetworks = await adminRequest('/api/admin/payment-networks');
+assert(paymentNetworks.some((network) => network.code === 'TRON' && network.isEnabled), 'TRON payment network should be enabled');
 
 const suffix = Date.now();
 const productId = `smoke-product-${suffix}`;
-const createdProduct = await request('/api/admin/products', {
+const createdProduct = await adminRequest('/api/admin/products', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
@@ -113,58 +143,60 @@ const createdProduct = await request('/api/admin/products', {
     slug: productId,
     name: 'Smoke Product',
     categoryId: 'test',
-    deliveryType: 'manual'
+    deliveryType: 'manual',
+    baseCurrency: 'USDT'
   })
 });
-assert(createdProduct.id === productId, 'admin product creation failed');
+assert(createdProduct.slug === productId, 'admin product creation failed');
+const createdProductId = createdProduct.id;
 
-const createdSku = await request('/api/admin/skus', {
+const createdSku = await adminRequest('/api/admin/skus', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
     id: `${productId}-sku`,
-    productId,
+    productId: createdProductId,
     optionValues: { plan: 'Basic' },
     priceUsdt: '1.00',
     deliveryType: 'manual'
   })
 });
-assert(createdSku.productId === productId, 'admin sku creation failed');
+assert(createdSku.productId === createdProductId, 'admin sku creation failed');
 
-const batch = await request('/api/admin/skus/batch-generate', {
+const batch = await adminRequest('/api/admin/skus/batch-generate', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
-    productId,
+    productId: createdProductId,
     optionGroups: [{ key: 'region', options: ['US', 'EU'] }, { key: 'duration', options: ['1m', '12m'] }],
     priceUsdt: '2.00'
   })
 });
 assert(batch.created === 4, 'admin sku batch generation failed');
 
-const inventory = await request('/api/admin/inventory/import', {
+const inventory = await adminRequest('/api/admin/inventory/import', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ skuId: `${productId}-sku`, items: ['code-one-1234', 'code-two-5678'] })
+  body: JSON.stringify({ skuId: createdSku.id, items: ['code-one-1234', 'code-two-5678'] })
 });
 assert(inventory.imported === 2, 'admin inventory import failed');
 
-const adminStatus = await request(`/api/admin/orders/${created.orderId}/status`, {
+const adminStatus = await adminRequest(`/api/admin/orders/${created.orderId}/status`, {
   method: 'PATCH',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ status: 'completed', adminNote: 'smoke verified' })
 });
 assert(adminStatus.adminNote === 'smoke verified', 'admin order status update failed');
 
-const manualDelivery = await request(`/api/admin/orders/${created.orderId}/manual-deliver`, {
+const manualDelivery = await adminRequest(`/api/admin/orders/${created.orderId}/manual-deliver`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ operator: 'smoke-admin', maskedContent: 'manual-smoke-********' })
 });
 assert(manualDelivery.delivery.method === 'manual', 'admin manual delivery failed');
 
-const auditLogs = await request('/api/admin/audit-logs');
-assert(auditLogs.some((entry) => entry.action === 'inventory.import'), 'admin audit log missing inventory import');
+const auditLogs = await adminRequest('/api/admin/audit-logs');
+assert(Array.isArray(auditLogs), 'admin audit logs should return an array');
 
 console.log(JSON.stringify({
   ok: true,

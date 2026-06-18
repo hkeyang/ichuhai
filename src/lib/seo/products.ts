@@ -40,7 +40,7 @@ export type SeoProduct = {
 export const siteConfig = {
   name: "ichuhai",
   url: process.env.NEXT_PUBLIC_SITE_URL || "https://ichuhai.com",
-  description: "ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT 支付与自动发货。",
+  description: "ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持余额、微信、支付宝与 USDT TRC20 支付及自动发货。",
   logo: "/assets/brand/logo/ichuhai-logo-horizontal-color.png",
 };
 
@@ -120,7 +120,7 @@ export const seoProducts: SeoProduct[] = [
       deliverySummary: "自动发货",
       warrantySummary: "30天",
       refundSummary: "开通后不支持退款",
-      usageGuide: "付款后自动发送开通指引，请按提示完成账号绑定或激活。",
+      usageGuide: "付款后自动发送开通指引，请按提示完成账号信息确认或激活。",
       warrantyDetail: "套餐有效期以开通成功时间计算。",
       attention: "地区与账号类型需匹配，提交订单前请确认账号可用状态。",
       faq: [
@@ -157,7 +157,7 @@ export const seoProducts: SeoProduct[] = [
       deliverySummary: "部分自动发货",
       warrantySummary: "30天",
       refundSummary: "开通后不支持退款",
-      usageGuide: "请填写可接收邀请的 Google 邮箱，部分规格需要人工确认后开通。",
+      usageGuide: "请填写可接收邀请的邮箱，部分规格需要人工确认后开通。",
       warrantyDetail: "如邀请失效可联系客服补发或协助排查。",
       attention: "跨区账号可能需要额外验证，请确认邮箱和地区条件。",
       faq: [
@@ -239,9 +239,9 @@ export const seoProducts: SeoProduct[] = [
 ];
 
 export const homeFaqs = [
-  { question: "购买需要登录吗？", answer: "需要。ichuhai 通过 Telegram 登录绑定订单与发货信息，方便查询和售后。" },
-  { question: "支持哪些支付方式？", answer: "当前主要支持 USDT 支付，并按订单展示 TRON、ETH、BSC、BASE 等可用网络。" },
-  { question: "如何查询订单？", answer: "用户可以在订单查询页使用订单号、邮箱、Telegram 或交易 Hash 找回订单。" },
+  { question: "购买需要登录吗？", answer: "需要。ichuhai 使用邮箱账号绑定订单、余额、发货信息和售后工单。" },
+  { question: "支持哪些支付方式？", answer: "支持余额支付、微信/支付宝聚合支付，以及 TRON 上的 USDT TRC20 支付。" },
+  { question: "如何查询订单？", answer: "用户可以在订单查询页使用订单号、邮箱或交易 Hash 找回订单。" },
   { question: "发货速度有多快？", answer: "自动发货商品通常在支付确认后秒级交付，人工商品会进入客服处理队列。" },
   { question: "虚拟商品可以退款吗？", answer: "未发货订单可联系售后处理；已发货或已开通的虚拟商品通常不支持退款。" },
 ];

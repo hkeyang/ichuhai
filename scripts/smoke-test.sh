@@ -2,13 +2,14 @@
 # scripts/smoke-test.sh
 # ichuhai 冒烟测试脚本 — 验证所有 30 个 API 端点
 # 用法：
-#   BASE_URL=https://ichuhai.shop ADMIN_PASSWORD=<密码> INTERNAL_API_SECRET=<密钥> bash scripts/smoke-test.sh
-#   本地开发：BASE_URL=http://localhost:8787 ADMIN_PASSWORD=dev_admin_password_12 INTERNAL_API_SECRET=dev_internal_api_secret_32_chars__ bash scripts/smoke-test.sh
+#   BASE_URL=https://ichuhai.shop ADMIN_USERNAME=<用户名> ADMIN_PASSWORD=<密码> INTERNAL_API_SECRET=<密钥> bash scripts/smoke-test.sh
+#   本地开发：BASE_URL=http://localhost:8787 ADMIN_USERNAME=admin ADMIN_PASSWORD=dev_admin_password_12 INTERNAL_API_SECRET=dev_internal_api_secret_32_chars__ bash scripts/smoke-test.sh
 
 set -euo pipefail
 
 # ─── 基础变量 ────────────────────────────────────────────────────────────────
 BASE_URL="${BASE_URL:-https://ichuhai.shop}"
+ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-<ADMIN_PASSWORD>}"
 INTERNAL_API_SECRET="${INTERNAL_API_SECRET:-<INTERNAL_API_SECRET>}"
 
@@ -228,7 +229,7 @@ echo "▶ 6. 管理员登录"
 # 6.1 POST /api/admin/login — 正确密码
 LOGIN_RESP=$(req POST "$BASE_URL/api/admin/login" \
   -H "content-type: application/json" \
-  -d "{\"password\":\"$ADMIN_PASSWORD\"}")
+  -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}")
 assert_status "POST /api/admin/login → 200" "$LOGIN_RESP" "200"
 
 ADMIN_TOKEN=$(body_of "$LOGIN_RESP" | jq -r '.token // empty' 2>/dev/null || echo "")

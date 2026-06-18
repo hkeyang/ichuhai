@@ -21,7 +21,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=seo-routes-20260521a" type="module" strategy="afterInteractive" />;
+  return <Script src="/app.js?v=admin-login-20260523a" type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {
@@ -55,11 +55,11 @@ export function SeoHomeContent() {
               全球数字商品，<span>一站式秒发</span>
             </h1>
             <p>
-              ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT 支付、订单查询和自动发货。
+              ichuhai 提供 Discord Nitro、Spotify Premium、YouTube Premium、Steam Wallet、Microsoft 365 等数字商品，支持 USDT TRC20 支付、订单查询和自动发货。
             </p>
             <div className="hero-tags">
               <span><b>即时发货</b><small>自动 SKU 秒级交付</small></span>
-              <span><b>USDT 支付</b><small>支持 TRON / ETH / BSC / BASE</small></span>
+              <span><b>稳定币支付</b><small>USDT TRC20 自动监听</small></span>
               <span><b>售后可查</b><small>订单与发货状态透明</small></span>
             </div>
             <div className="hero-actions">

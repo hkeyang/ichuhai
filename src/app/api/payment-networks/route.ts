@@ -12,20 +12,21 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   const { env } = await getCloudflareContext();
+  const cloudflareEnv = env as CloudflareEnv;
   try {
-    const db = (env as CloudflareEnv).DB;
+    const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
     const { results } = await db
       .prepare(
-        'SELECT id, code, display_name, token_standard, is_enabled, is_recommended, address, confirmations, warning_text, created_at, updated_at FROM payment_networks WHERE is_enabled = 1 ORDER BY code'
+        "SELECT id, code, display_name, token_standard, is_enabled, is_recommended, address, confirmations, warning_text, created_at, updated_at FROM payment_networks WHERE is_enabled = 1 AND code = 'TRON' ORDER BY code"
       )
       .all<PaymentNetworkRow>();
 
-    return jsonResponse(results.map(formatPaymentNetwork), 200, request, env as CloudflareEnv);
+    return jsonResponse(results.map(formatPaymentNetwork), 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
-      return jsonResponse({ error: error.message }, error.status, request, env as CloudflareEnv);
+      return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
     }
-    return jsonResponse({ error: 'internal server error' }, 500, request, env as CloudflareEnv);
+    return jsonResponse({ error: 'internal server error' }, 500, request, cloudflareEnv);
   }
 }

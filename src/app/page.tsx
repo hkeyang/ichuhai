@@ -1,7 +1,7 @@
-import Script from 'next/script';
 import { itemListJsonLd, organizationJsonLd, websiteJsonLd } from '@/lib/seo/json-ld';
 import { siteConfig } from '@/lib/seo/products';
 import { JsonLd, SeoHomeContent, ToastRegion } from './seo-components';
+import Script from 'next/script';
 
 export const metadata = {
   title: {
@@ -31,7 +31,7 @@ export default function HomePage() {
         <SeoHomeContent />
       </div>
       <ToastRegion />
-      <Script src="/app.js?v=seo-routes-20260521a" type="module" strategy="afterInteractive" />
+      <Script src="/app.js?v=account-wallet-20260618a" type="module" strategy="afterInteractive" />
     </>
   );
 }

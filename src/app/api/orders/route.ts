@@ -9,7 +9,13 @@ import { HttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { sendOrderCreatedEmail } from "@/lib/api/mailer";
-import type { ProductRow, SkuRow, PaymentNetworkRow } from "@/lib/api/types";
+import {
+  allocatePaymentAmount,
+  buildProviderPayload,
+  DEFAULT_PAYMENT_EXPIRY_MINUTES,
+  isSupportedTronNetwork,
+} from "@/lib/api/usdt-trc20";
+import type { OrderRow, ProductRow, SkuRow, PaymentNetworkRow } from "@/lib/api/types";
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +56,7 @@ export async function POST(request: Request) {
 
     const productId = String(body.productId ?? "").trim();
     const skuId = String(body.skuId ?? "").trim();
-    const paymentNetworkCode = String(body.paymentNetwork ?? "").trim();
+    const paymentNetworkCode = String(body.paymentNetwork ?? "TRON").trim().toUpperCase();
     const rawTelegramUsername = String(body.telegramUsername ?? "").trim();
     const rawEmail = String(body.email ?? "").trim().toLowerCase();
     const rawFiatCurrency = String(body.fiatCurrency ?? "").trim().toUpperCase();
@@ -58,7 +64,7 @@ export async function POST(request: Request) {
     // 2. 基础字段非空校验
     if (!productId) throw new HttpError(422, "productId is required");
     if (!skuId) throw new HttpError(422, "skuId is required");
-    if (!paymentNetworkCode) throw new HttpError(422, "paymentNetwork is required");
+    if (paymentNetworkCode !== "TRON") throw new HttpError(400, "only USDT TRC20 payments are supported");
 
     // 3. 查询 product（status='active'）
     const product = await db
@@ -81,10 +87,10 @@ export async function POST(request: Request) {
     // 5. 查询 payment_network（is_enabled=1）
     const network = await db
       .prepare(`SELECT * FROM payment_networks WHERE code = ? AND is_enabled = 1`)
-      .bind(paymentNetworkCode)
+      .bind("TRON")
       .first<PaymentNetworkRow>();
 
-    if (!network) throw new HttpError(400, "payment network not found or disabled");
+    if (!isSupportedTronNetwork(network)) throw new HttpError(400, "TRON USDT payment network is not configured");
 
     // 6. 校验 telegramUsername
     if (!/^@?[a-zA-Z0-9_]{5,32}$/.test(rawTelegramUsername)) {
@@ -116,7 +122,23 @@ export async function POST(request: Request) {
     const orderNo = generateOrderNo();
 
     // 10. 计算金额
-    const amountUsdt = sku.price_usdt;
+    const baseAmountUsdt = sku.price_usdt;
+    const reusablePaymentWindowStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const activeOrders = await db
+      .prepare(
+        `SELECT amount_usdt, status, expires_at, payment_network
+         FROM orders
+         WHERE payment_network = 'TRON'
+           AND status IN ('created','pending_payment','payment_confirming')
+           AND expires_at > ?`
+      )
+      .bind(reusablePaymentWindowStartedAt)
+      .all<Pick<OrderRow, "amount_usdt" | "status" | "expires_at" | "payment_network">>();
+    const paymentAmount = allocatePaymentAmount(baseAmountUsdt, activeOrders.results);
+    if (!paymentAmount) {
+      throw new HttpError(409, "当前同价订单较多，请稍后重试");
+    }
+    const amountUsdt = paymentAmount.amount;
     const fiatAmountSnapshot = (Number(amountUsdt) * rate).toFixed(2);
     const exchangeRateSnapshot = String(rate);
 
@@ -126,7 +148,7 @@ export async function POST(request: Request) {
       : `@${rawTelegramUsername}`;
 
     // 12. 设置过期时间（15 分钟后）
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + DEFAULT_PAYMENT_EXPIRY_MINUTES * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
     // 13. 构建快照（保持 camelCase 以兼容前端）
@@ -158,6 +180,15 @@ export async function POST(request: Request) {
       updatedAt: sku.updated_at,
     });
 
+    const paymentAddress = network.address;
+    let paymentCurrency = "USDT";
+    const paymentNetwork = "TRON";
+    let paymentProvider: string | null = "usdt-trc20-direct";
+    let providerPaymentId: string | null = null;
+    let providerPaymentStatus: string | null = null;
+    let providerPaymentUrl: string | null = null;
+    let providerPayload: Record<string, unknown> = buildProviderPayload(paymentAmount);
+
     // 14. INSERT INTO orders
     await db
       .prepare(
@@ -167,14 +198,18 @@ export async function POST(request: Request) {
           telegram_username, email,
           amount_usdt, fiat_currency, fiat_amount_snapshot, exchange_rate_snapshot,
           payment_currency, payment_network, payment_address,
-          status, expires_at, created_at, updated_at
+          status, expires_at,
+          payment_provider, provider_payment_id, provider_payment_status, provider_payment_url, provider_payload_json,
+          created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?,
           ?, ?,
           ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
-          'pending_payment', ?, datetime('now'), datetime('now')
+          'pending_payment', ?,
+          ?, ?, ?, ?, ?,
+          datetime('now'), datetime('now')
         )`
       )
       .bind(
@@ -182,8 +217,9 @@ export async function POST(request: Request) {
         productSnapshot, skuSnapshot,
         telegramUsername, rawEmail,
         amountUsdt, fiatCurrency, fiatAmountSnapshot, exchangeRateSnapshot,
-        "USDT", network.code, network.address,
-        expiresAt
+        paymentCurrency, paymentNetwork, paymentAddress,
+        expiresAt,
+        paymentProvider, providerPaymentId, providerPaymentStatus, providerPaymentUrl, JSON.stringify(providerPayload)
       )
       .run();
 
@@ -202,15 +238,20 @@ export async function POST(request: Request) {
       fiat_currency: fiatCurrency,
       fiat_amount_snapshot: fiatAmountSnapshot,
       exchange_rate_snapshot: exchangeRateSnapshot,
-      payment_currency: "USDT",
-      payment_network: network.code,
-      payment_address: network.address,
+      payment_currency: paymentCurrency,
+      payment_network: paymentNetwork,
+      payment_address: paymentAddress,
       status: "pending_payment",
       tx_hash: null,
       paid_at: null,
       delivered_at: null,
       admin_note: null,
       expires_at: expiresAt,
+      payment_provider: paymentProvider,
+      provider_payment_id: providerPaymentId,
+      provider_payment_status: providerPaymentStatus,
+      provider_payment_url: providerPaymentUrl,
+      provider_payload_json: JSON.stringify(providerPayload),
       created_at: now,
       updated_at: now,
     };
@@ -253,7 +294,7 @@ export async function POST(request: Request) {
           "order.create",
           "order",
           orderId,
-          { orderNo, productId, skuId, paymentNetwork: network.code, fiatCurrency }
+          { orderNo, productId, skuId, paymentNetwork, paymentProvider, fiatCurrency, baseAmountUsdt, amountUsdt, amountSuffix: paymentAmount.suffix }
         );
       } catch {
         // 审计日志写入失败不影响主流程
@@ -276,6 +317,8 @@ export async function POST(request: Request) {
         orderId,
         orderNo,
         paymentUrl: `/pay/${orderId}`,
+        paymentProvider,
+        providerPaymentId,
       },
       201,
       request,

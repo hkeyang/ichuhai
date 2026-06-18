@@ -12,14 +12,15 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   const { env } = await getCloudflareContext();
+  const cloudflareEnv = env as CloudflareEnv;
   try {
-    const db = (env as CloudflareEnv).DB;
+    const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
 
     const [productsResult, skusResult, networksResult] = await db.batch<ProductRow | SkuRow | PaymentNetworkRow>([
       db.prepare("SELECT * FROM products WHERE status = 'active' ORDER BY created_at ASC"),
       db.prepare("SELECT * FROM skus ORDER BY product_id, created_at ASC"),
-      db.prepare("SELECT * FROM payment_networks WHERE is_enabled = 1 ORDER BY created_at ASC"),
+      db.prepare("SELECT * FROM payment_networks WHERE is_enabled = 1 AND code = 'TRON' ORDER BY created_at ASC"),
     ]);
 
     const products = (productsResult.results as ProductRow[]).map(formatProduct);
@@ -32,11 +33,11 @@ export async function GET(request: Request) {
       supportedPaymentNetworks,
     }));
 
-    return jsonResponse(response, 200, request, env as CloudflareEnv);
+    return jsonResponse(response, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
-      return jsonResponse({ error: error.message }, error.status, request, env as CloudflareEnv);
+      return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
     }
-    return jsonResponse({ error: "internal server error" }, 500, request, env as CloudflareEnv);
+    return jsonResponse({ error: "internal server error" }, 500, request, cloudflareEnv);
   }
 }

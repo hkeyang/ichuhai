@@ -63,6 +63,11 @@ export interface OrderRow {
   delivered_at: string | null;
   admin_note: string | null;
   expires_at: string;
+  payment_provider?: string | null;
+  provider_payment_id?: string | null;
+  provider_payment_status?: string | null;
+  provider_payment_url?: string | null;
+  provider_payload_json?: string | null;
   created_at: string;
   updated_at: string;
 }

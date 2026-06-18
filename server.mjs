@@ -276,6 +276,7 @@ function internalActor(req) {
 function requireProductionConfig() {
   if (!IS_PRODUCTION) return;
   const required = [
+    ['ADMIN_USERNAME', 3],
     ['ADMIN_PASSWORD', 12],
     ['ADMIN_SESSION_SECRET', 32],
     ['INTERNAL_API_SECRET', 32],
@@ -287,6 +288,9 @@ function requireProductionConfig() {
   }
   if (process.env.ADMIN_PASSWORD === 'admin') {
     throw new Error('ADMIN_PASSWORD must not use the default value in production');
+  }
+  if (process.env.ADMIN_USERNAME === 'admin') {
+    throw new Error('ADMIN_USERNAME must not use the default value in production');
   }
 }
 
@@ -373,8 +377,9 @@ async function api(req, res, url) {
 
   if (req.method === 'POST' && path === '/api/admin/login') {
     const input = await body(req);
+    const expectedUsername = process.env.ADMIN_USERNAME || 'admin';
     const expected = process.env.ADMIN_PASSWORD || 'admin';
-    if (!safeEqual(String(input.password || ''), expected)) return json(req, res, 401, { error: 'invalid admin password' });
+    if (!safeEqual(String(input.username || ''), expectedUsername) || !safeEqual(String(input.password || ''), expected)) return json(req, res, 401, { error: 'invalid username or password' });
     return json(req, res, 200, { token: createAdminSessionToken(), role: 'admin', expiresInSeconds: Math.floor(ADMIN_SESSION_TTL_MS / 1000) });
   }
 

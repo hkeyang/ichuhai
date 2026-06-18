@@ -48,6 +48,7 @@ const child = spawn(process.execPath, ['server.mjs'], {
     DATA_DIR: dataDir,
     NODE_ENV: 'production',
     PUBLIC_SITE_URL: 'https://shop.example',
+    ADMIN_USERNAME: 'security-admin',
     ADMIN_PASSWORD: adminPassword,
     ADMIN_SESSION_SECRET: adminSecret,
     INTERNAL_API_SECRET: internalSecret,
@@ -65,14 +66,14 @@ try {
   const badLogin = await request('/api/admin/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'admin' })
+    body: JSON.stringify({ username: 'security-admin', password: 'admin' })
   });
   assert(badLogin.response.status === 401, 'default admin password must not authenticate');
 
   const login = await request('/api/admin/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: adminPassword })
+    body: JSON.stringify({ username: 'security-admin', password: adminPassword })
   });
   assert(login.response.ok && login.payload.token?.includes('.'), 'admin login should return signed session token');
 

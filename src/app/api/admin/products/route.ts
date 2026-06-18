@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const deliveryType = cleanEnum(body.deliveryType, "deliveryType", DELIVERY_TYPES, "auto");
     const baseCurrency = cleanString(body.baseCurrency, "baseCurrency", {
       max: 10,
-      pattern: /^[A-Z]{3}$/,
+      pattern: /^[A-Z]{3,6}$/,
     });
 
     const id = crypto.randomUUID();

@@ -10,10 +10,7 @@ const CURRENCIES = {
 };
 
 const networks = [
-  { code: 'TRON', displayName: 'TRON', tokenStandard: 'TRC20', icon: '🔻', recommended: true, enabled: true, warning: '请勿使用其他链转账，跨链支付可能导致资产无法找回。' },
-  { code: 'ETH', displayName: 'ETH', tokenStandard: 'ERC20', icon: '♦', recommended: false, enabled: true, warning: '网络费用可能较高，请确认钱包余额充足。' },
-  { code: 'BSC', displayName: 'BSC', tokenStandard: 'BEP20', icon: '⬢', recommended: false, enabled: true, warning: '请确认钱包支持 BSC 网络。' },
-  { code: 'BASE', displayName: 'BASE', tokenStandard: 'ERC20', icon: '●', recommended: false, enabled: true, warning: '请确认钱包支持 BASE 网络。' }
+  { code: 'TRON', displayName: 'TRON', tokenStandard: 'TRC20', icon: '🔻', recommended: true, enabled: true, warning: '仅支持 USDT TRC20，请勿使用其他链转账。' }
 ];
 
 const ASSETS = {
@@ -81,8 +78,8 @@ const GUARANTEE_ITEMS = [
 
 const HOME_FLOW_STEPS = [
   { icon: 'B02_shield_secure_payment.png', title: '1 选商品', desc: '选择套餐', source: 'trust' },
-  { icon: 'A07_user_login.png', title: '2 绑账号', desc: 'Telegram 登录', source: 'nav' },
-  { icon: 'C08_payment_success.png', title: '3 去支付', desc: 'USDT / TRX', source: 'payment' },
+  { icon: 'A07_user_login.png', title: '2 登录账号', desc: '邮箱登录', source: 'nav' },
+  { icon: 'C08_payment_success.png', title: '3 去支付', desc: '余额 / 微信 / 支付宝 / USDT', source: 'payment' },
   { icon: 'B01_lightning_instant_delivery.png', title: '4 收权益', desc: '自动发货', source: 'trust' }
 ];
 
@@ -90,12 +87,12 @@ const HOME_FAQS = [
   {
     icon: 'user',
     question: '购买需要登录吗？',
-    answer: '需要。我们通过 Telegram 登录，订单与发货信息将安全绑定到您的账户，方便查询与售后。'
+    answer: '需要。使用邮箱账号登录后，订单、余额、发货内容和售后工单会归档到同一个账户。'
   },
   {
     icon: 'card',
     question: '支持哪些支付方式？',
-    answer: '我们支持 USDT（TRC20）等主流加密货币支付，安全便捷，到账迅速。'
+    answer: '支持余额支付、微信/支付宝聚合支付，以及 TRON 上的 USDT TRC20 支付。'
   },
   {
     icon: 'receipt',
@@ -115,7 +112,7 @@ const HOME_FAQS = [
   {
     icon: 'headset',
     question: '遇到问题如何联系客服？',
-    answer: '您可以通过 Telegram 联系在线客服，我们 7×24 小时为您提供专业帮助。'
+    answer: '您可以通过帮助中心联系在线客服，我们 7×24 小时为您提供专业帮助。'
   }
 ];
 
@@ -213,7 +210,7 @@ const products = [
       { id: 'yt-g-1', optionValues: { region: 'Global', duration: '1个月' }, priceUsdt: 2.5, stock: 'in_stock', deliveryType: 'auto' },
       { id: 'yt-us-12', optionValues: { region: 'US', duration: '12个月' }, priceUsdt: 24, stock: 'in_stock', deliveryType: 'manual' }
     ],
-    notice: { deliverySummary: '部分自动发货', warrantySummary: '30天', refundSummary: '开通后不支持退款', usageGuide: '请填写可接收邀请的 Google 邮箱。', warrantyDetail: '如邀请失效可联系客服补发。', attention: '跨区账号可能需要额外验证。', faq: ['是否包含 Music？', '可以用于家庭成员吗？'] }
+    notice: { deliverySummary: '部分自动发货', warrantySummary: '30天', refundSummary: '开通后不支持退款', usageGuide: '请填写可接收邀请的邮箱。', warrantyDetail: '如邀请失效可联系客服补发。', attention: '跨区账号可能需要额外验证。', faq: ['是否包含 Music？', '可以用于家庭成员吗？'] }
   },
   {
     id: 'steam-wallet',
@@ -256,11 +253,21 @@ const state = {
   cart: JSON.parse(localStorage.getItem('gfCart') || '[]'),
   fiatCurrency: localStorage.getItem('preferredCurrency') || 'USD',
   paymentNetwork: localStorage.getItem('paymentNetwork') || 'TRON',
+  paymentMethod: localStorage.getItem('paymentMethod') || 'balance',
+  useBalance: JSON.parse(localStorage.getItem('useBalance') || 'true'),
   telegramUsername: localStorage.getItem('telegramUsername') || '',
   email: localStorage.getItem('email') || '',
   user: JSON.parse(localStorage.getItem('gfUser') || 'null'),
+  authPanelOpen: false,
+  authMode: 'login',
+  messageCenterOpen: false,
+  accountSection: localStorage.getItem('accountSection') || 'orders',
+  profile: JSON.parse(localStorage.getItem('gfProfile') || '{"avatar":"","nickname":""}'),
+  wallet: JSON.parse(localStorage.getItem('gfWallet') || '{"balance":128.6,"ledger":[]}'),
+  rechargeDraft: { amount: '20', method: 'wechat' },
+  messages: JSON.parse(localStorage.getItem('gfMessages') || '[]'),
   adminToken: localStorage.getItem('adminToken') || '',
-  adminUsername: localStorage.getItem('adminUsername') || 'admin',
+  adminUsername: localStorage.getItem('adminUsername') || 'bitbernie',
   currencyOpen: false,
   categoryFilter: '全部',
   searchQuery: '',
@@ -271,13 +278,13 @@ const state = {
   lookupResult: null,
   accountOrderFilter: 'all',
   accountOrders: { loadedFor: '', loading: false, error: '', items: [] },
-  accountPrefs: JSON.parse(localStorage.getItem('accountPrefs') || '{"telegram":true,"email":true,"payment":true,"delivery":true,"support":true}'),
-  adminTab: 'dashboard',
-  adminSubTabs: {},
+  accountPrefs: JSON.parse(localStorage.getItem('accountPrefs') || '{"email":true,"site":true,"payment":true,"delivery":true,"support":true,"wallet":true}'),
+  adminTab: localStorage.getItem('adminTab') || 'dashboard',
+  adminSubTabs: JSON.parse(localStorage.getItem('adminSubTabs') || '{}'),
   adminFilters: JSON.parse(localStorage.getItem('adminFilters') || '{}'),
   adminImportPreview: null,
   adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [], ops: {} },
-  config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } },
+  config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' }, payments: { provider: 'direct', nowpayments: { enabled: false, payCurrencies: {} } } },
   telegramPanelOpen: false,
   telegramDeeplink: null,       // { token, deeplink, deeplinkNative, expiresAt, startedAt, returnTo }
   telegramDeeplinkStatus: 'idle', // idle | issuing | waiting | error | completed
@@ -393,16 +400,101 @@ function persist() {
   localStorage.setItem('selectedOptions', JSON.stringify(state.selectedOptions));
   localStorage.setItem('preferredCurrency', state.fiatCurrency);
   localStorage.setItem('paymentNetwork', state.paymentNetwork);
+  localStorage.setItem('paymentMethod', state.paymentMethod);
+  localStorage.setItem('useBalance', JSON.stringify(state.useBalance));
+  localStorage.setItem('accountSection', state.accountSection);
+  localStorage.setItem('gfProfile', JSON.stringify(state.profile));
+  localStorage.setItem('gfWallet', JSON.stringify(state.wallet));
+  localStorage.setItem('gfMessages', JSON.stringify(state.messages));
   if (state.telegramUsername) localStorage.setItem('telegramUsername', state.telegramUsername);
   else localStorage.removeItem('telegramUsername');
   localStorage.setItem('email', state.email);
   if (state.user) localStorage.setItem('gfUser', JSON.stringify(state.user));
   else localStorage.removeItem('gfUser');
   localStorage.setItem('adminToken', state.adminToken);
-  localStorage.setItem('adminUsername', state.adminUsername || 'admin');
+  localStorage.setItem('adminUsername', state.adminUsername || 'bitbernie');
+  localStorage.setItem('adminTab', state.adminTab);
+  localStorage.setItem('adminSubTabs', JSON.stringify(state.adminSubTabs));
   localStorage.setItem('adminFilters', JSON.stringify(state.adminFilters));
   localStorage.setItem('accountPrefs', JSON.stringify(state.accountPrefs));
   localStorage.setItem('walletMode', state.walletMode);
+}
+
+function userEmail() {
+  return state.user?.email || state.email || '';
+}
+
+function userNickname() {
+  return state.profile.nickname || state.user?.nickname || (userEmail() ? userEmail().split('@')[0] : state.user?.username) || '用户昵称';
+}
+
+function userInitials() {
+  return userNickname().slice(0, 2).toUpperCase();
+}
+
+function demoToken(prefix = 'auth') {
+  return `${prefix}_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
+
+function ensureEmailAccount(email, password) {
+  const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
+  const key = email.toLowerCase();
+  if (!accounts[key]) {
+    accounts[key] = {
+      id: `user_${Date.now()}`,
+      email: key,
+      password,
+      nickname: `用户${String(Date.now()).slice(-5)}`,
+      createdAt: new Date().toISOString()
+    };
+    localStorage.setItem('gfEmailAccounts', JSON.stringify(accounts));
+  }
+  return accounts[key];
+}
+
+function emailLogin(email, password) {
+  const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
+  const account = accounts[email.toLowerCase()];
+  if (!account || account.password !== password) return null;
+  return account;
+}
+
+function applyEmailLogin(account) {
+  state.user = {
+    id: account.id,
+    email: account.email,
+    username: account.email.split('@')[0],
+    nickname: account.nickname,
+    authType: 'email',
+    defaultCurrency: state.fiatCurrency,
+    createdAt: account.createdAt
+  };
+  state.email = account.email;
+  state.profile.nickname = state.profile.nickname || account.nickname;
+  localStorage.setItem('gfAuthToken', demoToken('email'));
+  addMessage('账号登录', `${account.email} 已登录，订单和余额会绑定到该邮箱。`, 'account');
+  persist();
+}
+
+function addMessage(title, text, type = 'system') {
+  state.messages = [
+    { id: demoToken('msg'), title, text, type, read: false, createdAt: new Date().toISOString() },
+    ...state.messages
+  ].slice(0, 30);
+  persist();
+}
+
+function unreadMessages() {
+  return state.messages.filter((message) => !message.read).length;
+}
+
+function walletLedger(type, amount, note, status = 'completed') {
+  const value = Number(amount || 0);
+  state.wallet.ledger = [
+    { id: demoToken('wl'), type, amount: value, note, status, createdAt: new Date().toISOString() },
+    ...(state.wallet.ledger || [])
+  ];
+  persist();
 }
 
 function applyTelegramLogin(result) {
@@ -434,6 +526,9 @@ function authToken() {
 function logoutAccount() {
   state.user = null;
   state.telegramUsername = '';
+  state.email = '';
+  state.authPanelOpen = false;
+  state.messageCenterOpen = false;
   state.telegramPanelOpen = false;
   state.telegramDeeplink = null;
   state.telegramDeeplinkStatus = 'idle';
@@ -445,7 +540,7 @@ function logoutAccount() {
   clearTelegramReturnTo();
   stopTelegramPolling();
   persist();
-  notify('已退出 Telegram 登录');
+  notify('已退出登录');
   location.hash = '#/account';
   route();
 }
@@ -505,6 +600,9 @@ function normalizeServerOrder(order) {
   const options = skuSnapshot.optionValues || {};
   const amountUsdt = Number(order.amountUsdt ?? order.amount_usdt ?? skuSnapshot.priceUsdt ?? 0);
   const fiatCurrency = order.fiatCurrency || order.fiat_currency || 'USD';
+  const providerPayload = parseMaybeJson(order.providerPayload ?? order.provider_payload_json, {});
+  const payAmount = Number(providerPayload.pay_amount ?? order.payAmount ?? amountUsdt);
+  const payCurrency = String(providerPayload.pay_currency ?? order.paymentCurrency ?? order.payment_currency ?? 'USDT').toUpperCase();
   return {
     id: order.id || order.orderId,
     orderNo: order.orderNo || order.order_no,
@@ -519,6 +617,13 @@ function normalizeServerOrder(order) {
     fiatAmount: money(amountUsdt, fiatCurrency),
     paymentNetwork: order.paymentNetwork || order.payment_network,
     paymentAddress: order.paymentAddress || order.payment_address,
+    paymentProvider: order.paymentProvider || order.payment_provider || null,
+    providerPaymentId: order.providerPaymentId || order.provider_payment_id || null,
+    providerPaymentStatus: order.providerPaymentStatus || order.provider_payment_status || null,
+    providerPaymentUrl: order.providerPaymentUrl || order.provider_payment_url || null,
+    providerPayload,
+    payAmount: Number.isFinite(payAmount) ? payAmount : amountUsdt,
+    payCurrency,
     status: order.status,
     deliveryType: skuSnapshot.deliveryType || order.deliveryType || order.delivery_type || 'manual',
     delivery: order.delivery || null,
@@ -865,14 +970,15 @@ function header() {
   const isDetail = location.hash.startsWith('#/product/') || location.hash.startsWith('#/products/');
   const count = cartCount();
   const accountAction = state.user
-    ? `<a class="pill telegram-pill logged-in" href="#/account">${navIcon('A07_user_login.png', '已登录')}@${state.user.username}</a>`
-    : `<button class="pill telegram-pill" data-action="telegramLogin">${navIcon('A07_user_login.png', '登录')}Telegram 登录</button>`;
+    ? `<a class="pill telegram-pill logged-in" href="#/account">${navIcon('A07_user_login.png', '已登录')}${escapeHtml(userNickname())}</a>`
+    : `<button class="pill telegram-pill" data-action="openAuthPanel">${navIcon('A07_user_login.png', '登录')}邮箱登录</button>`;
+  const unread = unreadMessages();
   return `
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
       <nav class="header-nav">
         <a href="#/products">数字商品</a>
-        <a href="#/faq">解决方案</a>
+        <a href="#/solutions">解决方案</a>
         <a href="#/faq">帮助中心</a>
       </nav>
       <div class="top-actions">
@@ -880,11 +986,52 @@ function header() {
           <button class="pill currency-pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency} ${navIcon('A10_shaixuan.png', '展开货币', 'currency-chevron')}</button>
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
+        <div class="message-center ${state.messageCenterOpen ? 'open' : ''}">
+          <button class="pill icon-pill" data-action="toggleMessages" type="button" aria-label="消息中心">${lineIcon('headset', '消息中心', 'message-icon')}${unread ? `<span>${unread}</span>` : ''}</button>
+          ${state.messageCenterOpen ? messageCenterPanel() : ''}
+        </div>
         <a class="pill cart" href="#/cart">${navIcon('A06_shopping_cart.png', '购物车')} 购物车${count ? `<span class="cart-count">${count}</span>` : ''}</a>
         ${accountAction}
       </div>
     </header>
+    ${state.authPanelOpen ? authPanel() : ''}
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
+  `;
+}
+
+function messageCenterPanel() {
+  const messages = state.messages.length ? state.messages : [
+    { title: '暂无新消息', text: '订单、售后、充值到账和余额变动会显示在这里。', createdAt: new Date().toISOString(), read: true }
+  ];
+  return `<section class="message-popover">
+    <div class="message-head"><b>消息中心</b><button data-action="markMessagesRead" type="button">全部已读</button></div>
+    <div class="message-list">
+      ${messages.slice(0, 6).map((message) => `<article class="${message.read ? '' : 'unread'}">
+        <b>${escapeHtml(message.title)}</b>
+        <span>${escapeHtml(message.text)}</span>
+        <small>${escapeHtml(timeFrom(message.createdAt))}</small>
+      </article>`).join('')}
+    </div>
+  </section>`;
+}
+
+function authPanel() {
+  const isRegister = state.authMode === 'register';
+  return `
+    <div class="modal-backdrop" data-action="closeAuthPanel">
+      <section class="glass auth-panel">
+        <button class="modal-close" data-action="closeAuthPanel" type="button" aria-label="关闭登录窗口">×</button>
+        <span class="console-eyebrow">${isRegister ? 'Create account' : 'Sign in'}</span>
+        <h2>${isRegister ? '邮箱注册' : '邮箱登录'}</h2>
+        <p>${isRegister ? '邮箱将作为唯一登录账号，暂不支持更换。' : '使用邮箱和密码进入个人中心、余额和售后工单。'}</p>
+        <label>邮箱账号<input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(state.email || '')}" /></label>
+        <label>密码<input id="authPassword" type="password" autocomplete="${isRegister ? 'new-password' : 'current-password'}" placeholder="至少 6 位" /></label>
+        ${isRegister ? '<label>确认密码<input id="authPassword2" type="password" autocomplete="new-password" placeholder="再次输入密码" /></label>' : ''}
+        <button class="primary" data-action="${isRegister ? 'submitRegister' : 'submitLogin'}" type="button">${isRegister ? '创建账号' : '登录'}</button>
+        <button class="secondary auth-switch" data-action="switchAuthMode" data-mode="${isRegister ? 'login' : 'register'}" type="button">${isRegister ? '已有账号，去登录' : '没有账号，去注册'}</button>
+        <small>忘记密码将通过邮箱验证码重置，接口接入后启用。</small>
+      </section>
+    </div>
   `;
 }
 
@@ -959,6 +1106,7 @@ function currencyMenu() {
 }
 
 function shell(content, className = '') {
+  document.documentElement.classList.remove('admin-hash-loading');
   app.innerHTML = `${className.includes('admin-page') ? '' : header()}<main class="${className}">${content}</main>`;
   enhanceSelects();
 }
@@ -1150,10 +1298,10 @@ function siteFooter() {
           <h4>支付方式</h4>
           <div class="payment-icons">
             <span>USDT</span>
-            <span>TRX</span>
+            <span>TRC20</span>
             <span>◎</span>
           </div>
-          <p>更多支付方式陆续接入中</p>
+          <p>余额、微信、支付宝与 USDT TRC20</p>
         </div>
       </div>
       <div class="footer-bottom">
@@ -1212,7 +1360,7 @@ function productProfile(item, sku = findSku(item)) {
     receives: isGift ? '卡密、兑换码或充值指引' : '账号权益、激活链接、邀请链接或开通指引',
     limits: `${sku?.optionValues?.region || 'Global'} 地区；${sku?.optionValues?.account || '按商品说明'}；请勿频繁切换设备、地区或 IP`,
     afterSales: '保期内失效可申请补发、重置或人工协助；已发货且信息无误的虚拟商品通常不支持无理由退款',
-    required: item.name.includes('YouTube') ? 'Google 邮箱、Telegram、备用联系方式' : 'Telegram 用户名、接收邮箱、必要时的账号 ID 或备注',
+    required: item.name.includes('YouTube') ? '接收邮箱、备用联系方式' : '接收邮箱、必要时的账号 ID 或备注',
     risk: '虚拟商品付款前请确认账号、地区、网络和收款链；发货后不可撤销，异常支付进入人工处理'
   };
 }
@@ -1282,10 +1430,7 @@ const OPTION_META = {
 };
 
 const PAYMENT_META = {
-  TRON: { title: 'USDT (TRC20)', sub: '安全 · 快速', icon: 'C01_usdt.png' },
-  ETH: { title: 'ETH (ERC20)', sub: '以太坊网络', icon: 'C03_wallet.png' },
-  BSC: { title: 'BSC (BEP20)', sub: '币安智能链', icon: 'C03_wallet.png' },
-  BASE: { title: 'BASE (ERC20)', sub: 'Base 网络', icon: 'C03_wallet.png' }
+  TRON: { title: 'USDT (TRC20)', sub: '固定地址 · 自动监听', icon: 'C01_usdt.png' }
 };
 
 function paymentDisplay(code = state.paymentNetwork) {
@@ -1445,13 +1590,12 @@ function quickOrder(item, sku) {
       <h2>快速下单</h2>
       <label>商品<select data-action="quickProduct">${products.map((p) => `<option value="${p.id}" ${p.id === item.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label>
       <label>规格 / 套餐<select data-action="quickSku">${item.skus.map((s) => `<option value="${s.id}" ${sku?.id === s.id ? 'selected' : ''}>${Object.values(s.optionValues).join(' · ')}</option>`).join('')}</select></label>
-      <label>Telegram 用户名 *<input data-field="telegram" value="${state.telegramUsername}" placeholder="例如 @username" /></label>
-      <label>邮箱 *<input data-field="email" value="${state.email}" placeholder="例如 name@example.com" /></label>
+      <label>邮箱账号 *<input data-field="email" value="${state.email || userEmail()}" placeholder="例如 name@example.com" /></label>
       <label>支付币种<input value="USDT 🔒" disabled /></label>
       <label>支付网络<select data-action="setNetwork">${networks.map((n) => `<option value="${n.code}" ${n.code === state.paymentNetwork ? 'selected' : ''}>${n.displayName} (${n.tokenStandard})</option>`).join('')}</select></label>
       <div class="amount"><span>订单金额</span><strong>${sku ? price(sku.priceUsdt) : '当前规格暂不可购买'}</strong></div>
       <button class="primary" data-action="goCheckout" ${disabled ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} 前往统一结算</button>
-      <p class="secure">支付信息与订单通知将同时发送至 Telegram 与邮箱</p>
+      <p class="secure">支付信息与订单通知将同步到邮箱和右上角消息中心</p>
       <footer>${featureIcon('B02_shield_secure_payment.png', '安全加密支付')} 安全加密支付，保障您的隐私与资产安全</footer>
     </aside>
   `;
@@ -1518,6 +1662,18 @@ function detail(slug = 'discord-nitro') {
   requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 }
 
+function checkoutBalanceUse(total) {
+  const amount = Number(total || 0);
+  const balance = Number(state.wallet.balance || 0);
+  if (state.paymentMethod === 'balance') return Math.min(balance, amount);
+  if (state.useBalance) return Math.min(balance, amount);
+  return 0;
+}
+
+function checkoutRemainder(total) {
+  return Math.max(0, Number(total || 0) - checkoutBalanceUse(total));
+}
+
 function checkout() {
   const item = product();
   const sku = findSku(item);
@@ -1539,18 +1695,27 @@ function checkout() {
           <div class="preview-row">${icon(item.icon)}<b>${item.name}</b>${Object.entries(selectedOptions(item)).map(([k, v]) => `<span>${v}</span>`).join('')}<span>${deliveryLabel(sku.deliveryType)}</span><span>${stockLabel(sku.stockStatus || sku.stock)}</span></div>
         </section>
         <section class="glass panel">
-          <h3>账号绑定</h3>
+          <h3>账号信息</h3>
           <div class="account-binding-note checkout-binding">
             <strong>${featureIcon('B02_shield_secure_payment.png', '订单绑定')} 订单信息自动绑定当前登录账号</strong>
-            <p>${state.user ? `当前登录账号：@${state.user.username}` : '请先登录后再创建订单，发货与售后信息会归档到「我的订单」。'}</p>
+            <p>${state.user ? `当前邮箱账号：${escapeHtml(userEmail())}` : '请先登录后再创建订单，发货与售后信息会归档到「我的订单」。'}</p>
           </div>
         </section>
         <section class="glass panel">
           <h3>支付信息</h3>
-          <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${paymentIcon(n.code === 'TRON' ? 'C02_tron_trc20.png' : 'C03_wallet.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
+          <div class="payment-method-row">
+            ${[
+              ['balance', '余额支付', `${Number(state.wallet.balance || 0).toFixed(2)} USDT 可用`],
+              ['wechat', '微信支付', '第三方聚合支付'],
+              ['alipay', '支付宝', '第三方聚合支付'],
+              ['usdt_trc20', 'USDT TRC20', '链上确认到账']
+            ].map(([key, label, desc]) => `<button class="${state.paymentMethod === key ? 'active' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button"><b>${label}</b><span>${desc}</span></button>`).join('')}
+          </div>
+          ${state.paymentMethod !== 'balance' ? `<label class="agree balance-offset"><input type="checkbox" data-action="toggleUseBalance" ${state.useBalance ? 'checked' : ''}/> 使用余额抵扣，剩余部分通过${state.paymentMethod === 'wechat' ? '微信' : state.paymentMethod === 'alipay' ? '支付宝' : 'USDT TRC20'}支付</label>` : ''}
+          <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${paymentIcon('C02_tron_trc20.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
           <div class="network-confirm">
             <b>你选择的是 ${networkText(state.paymentNetwork)}</b>
-            <span>请确认钱包/交易所转账网络与订单完全一致，不要使用其他链或内部转账网络。</span>
+            <span>USDT 只支持 TRC20。微信/支付宝由第三方聚合支付回调确认，TRC20 需要链上确认。</span>
             <span>错链支付、少付、多付、超时付款都将进入异常订单，需要人工处理。</span>
             <label class="agree"><input type="checkbox" id="networkConfirm" /> 我已确认支付网络和金额风险</label>
           </div>
@@ -1566,6 +1731,8 @@ function checkout() {
         <div class="summary-product">${icon(item.icon)}<div><b>${item.name}</b><small>${Object.values(selectedOptions(item)).join(' / ')}</small></div><span>× 1</span></div>
         <div class="line"><span>商品单价</span>${price(sku.priceUsdt)}</div>
         <div class="line"><span>参考金额</span><b>${money(sku.priceUsdt)}（仅供参考）</b></div>
+        <div class="line"><span>余额抵扣</span><b>${checkoutBalanceUse(sku.priceUsdt).toFixed(2)} USDT</b></div>
+        <div class="line"><span>剩余支付</span><b>${checkoutRemainder(sku.priceUsdt).toFixed(2)} USDT</b></div>
         <div class="line total"><span>应付金额</span>${price(sku.priceUsdt)}</div>
         <p class="summary-note">订单创建时锁定 USDT 金额，链上手续费由用户承担。登录后，订单及发货信息将自动保存至「我的订单」。</p>
         <label class="agree"><input type="checkbox" id="agree" /> 我已阅读并同意 <a>购买须知</a> 与 <a>售后规则</a></label>
@@ -1651,11 +1818,58 @@ function stepper(items, active) {
   return `<div class="stepper">${items.map((item, i) => `<span class="${i <= active ? 'active' : ''}"><b>${i + 1}</b>${item}</span>`).join('')}</div>`;
 }
 
+function createLocalOrder(item, sku) {
+  const amount = Number(sku.priceUsdt || 0);
+  const balanceUsed = checkoutBalanceUse(amount);
+  const remainder = checkoutRemainder(amount);
+  const paidByBalance = state.paymentMethod === 'balance' && remainder <= 0;
+  if (state.paymentMethod === 'balance' && remainder > 0) {
+    notify('余额不足，请选择微信、支付宝或 USDT TRC20 组合支付');
+    return null;
+  }
+  if (balanceUsed > 0) {
+    state.wallet.balance = Number((Number(state.wallet.balance || 0) - balanceUsed).toFixed(2));
+    walletLedger('订单消费', -balanceUsed, `${item.name} 余额抵扣`);
+  }
+  const id = `local_${Date.now()}`;
+  const order = {
+    id,
+    orderNo: `CH${new Date().toISOString().slice(0, 10).replace(/-/g, '')}${String(Date.now()).slice(-5)}`,
+    productName: item.name,
+    productId: item.id,
+    skuId: sku.id,
+    icon: item.icon,
+    options: selectedOptions(item),
+    amountUsdt: amount,
+    fiatCurrency: state.fiatCurrency,
+    fiatAmount: money(amount),
+    paymentMethod: state.paymentMethod,
+    paymentNetwork: 'TRON',
+    paymentAddress: 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',
+    payAmount: remainder || amount,
+    payCurrency: 'USDT',
+    balanceUsed,
+    email: userEmail(),
+    telegramUsername: state.user.username || userEmail().split('@')[0],
+    deliveryType: sku.deliveryType,
+    status: paidByBalance ? 'completed' : 'pending_payment',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    paidAt: paidByBalance ? new Date().toISOString() : null,
+    deliveredAt: paidByBalance ? new Date().toISOString() : null
+  };
+  saveOrder(order);
+  addMessage(paidByBalance ? '订单已完成' : '订单已创建', paidByBalance ? `${item.name} 已使用余额支付并生成交付内容。` : `${item.name} 剩余 ${remainder.toFixed(2)} USDT 待支付。`, 'order');
+  return order;
+}
+
 async function createOrder() {
   syncInputs();
   if (!state.user) {
-    openTelegramLoginPanel('#/checkout');
-    return notify('请先登录后再支付');
+    state.authPanelOpen = true;
+    state.authMode = 'login';
+    route();
+    return notify('请先使用邮箱登录后再支付');
   }
   const agree = document.querySelector('#agree');
   if (agree && !agree.checked) return notify('请先勾选购买须知与售后规则');
@@ -1665,6 +1879,13 @@ async function createOrder() {
   let serverOrder = null;
   const networkConfirm = document.querySelector('#networkConfirm');
   if (networkConfirm && !networkConfirm.checked) return notify('请先确认支付网络风险');
+  if (state.user.authType === 'email') {
+    const localOrder = createLocalOrder(item, sku);
+    if (!localOrder) return;
+    notify(localOrder.status === 'completed' ? '余额支付成功，订单已完成' : '订单已创建，请继续完成剩余支付');
+    location.hash = localOrder.status === 'completed' ? `#/order/${localOrder.id}/success` : `#/pay/${localOrder.id}`;
+    return;
+  }
   const accountUsername = state.telegramUsername || `@${state.user.username}`;
   const accountEmail = state.email || `${state.user.username || state.user.id}@telegram.local`;
   try {
@@ -1707,8 +1928,13 @@ function userOrderKey(order) {
 
 function localOrdersForUser() {
   if (!state.user) return [];
-  const username = normalizeTelegramUsername(state.user.username).toLowerCase();
-  return orders().filter((order) => normalizeTelegramUsername(order.telegramUsername || '').toLowerCase() === username);
+  const username = normalizeTelegramUsername(state.user.username || '').toLowerCase();
+  const email = userEmail().toLowerCase();
+  return orders().filter((order) => {
+    const orderUser = normalizeTelegramUsername(order.telegramUsername || '').toLowerCase();
+    const orderEmail = String(order.email || '').toLowerCase();
+    return (username && orderUser === username) || (email && orderEmail === email);
+  });
 }
 
 function accountOrders() {
@@ -1842,6 +2068,8 @@ function demoOrder() {
 async function pay(id) {
   const order = (await loadServerOrder(id)) || findExactOrder(id);
   if (!order) return checkout();
+  const paymentAmountValue = Number(order.payAmount || order.amountUsdt).toFixed(3);
+  const paymentAmountText = `${paymentAmountValue} USDT`;
   const walletModes = [
     { key: 'browser', label: '浏览器钱包', note: '推荐', icon: paymentIcon('C03_wallet.png', '浏览器钱包', 'wallet-icon') },
     { key: 'mobile', label: '移动钱包', note: 'APP 扫码打开', icon: paymentIcon('C04_qr_code.png', '移动钱包扫码', 'wallet-icon') },
@@ -1857,31 +2085,29 @@ async function pay(id) {
       <div>
         <section class="glass panel pay-info">
           <h3>订单信息</h3>
-          ${[['订单号', order.orderNo + ' ⧉'], ['商品', order.productName + '  ' + Object.values(order.options).join(' / ')], ['支付金额', `${order.amountUsdt.toFixed(2)} USDT ≈ ${order.fiatAmount}`], ['支付网络', networkText(order.paymentNetwork)], ['剩余支付时间', '<strong class="timer" data-expires="' + order.expiresAt + '">14:32</strong> <button class="danger">请尽快完成支付</button>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+          ${[['订单号', order.orderNo + ' ⧉'], ['商品', order.productName + '  ' + Object.values(order.options).join(' / ')], ['精确支付金额', `${paymentAmountText} ≈ ${order.fiatAmount}`], ['支付网络', 'USDT TRC20'], ['支付通道', 'TRON 链上直付'], ['剩余支付时间', '<strong class="timer" data-expires="' + order.expiresAt + '">14:32</strong> <button class="danger">请尽快完成支付</button>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
         </section>
         <section class="glass panel wallets">
           <h3>打开钱包并转账 <small>系统将尝试自动唤起您选择的钱包</small></h3>
           <div class="wallet-row">${walletModes.map((wallet) => `<button class="${state.walletMode === wallet.key ? 'active' : ''}" data-action="setWalletMode" data-wallet="${wallet.key}"><span>${wallet.icon}</span><b>${wallet.label}</b><small>${wallet.note}</small></button>`).join('')}</div>
           <button class="primary small" data-action="openWallet">${paymentIcon('C03_wallet.png', '钱包')} 重新打开钱包</button>
         </section>
-        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请严格按订单金额支付，必须与订单金额一致，少付或多付将无法到账。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请务必使用 ${networkText(order.paymentNetwork)} 网络转账，切勿使用其他链或交易所内部转账。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，超时未支付订单将自动取消。</p></section>
+        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请严格支付 ${paymentAmountText}，金额用于自动识别订单。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请务必使用 TRON / TRC20 网络转 USDT，其他链无法自动确认。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，链上延迟会额外保留短暂监听窗口。</p></section>
       </div>
       <div>
         <section class="glass panel qr-panel">
           <h3>请使用 ${networkText(order.paymentNetwork)} 向以下地址转账</h3>
           <div class="qr-wrap"><div class="fake-qr"><span>${paymentIcon('C04_qr_code.png', '二维码')}</span></div><button data-action="copyPaymentInfo">${paymentIcon('C04_qr_code.png', '二维码')} 保存二维码</button></div>
           <div class="copy-box"><label>${paymentIcon('C06_address.png', '收款地址')} 收款地址 <small>安全验证通过</small><input value="${order.paymentAddress}" readonly /></label><button data-copy="${order.paymentAddress}">${paymentIcon('C05_copy.png', '复制')} 复制地址</button></div>
-          <div class="copy-box"><label>${paymentIcon('C01_usdt.png', 'USDT')} 支付金额<input value="${order.amountUsdt.toFixed(2)} USDT ≈ ${order.fiatAmount}" readonly /></label><button data-copy="${order.amountUsdt.toFixed(2)}">${paymentIcon('C05_copy.png', '复制')} 复制金额</button></div>
-          <div class="copy-box"><label>${paymentIcon('C02_tron_trc20.png', '支付网络')} 支付网络<input value="${networkText(order.paymentNetwork)}" readonly /></label><button data-copy="${networkText(order.paymentNetwork)}">${paymentIcon('C05_copy.png', '复制')} 复制网络</button></div>
+          <div class="copy-box"><label>${paymentIcon('C01_usdt.png', 'USDT')} 精确支付金额<input value="${paymentAmountText} ≈ ${order.fiatAmount}" readonly /></label><button data-copy="${paymentAmountValue}">${paymentIcon('C05_copy.png', '复制')} 复制金额</button></div>
+          <div class="copy-box"><label>${paymentIcon('C02_tron_trc20.png', '支付网络')} 支付网络<input value="USDT TRC20" readonly /></label><button data-copy="USDT TRC20">${paymentIcon('C05_copy.png', '复制')} 复制网络</button></div>
           <p>${featureIcon('B07_warning_triangle.png', '注意')} 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
         </section>
         <section class="glass panel pay-cta">
-          <p>支付后通常需要 1–3 分钟链上确认，请勿重复支付。若未自动识别，可提交 TxID 进入人工核验。</p>
-          <label>交易 Hash / TxID<input id="txHashInput" value="${order.raw?.txHash || ''}" placeholder="粘贴钱包或交易所返回的 TxID" /></label>
-          <button class="primary small" data-action="submitTxHash" data-id="${order.id}">${paymentIcon('C06_address.png', 'TxID')} 提交 TxID</button>
+          <p>支付后系统会通过 TronGrid 自动监听，达到 3 次确认后标记为已支付。少付、多付或超时到账会进入后台异常处理。</p>
           <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
         </section>
-        <section class="glass panel support"><b>遇到问题？联系 Telegram 客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
+        <section class="glass panel support"><b>遇到问题？联系在线客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
       </div>
     </section>
   `, 'page');
@@ -1916,7 +2142,7 @@ async function markPaid(id) {
       await fetch(`/api/internal/orders/${order.id}/mark-paid`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ txHash: `mock_tx_${Date.now()}` })
+        body: JSON.stringify({})
       });
       const deliveryResponse = await fetch(`/api/internal/orders/${order.id}/deliver`, { method: 'POST' });
       const deliveryResult = await deliveryResponse.json().catch(() => ({}));
@@ -1979,7 +2205,7 @@ async function success(id) {
   shell(`
     <section class="success-hero glass">
       <div class="success-orb">${statusIcon('C08_payment_success.png', '支付成功')}</div>
-      <div><h1>订单已完成，感谢您的购买！</h1><p>支付成功，订单已顺利完成，商品已发送至您的 Telegram 与邮箱。</p><div class="mini-tags"><span>${featureIcon('B06_check_circle_success.png', '通知已发送')} Telegram 通知已发送</span><span>${featureIcon('B06_check_circle_success.png', '邮件已发送')} 邮件通知已发送</span><span>${featureIcon('B09_auto_delivery.png', '自动发货')} 安全可靠的自动发货系统</span></div></div>
+      <div><h1>订单已完成，感谢您的购买！</h1><p>支付成功，订单已顺利完成，交付内容已归档到您的邮箱账号。</p><div class="mini-tags"><span>${featureIcon('B06_check_circle_success.png', '通知已发送')} 站内通知已发送</span><span>${featureIcon('B06_check_circle_success.png', '邮件已发送')} 邮件通知已发送</span><span>${featureIcon('B09_auto_delivery.png', '自动发货')} 安全可靠的自动发货系统</span></div></div>
     </section>
     <section class="glass completion">${events.map((e) => `<span><b>${featureIcon('B06_check_circle_success.png', '完成')}</b>${e.label}<small>${e.time}</small></span>`).join('')}</section>
     <section class="success-grid">
@@ -1990,8 +2216,8 @@ async function success(id) {
       </section>
       <section class="glass panel delivery">
         <h3>发货结果 / 交付信息</h3>
-        <div class="delivery-ok"><b>发货状态：已发送至 Telegram 与邮箱</b><span>已完成</span></div>
-        <div class="pay-row"><span>Telegram</span><b>已发送至 ${order.telegramUsername}</b></div>
+        <div class="delivery-ok"><b>发货状态：已归档到邮箱账号</b><span>已完成</span></div>
+        <div class="pay-row"><span>站内消息</span><b>已发送至右上角消息中心</b></div>
         <div class="pay-row"><span>邮箱</span><b>已发送至 ${order.email}</b></div>
         <div class="secret ${deliveryContent ? 'revealed' : ''}">
           <small>交付内容</small>
@@ -2067,7 +2293,7 @@ async function orderDetail(id) {
           </section>
 
           <section class="detail-panel-block">
-            <div class="account-section-head"><div><h2>交付与通知</h2><p>虚拟商品敏感内容会隐藏展示，完整内容通过 Telegram / 邮箱发送。</p></div></div>
+            <div class="account-section-head"><div><h2>交付与通知</h2><p>虚拟商品敏感内容会隐藏展示，完整内容通过邮箱与站内消息归档。</p></div></div>
             <div class="delivery-ok"><b>${order.status === 'completed' ? '发货已完成' : order.status === 'delivering' ? '发货处理中' : '等待付款后发货'}</b><span>${deliveryLabel(order.deliveryType)}</span></div>
             <div class="secret ${order.status === 'completed' ? 'revealed' : ''}">
               <small>交付摘要</small>
@@ -2086,7 +2312,7 @@ async function orderDetail(id) {
             <h2>订单资料</h2>
             ${[
               ['订单号', order.orderNo],
-              ['Telegram', order.telegramUsername],
+              ['邮箱账号', order.email || userEmail()],
               ['邮箱', order.email || '-'],
               ['创建时间', timeFrom(order.createdAt)],
               ['更新时间', timeFrom(order.updatedAt)]
@@ -2096,7 +2322,7 @@ async function orderDetail(id) {
           <section class="detail-panel-block support-ticket">
             <h2>提交售后</h2>
             <label>问题类型<select id="ticketType"><option>未收到发货</option><option>卡密无效</option><option>账号无法登录</option><option>少付/多付/错链</option><option>填写信息错误</option></select></label>
-            <label>问题描述<textarea id="ticketBody" placeholder="描述问题，并补充截图链接、TxID 或账号信息"></textarea></label>
+            <label>问题描述<textarea id="ticketBody" placeholder="描述问题，并补充截图链接、订单号或账号信息"></textarea></label>
             <button class="primary" data-action="submitTicket" data-id="${order.id}" type="button">提交售后工单</button>
           </section>
         </aside>
@@ -2114,7 +2340,7 @@ async function lookup() {
         <div>
           <span class="pro-kicker">Order Service</span>
           <h1>订单查询与异常处理</h1>
-          <p>用订单号、Telegram、邮箱或 TxID 找回订单；查询结果可直接继续支付、查看发货或提交售后。</p>
+          <p>用订单号、邮箱或 TxID 找回订单；查询结果可直接继续支付、查看发货或提交售后。</p>
         </div>
         <div class="pro-hero-actions">
           <a class="secondary" href="#/account">返回个人中心</a>
@@ -2125,13 +2351,12 @@ async function lookup() {
       <section class="lookup-workbench">
         <div class="lookup-card">
           <div class="lookup-card-head">
-            <div><h2>查询条件</h2><p>订单号与联系方式组合查询更安全；只有 TxID 时也可以走异常订单找回。</p></div>
+            <div><h2>查询条件</h2><p>订单号与联系方式组合查询更安全，支付异常请联系人工客服核验。</p></div>
             <span>支持前台订单接口</span>
           </div>
           <div class="lookup-form-grid">
             <label>订单号<input id="lookupOrder" autocomplete="off" placeholder="GF20240527000123" /></label>
-            <label>邮箱 / Telegram 用户名<input id="lookupContact" autocomplete="off" placeholder="name@example.com 或 @username" /></label>
-            <label class="wide">TxID / 交易 Hash<input id="lookupTxHash" autocomplete="off" placeholder="支付后未自动识别时填写，可直接进入人工核验" /></label>
+            <label>邮箱账号<input id="lookupContact" autocomplete="off" placeholder="name@example.com" /></label>
           </div>
           <button class="primary lookup-submit" data-action="lookupOrder" type="button">查询订单</button>
           <div class="lookup-rules">
@@ -2144,7 +2369,7 @@ async function lookup() {
         <aside class="lookup-side">
           <section>
             <h2>处理范围</h2>
-            <div class="support-route"><b>未到账 / 少付 / 多付</b><span>提交 TxID 后进入支付核验。</span></div>
+            <div class="support-route"><b>未到账 / 少付 / 多付</b><span>联系人工客服进入支付核验。</span></div>
             <div class="support-route"><b>未收到发货</b><span>订单详情内提交售后，后台售后中心承接。</span></div>
             <div class="support-route"><b>信息填写错误</b><span>未发货前可申请人工修改。</span></div>
           </section>
@@ -2158,8 +2383,8 @@ async function lookup() {
 
       <section class="pro-section">
         <div class="account-section-head">
-          <div><h2>${state.user ? '我的订单' : '本机订单'}</h2><p>${state.user ? '展示当前登录账号与本机缓存订单。' : '登录后可同步当前 Telegram 账号的线上订单。'}</p></div>
-          ${state.user ? '<button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>' : '<button class="secondary" data-action="telegramLogin" type="button">Telegram 登录</button>'}
+          <div><h2>${state.user ? '我的订单' : '本机订单'}</h2><p>${state.user ? '展示当前邮箱账号与本机缓存订单。' : '登录后可同步当前邮箱账号的线上订单。'}</p></div>
+          ${state.user ? '<button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>' : '<button class="secondary" data-action="openAuthPanel" type="button">邮箱登录</button>'}
         </div>
         <div class="account-order-stack">${savedOrders.length ? savedOrders.slice(0, 8).map(accountOrderCard).join('') : accountEmptyOrders()}</div>
       </section>
@@ -2257,11 +2482,9 @@ function accountStatCards() {
 
 function accountOverviewCards(userName) {
   const cards = [
-    ['个人信息', `<div class="overview-profile">${navIcon('A07_user_login.png', '头像', 'overview-avatar')}<span><b>${escapeHtml(userName)}</b><em>高级会员</em><small>ID：12345678</small></span></div>`, '编辑资料'],
+    ['个人信息', `<div class="overview-profile">${navIcon('A07_user_login.png', '头像', 'overview-avatar')}<span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料'],
     ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button type="button">充值</button><button type="button">提现</button></div>', ''],
-    ['邮箱绑定', '<b>user@example.com</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换邮箱'],
-    ['手机号绑定', '<b>+44 **** 8888</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换手机号'],
-    ['Telegram 绑定', '<b>@your_telegram</b><em class="bound">已绑定</em><small>绑定时间：2024-01-15 10:30</small>', '更换账号'],
+    ['邮箱账号', `<b>${escapeHtml(userEmail() || 'user@example.com')}</b><em class="bound">已绑定</em><small>暂不支持更换</small>`, ''],
     ['默认货币', '<b>USD</b>', '更改货币'],
     ['最近登录', '<b>2025-05-28 18:24</b><small>London, United Kingdom</small>', '查看登录记录'],
     ['通知设置', '<b>邮箱通知、订单更新、活动提醒等</b><em class="bound">已开启</em><label class="overview-switch"><input checked type="checkbox" /><span></span></label>', '']
@@ -2332,6 +2555,187 @@ function accountExpandedOrder(order) {
   `;
 }
 
+function accountSections() {
+  return [
+    { key: 'orders', label: '订单中心', icon: 'receipt', desc: '查看订单、筛选状态、展开交付内容并发起售后。' },
+    { key: 'content', label: '我的内容', icon: 'lightning', desc: '集中查看已交付的卡密、账号密码、兑换码、链接和文字说明。' },
+    { key: 'wallet', label: '余额中心', icon: 'card', desc: '管理 USDT 余额、充值记录、消费流水和组合支付。' },
+    { key: 'support', label: '售后服务', icon: 'headset', desc: '提交工单，后台人工处理退款、补发和异常问题。' },
+    { key: 'profile', label: '个人资料', icon: 'user', desc: '修改头像和昵称，邮箱账号只读且暂不支持更换。' },
+    { key: 'security', label: '安全设置', icon: 'shield-check', desc: '修改密码、查看登录记录和退出其他设备。' },
+    { key: 'notifications', label: '通知设置', icon: 'refund', desc: '设置邮件和站内通知，右上角消息中心展示通知记录。' },
+    { key: 'help', label: '帮助中心', icon: 'more', desc: '查看购买、充值、TRC20 支付、发货和售后规则。' }
+  ];
+}
+
+function accountSectionPanel(section) {
+  const map = {
+    orders: accountOrdersPanel,
+    content: accountContentPanel,
+    wallet: accountWalletPanel,
+    support: accountSupportPanel,
+    profile: accountProfilePanel,
+    security: accountSecurityPanel,
+    notifications: accountNotificationsPanel,
+    help: accountHelpPanel
+  };
+  return (map[section] || accountOrdersPanel)();
+}
+
+function accountOrdersPanel() {
+  return `
+    <section class="member-stats">${accountStatCards()}</section>
+    <nav class="order-tabs">
+      ${['全部订单','待支付','自动发货','人工处理','已完成','售后记录'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
+    </nav>
+    <section class="order-filter-bar">
+      <label>${navIcon('A09_search.png', '搜索', 'filter-icon')}<input placeholder="搜索订单号或商品名称" /></label>
+      <input placeholder="开始日期" />
+      <input placeholder="结束日期" />
+      <select><option>全部状态</option><option>待支付</option><option>处理中</option><option>已完成</option></select>
+      <select><option>最新下单</option><option>金额从高到低</option></select>
+      <button type="button">导出订单</button>
+    </section>
+    <section class="member-order-list">
+      <div class="member-order-head"><span>商品</span><span>订单号</span><span>购买时间</span><span>金额</span><span>支付方式</span><span>状态</span><span>操作</span></div>
+      ${accountOrderRows()}
+    </section>
+    <section class="member-pagination">
+      <span>共 128 条订单</span>
+      <div><button type="button">‹</button><button class="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><em>...</em><button type="button">13</button><button type="button">›</button></div>
+      <select><option>10 条/页</option></select>
+    </section>
+  `;
+}
+
+function accountContentPanel() {
+  const items = [
+    ['卡密', 'Discord Nitro', 'DNBP-XXXX-XXXX-XXXX'],
+    ['账号密码', 'Spotify Premium', 'sp_user@example.com / ********'],
+    ['兑换码', 'Steam Wallet', 'STEAM-5USD-2025'],
+    ['链接', 'YouTube Premium', 'https://youtube.com/redeem'],
+    ['文字说明', 'Microsoft 365', '按发货邮件步骤登录并激活，首次使用请勿切换地区。']
+  ];
+  return `<section class="member-panel">
+    <div class="section-toolbar"><b>已交付内容</b><select><option>全部商品</option><option>卡密</option><option>账号密码</option><option>兑换码</option><option>链接</option></select></div>
+    <div class="content-grid">
+      ${items.map(([type, productName, content]) => `<article class="content-card">
+        <span>${escapeHtml(type)}</span>
+        <h3>${escapeHtml(productName)}</h3>
+        <p>${escapeHtml(content)}</p>
+        <div><button data-copy="${escapeHtml(content)}" type="button">复制</button><button data-action="selectAccountSection" data-section="support" type="button">申请售后</button></div>
+      </article>`).join('')}
+    </div>
+  </section>`;
+}
+
+function accountWalletPanel() {
+  const ledger = state.wallet.ledger?.length ? state.wallet.ledger : [
+    { type: '充值入账', amount: 100, note: 'USDT TRC20 确认到账', status: 'completed', createdAt: '2025-05-26T11:00:00Z' },
+    { type: '订单消费', amount: -1.8, note: 'Discord Nitro 订单支付', status: 'completed', createdAt: '2025-05-28T14:32:18Z' }
+  ];
+  return `<section class="wallet-layout">
+    <div class="wallet-balance">
+      <span>当前余额</span>
+      <strong>${Number(state.wallet.balance || 0).toFixed(2)} USDT</strong>
+      <p>微信/支付宝充值会按聚合支付回调入账；USDT TRC20 需要链上确认。</p>
+    </div>
+    <form class="wallet-recharge">
+      <h3>余额充值</h3>
+      <label>充值金额<input id="rechargeAmount" type="number" min="1" step="0.01" value="${escapeHtml(state.rechargeDraft.amount)}" /></label>
+      <label>充值方式<select id="rechargeMethod"><option value="wechat">微信支付</option><option value="alipay">支付宝支付</option><option value="usdt_trc20">USDT TRC20</option></select></label>
+      <button class="primary" data-action="createRecharge" type="button">创建充值单</button>
+      <small>第三方聚合支付/链上监听接入后会自动完成入账；当前环境可用模拟回调验证界面。</small>
+    </form>
+    <section class="member-panel wide">
+      <div class="section-toolbar"><b>余额流水</b><button data-action="simulateRecharge" type="button">模拟最近充值到账</button></div>
+      <div class="ledger-list">${ledger.map((item) => `<div><span>${escapeHtml(item.type)}</span><b>${Number(item.amount).toFixed(2)} USDT</b><small>${escapeHtml(item.note)} · ${escapeHtml(timeFrom(item.createdAt))}</small><em>${escapeHtml(item.status)}</em></div>`).join('')}</div>
+    </section>
+  </section>`;
+}
+
+function accountSupportPanel() {
+  const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]');
+  return `<section class="support-layout">
+    <form class="member-panel support-form">
+      <h3>提交售后工单</h3>
+      <label>关联订单<select id="supportOrder">${accountDemoOrders().map((order) => `<option value="${order.orderNo}">${order.orderNo} · ${order.productName}</option>`).join('')}</select></label>
+      <label>问题类型<select id="supportType"><option>未收到内容</option><option>内容无法使用</option><option>账号异常</option><option>申请退款</option><option>其他问题</option></select></label>
+      <label>问题描述<textarea id="supportBody" placeholder="请描述问题，可补充截图凭证说明"></textarea></label>
+      <button class="primary" data-action="createSupportTicket" type="button">提交工单</button>
+    </form>
+    <section class="member-panel">
+      <div class="section-toolbar"><b>我的工单</b><span>后台人工处理</span></div>
+      <div class="ticket-list">
+        ${tickets.length ? tickets.map((ticket) => `<article><b>${escapeHtml(ticket.ticketNo || ticket.id)}</b><span>${escapeHtml(ticket.type)} · ${escapeHtml(ticket.status || '待处理')}</span><p>${escapeHtml(ticket.description || '')}</p></article>`).join('') : '<p class="muted">暂无工单。提交后会显示待处理、处理中、等待用户回复、已解决等状态。</p>'}
+      </div>
+    </section>
+  </section>`;
+}
+
+function accountProfilePanel() {
+  return `<section class="member-panel profile-form">
+    <div class="profile-editor">
+      <span class="member-avatar">${state.profile.avatar ? `<img src="${escapeHtml(state.profile.avatar)}" alt="头像" />` : userInitials()}</span>
+      <div><h3>${escapeHtml(userNickname())}</h3><p>${escapeHtml(userEmail())}</p></div>
+    </div>
+    <label>头像 URL<input id="profileAvatar" value="${escapeHtml(state.profile.avatar || '')}" placeholder="https://example.com/avatar.png" /></label>
+    <label>昵称<input id="profileNickname" value="${escapeHtml(userNickname())}" maxlength="20" /></label>
+    <label>邮箱账号<input value="${escapeHtml(userEmail())}" disabled /></label>
+    <label>用户 ID<input value="${escapeHtml(state.user.id)}" disabled /></label>
+    <button class="primary" data-action="saveProfile" type="button">保存资料</button>
+  </section>`;
+}
+
+function accountSecurityPanel() {
+  return `<section class="support-layout">
+    <form class="member-panel support-form">
+      <h3>修改密码</h3>
+      <label>当前密码<input id="oldPassword" type="password" /></label>
+      <label>新密码<input id="newPassword" type="password" /></label>
+      <button class="primary" data-action="changePassword" type="button">更新密码</button>
+    </form>
+    <section class="member-panel">
+      <div class="section-toolbar"><b>最近登录记录</b><button data-action="logoutAccount" type="button">退出当前设备</button></div>
+      <div class="ledger-list">
+        <div><span>邮箱密码登录</span><b>${escapeHtml(userEmail())}</b><small>${escapeHtml(timeFrom(new Date().toISOString()))} · 当前浏览器</small><em>正常</em></div>
+      </div>
+      <p class="muted">暂不启用 2FA。后续可接入设备会话管理和退出其他设备接口。</p>
+    </section>
+  </section>`;
+}
+
+function accountNotificationsPanel() {
+  const prefs = [
+    ['email', '邮件通知', '订单、充值、售后结果发送到邮箱'],
+    ['site', '站内通知', '右上角消息中心展示通知记录'],
+    ['payment', '订单支付', '待支付、支付成功和支付失败提醒'],
+    ['delivery', '发货完成', '自动/人工发货完成提醒'],
+    ['support', '售后回复', '工单状态变化和客服回复提醒'],
+    ['wallet', '余额变动', '充值、消费、退款和后台调整提醒']
+  ];
+  return `<section class="member-panel">
+    <div class="account-pref-list">
+      ${prefs.map(([key, title, text]) => `<label class="account-pref"><input type="checkbox" data-action="toggleAccountPref" data-pref="${key}" ${state.accountPrefs[key] ? 'checked' : ''}/><span><b>${title}</b><small>${text}</small></span></label>`).join('')}
+    </div>
+    <button class="primary small" data-action="saveAccountPrefs" type="button">保存通知设置</button>
+  </section>`;
+}
+
+function accountHelpPanel() {
+  const faqs = [
+    ['购买说明', '选择商品和规格后进入结算，订单会绑定当前邮箱账号。'],
+    ['充值说明', '余额单位为 USDT，微信/支付宝通过第三方聚合支付折算入账。'],
+    ['USDT TRC20 支付说明', '仅支持 TRC20，转账金额和网络必须与订单一致，到账后进入确认。'],
+    ['发货说明', '自动发货会展示卡密、账号密码、兑换码、链接或文字说明；人工商品由后台处理。'],
+    ['售后规则', '用户提交工单后，后台人工处理补发、退款、驳回或继续沟通。']
+  ];
+  return `<section class="member-panel help-list">
+    ${faqs.map(([title, text]) => `<article><b>${escapeHtml(title)}</b><p>${escapeHtml(text)}</p></article>`).join('')}
+    <a class="secondary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a>
+  </section>`;
+}
+
 function ticketCardsForOrder(order) {
   const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]')
     .filter((ticket) => {
@@ -2352,65 +2756,57 @@ function productsPage() {
 }
 
 function account() {
-  const userName = state.user?.username || '用户昵称';
+  if (!state.user) {
+    shell(`
+      <section class="account-console account-console-guest">
+        <div class="account-console-panel">
+          <span class="console-eyebrow">Account Center</span>
+          <h1>登录后管理订单、余额与售后</h1>
+          <p>使用邮箱账号登录。注册后系统会分配昵称，邮箱作为登录账号暂时不能更换。</p>
+          <div class="console-actions">
+            <button class="primary account-login" data-action="openAuthPanel" type="button">${navIcon('A07_user_login.png', '登录')} 邮箱登录</button>
+            <button class="secondary" data-action="openRegisterPanel" type="button">创建账号</button>
+            <a class="secondary" href="#/orders/lookup">找回订单</a>
+          </div>
+        </div>
+        <div class="account-guest-modules">
+          ${[
+            ['订单', '查看待付款、发货中和已完成订单'],
+            ['余额', '充值、流水和组合支付记录'],
+            ['内容', '查看卡密、账号密码、兑换码、链接和文字说明'],
+            ['售后', '提交工单并跟进后台人工处理']
+          ].map(([title, text]) => `<div><b>${title}</b><span>${text}</span></div>`).join('')}
+        </div>
+      </section>
+    `, 'page account-console-shell');
+    return;
+  }
+
+  const userName = userNickname();
+  const section = state.accountSection || 'orders';
+  const sectionMeta = accountSections().find((item) => item.key === section) || accountSections()[0];
   shell(`
     <section class="member-center">
       <aside class="member-sidebar">
         <div class="member-user">
-          <span class="member-avatar">IC</span>
+          <button class="member-avatar avatar-button" data-action="selectAccountSection" data-section="profile" type="button">${state.profile.avatar ? `<img src="${escapeHtml(state.profile.avatar)}" alt="头像" />` : userInitials()}</button>
           <h2>${escapeHtml(userName)}</h2>
-          <em>高级会员</em>
-          <div class="member-balance"><span>账户余额</span><b>128.60 USDT</b></div>
-          <button type="button">充值</button>
+          <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
+          <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
         </div>
         <nav class="member-nav">
-          ${['订单中心','我的内容','售后服务','账号绑定','安全中心','通知设置','帮助中心'].map((label, index) => `<a class="${index === 0 ? 'active' : ''}" href="${index === 0 ? '#/account' : '#/account'}">${lineIcon(index === 0 ? 'receipt' : index === 4 ? 'shield-check' : index === 5 ? 'headset' : 'card', label, 'member-nav-icon')}${label}</a>`).join('')}
+          ${accountSections().map((item) => `<button class="${item.key === section ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
         </nav>
         <button class="member-logout" data-action="logoutAccount" type="button">退出登录</button>
       </aside>
 
       <section class="member-main">
         <header class="member-title">
-          <h1>个人中心 / 我的订单</h1>
-          <p>查看与管理您的所有订单，轻松获取商品与售后支持。</p>
+          <h1>个人中心 / ${escapeHtml(sectionMeta.label)}</h1>
+          <p>${escapeHtml(sectionMeta.desc)}</p>
         </header>
 
-        <section class="member-stats">${accountStatCards()}</section>
-
-        <nav class="order-tabs">
-          ${['全部订单','待支付','自动发货','人工处理','已完成','售后记录'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
-        </nav>
-
-        <section class="order-filter-bar">
-          <label>${navIcon('A09_search.png', '搜索', 'filter-icon')}<input placeholder="搜索订单号或商品名称" /></label>
-          <input placeholder="开始日期" />
-          <input placeholder="结束日期" />
-          <select><option>全部状态</option></select>
-          <select><option>最新下单</option></select>
-          <button type="button">导出订单</button>
-        </section>
-
-        <section class="member-order-list">
-          <div class="member-order-head"><span>商品</span><span>订单号</span><span>购买时间</span><span>金额</span><span>支付方式</span><span>状态</span><span>操作</span></div>
-          ${accountOrderRows()}
-        </section>
-
-        <section class="member-pagination">
-          <span>共 128 条订单</span>
-          <div><button type="button">‹</button><button class="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><em>...</em><button type="button">13</button><button type="button">›</button></div>
-          <select><option>10 条/页</option></select>
-        </section>
-
-        <section class="account-overview">
-          <nav class="account-tabs">
-            ${['基础资料','账号绑定','通知偏好','帮助支持','安全中心'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
-          </nav>
-          <div class="profile-grid">${accountOverviewCards(userName)}</div>
-          <div class="security-entry">
-            <span>${lineIcon('shield-check', '安全中心', 'security-entry-icon')}<b>安全中心</b><small>修改密码、双重验证、设备管理等安全设置请前往安全中心管理。</small></span>
-            <a class="secondary small link-button" href="#/account">前往安全中心</a>
-          </div>
-        </section>
+        ${accountSectionPanel(section)}
       </section>
     </section>
   `, 'member-page');
@@ -2422,7 +2818,7 @@ function accountEmptyOrders() {
   return `
     <div class="account-empty">
       <b>当前账号暂无订单</b>
-      <span>购买后订单会自动出现在这里；如果你在其他设备下过单，可用订单号和 Telegram 用户名找回。</span>
+      <span>购买后订单会自动出现在这里；如果你在其他设备下过单，可用订单号和邮箱找回。</span>
       <div><a class="primary small link-button" href="#/products">去选购商品</a><a class="secondary link-button" href="#/orders/lookup">找回订单</a></div>
     </div>
   `;
@@ -2457,7 +2853,7 @@ function adminLoginPanel() {
         <span class="admin-form-kicker">Admin Console</span>
         <h2>登录后台</h2>
         <p>使用管理员用户名和密码进入控制台。登录后才能查看敏感运营数据和执行人工操作。</p>
-        <label>用户名<input id="adminUsername" name="username" value="${escapeHtml(state.adminUsername || 'admin')}" type="text" placeholder="admin" autocomplete="username" /></label>
+        <label>用户名<input id="adminUsername" name="username" value="${escapeHtml(state.adminUsername || 'bitbernie')}" type="text" placeholder="bitbernie" autocomplete="username" /></label>
         <label>密码<input id="adminPassword" name="password" type="password" placeholder="输入管理员密码" autocomplete="current-password" /></label>
         <button class="primary" data-action="adminLogin" type="submit">登录后台</button>
         <small class="admin-login-hint">生产环境请配置 ADMIN_USERNAME、ADMIN_PASSWORD 和 ADMIN_SESSION_SECRET。</small>
@@ -2580,11 +2976,11 @@ function adminActionForm(action, fields, button = '保存') {
   return `<form class="admin-form" data-action="adminOps" data-ops="${action}">
     ${fields.map((field) => {
       const [name, label, type = 'text', placeholder = ''] = field;
-      if (type === 'textarea') return `<label>${label}<textarea name="${name}" placeholder="${placeholder}"></textarea></label>`;
+      if (type === 'textarea') return `<label class="admin-field-wide">${label}<textarea name="${name}" placeholder="${placeholder}"></textarea></label>`;
       if (type === 'checkbox') return `<label class="checkline"><input name="${name}" type="checkbox" /> ${label}</label>`;
       return `<label>${label}<input name="${name}" type="${type}" placeholder="${placeholder}" /></label>`;
     }).join('')}
-    <button class="primary small" type="submit">${button}</button>
+    <div class="admin-form-actions"><button class="primary small" type="submit">${button}</button></div>
   </form>`;
 }
 
@@ -2621,8 +3017,10 @@ function adminToolbar(fields, action = '', scope = adminFilterScope()) {
       if (field.type === 'button') return `<button class="${field.className || 'secondary'}" ${field.action ? `data-action="${field.action}"` : ''} ${field.tab ? `data-tab="${field.tab}"` : ''} type="button">${field.label}</button>`;
       return `<label>${field.label}<input data-action="adminFilter" data-filter-scope="${scope}" name="${name}" placeholder="${field.placeholder || ''}" value="${escapeHtml(value)}" /></label>`;
     }).join('')}
-    <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">重置筛选</button>
-    ${action}
+    <div class="admin-toolbar-actions">
+      <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">重置筛选</button>
+      ${action}
+    </div>
   </div>`;
 }
 
@@ -2631,7 +3029,7 @@ function adminStatus(text, tone = 'neutral') {
 }
 
 function adminTable(columns, rows, empty) {
-  return `<div class="admin-data-table" style="--admin-cols:${columns.map((column) => column.width || '1fr').join(' ')}">
+  return `<div class="admin-data-table admin-cols-${columns.length}">
     <div class="admin-data-head">${columns.map((column) => `<span>${column.label}</span>`).join('')}</div>
     ${rows.length ? rows.map((cells) => `<div class="admin-data-row">${cells.map((cell) => `<span>${cell}</span>`).join('')}</div>`).join('') : adminEmpty(empty.title, empty.desc)}
   </div>`;
@@ -2890,21 +3288,22 @@ function adminContent(tab) {
   if (tab === 'orders') {
     const scope = adminFilterScope(tab);
     const visibleOrders = filterAdminOrders(orderList, adminFiltersFor(scope));
-    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram' }, { name: 'status', label: '订单状态', type: 'select', value: '全部状态', options: ['待付款','链上确认中','已付款','发货中','已完成','已超时','支付失败','退款中','已退款'] }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'date', label: '时间范围', placeholder: '最近 30 天' }], '', scope)}<div class="admin-tabs static">${['全部订单','待支付','已支付','待发货','已发货','发货失败','异常订单','已取消','售后中'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</div><div class="admin-panel">${adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '金额' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.6fr' }], visibleOrders.map((o) => [`<b>${escapeHtml(o.orderNo)}</b>`, escapeHtml(o.telegramUsername || o.email || '-'), `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`, o.quantity || 1, `${Number(o.amountUsdt || 0).toFixed(2)} USDT`, adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), adminStatus(o.deliveryStatus || statusLabel(o.status), adminToneFromStatus(o.deliveryStatus || o.status)), adminStatus(o.ticketStatus || '无售后', 'neutral'), timeFrom(o.createdAt), `<a href="#/order/${o.id}">详情</a><button data-action="adminMarkPaid" data-id="${o.id}" type="button">手动确认</button><button data-action="adminDeliver" data-id="${o.id}" type="button">人工发货</button>`]), { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPager(visibleOrders.length)}</div><div class="admin-panel admin-detail-skeleton"><h2>订单详情页结构</h2>${['订单状态时间线','用户信息','商品快照','SKU 快照','用户填写信息','支付信息','发货信息','售后记录','通知记录','操作日志','管理员备注'].map((label) => `<span>${label}</span>`).join('')}</div>`);
+    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram' }, { name: 'status', label: '订单状态', type: 'select', value: '全部状态', options: ['待付款','链上确认中','已付款','发货中','已完成','已超时','支付失败','退款中','已退款'] }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'date', label: '时间范围', placeholder: '最近 30 天' }], '', scope)}<div class="admin-tabs static">${['全部订单','待支付','已支付','待发货','已发货','发货失败','异常订单','已取消','售后中'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</div><div class="admin-panel">${adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '金额' }, { label: '支付通道', width: '1.2fr' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.6fr' }], visibleOrders.map((o) => [`<b>${escapeHtml(o.orderNo)}</b>`, escapeHtml(o.telegramUsername || o.email || '-'), `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`, o.quantity || 1, `${Number(o.payAmount || o.amountUsdt || 0).toFixed(6).replace(/\.?0+$/, '')} ${escapeHtml(o.payCurrency || 'USDT')}`, paymentChannelLabel(o), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), adminStatus(o.deliveryStatus || statusLabel(o.status), adminToneFromStatus(o.deliveryStatus || o.status)), adminStatus(o.ticketStatus || '无售后', 'neutral'), timeFrom(o.createdAt), `<a href="#/order/${o.id}">详情</a><button data-action="adminMarkPaid" data-id="${o.id}" type="button">手动确认</button><button data-action="adminDeliver" data-id="${o.id}" type="button">人工发货</button>`]), { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPager(visibleOrders.length)}</div><div class="admin-panel admin-detail-skeleton"><h2>订单详情页结构</h2>${['订单状态时间线','用户信息','商品快照','SKU 快照','用户填写信息','支付信息','发货信息','售后记录','通知记录','操作日志','管理员备注'].map((label) => `<span>${label}</span>`).join('')}</div>`);
   }
   if (tab === 'payments') {
     const sub = currentAdminSubTab(tab, 'networks');
     const tabs = ['networks|支付网络', 'addresses|收款地址', 'transactions|到账交易', 'exceptions|支付异常'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
+    const providerBanner = `<div class="admin-risk-callout"><b>当前支付通道：USDT TRC20 直付</b><span>新订单使用固定 TRON 收款地址、三位小数尾差和 TronGrid 轮询自动确认。</span></div>`;
     let body = '';
     if (sub === 'addresses') {
-      body = `<div class="admin-risk-callout"><b>高风险配置</b><span>修改收款地址会影响所有新订单支付，必须二次确认并写入审计日志。</span></div><div class="admin-panel">${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '最近到账' }, { label: '操作人' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.address || '未配置地址'), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), '-', 'admin', '<button type="button">二次确认修改</button><button data-action="adminTab" data-tab="audit" type="button">日志</button>']), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
+      body = `${providerBanner}<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '最近到账' }, { label: '操作人' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), adminNetworkCollectionMethod(n), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), '-', 'admin', '<button type="button">二次确认修改</button><button data-action="adminTab" data-tab="audit" type="button">日志</button>']), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
     } else if (sub === 'transactions') {
       body = `<div class="admin-panel">${adminActionForm('paymentTransaction.create', [['txHash','交易 Hash'], ['network','网络','text','TRON'], ['toAddress','收款地址'], ['amount','到账金额'], ['orderNo','绑定订单号'], ['matchStatus','匹配状态','text','manual_confirm'], ['note','处理备注']], '记录到账交易')}${adminTable([{ label: 'Hash', width: '1.8fr' }, { label: '网络' }, { label: '金额' }, { label: '付款地址' }, { label: '收款地址' }, { label: '匹配订单' }, { label: '状态' }, { label: '检测时间' }, { label: '操作' }], (ops.paymentTransactions || []).map((t) => [`<b>${escapeHtml(t.txHash)}</b>`, escapeHtml(t.network), `${escapeHtml(t.amount)} ${escapeHtml(t.token || 'USDT')}`, escapeHtml(t.fromAddress || '-'), escapeHtml(t.toAddress || '-'), escapeHtml(t.matchedOrderNo || t.orderNo || '未绑定'), adminStatus(t.matchStatus || 'unmatched', adminToneFromStatus(t.matchStatus)), timeFrom(t.detectedAt || t.createdAt), '<button type="button">绑定订单</button>']), { title: '暂无监听交易', desc: '链上监听或手动录入的到账交易会显示在这里。' })}</div>`;
     } else if (sub === 'exceptions') {
       const exceptions = (ops.paymentTransactions || []).filter((t) => !['matched', 'manual_confirm'].includes(t.matchStatus));
       body = `<div class="admin-panel">${adminTable([{ label: '异常类型' }, { label: 'Hash', width: '1.8fr' }, { label: '金额' }, { label: '网络' }, { label: '可能订单' }, { label: '原因' }, { label: '处理状态' }, { label: '操作' }], exceptions.map((t) => [escapeHtml(t.exceptionType || '未匹配'), escapeHtml(t.txHash), `${escapeHtml(t.amount)} USDT`, escapeHtml(t.network), escapeHtml(t.matchedOrderNo || '-'), escapeHtml(t.note || '需要人工核验'), adminStatus(t.matchStatus || '待处理', 'warning'), '<button type="button">人工绑定</button><button type="button">忽略</button>']), { title: '暂无支付异常', desc: '少付、多付、错链、超时、重复 Hash、未匹配交易会显示在这里。' })}</div>`;
     } else {
-      body = `<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '协议' }, { label: '代币' }, { label: '合约地址', width: '1.4fr' }, { label: '确认数' }, { label: '状态' }, { label: '推荐' }, { label: '操作', width: '1.5fr' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.tokenStandard || '-'), 'USDT', escapeHtml(n.contractAddress || '-'), n.confirmations || 1, adminStatus((n.enabled ?? n.isEnabled) ? '已启用' : '已关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), adminStatus((n.recommended ?? n.isRecommended) ? '推荐' : '普通', (n.recommended ?? n.isRecommended) ? 'success' : 'neutral'), `<button data-action="adminToggleNetwork" data-code="${n.code}" type="button">${(n.enabled ?? n.isEnabled) ? '关闭' : '启用'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}" type="button">设为推荐</button>`]), { title: '暂无支付网络', desc: '配置 TRON、ETH、BSC、BASE 等网络后可用于订单支付。' })}</div>`;
+      body = `${providerBanner}<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '协议' }, { label: '币种' }, { label: '收款方式', width: '1.4fr' }, { label: '确认数' }, { label: '状态' }, { label: '推荐' }, { label: '操作', width: '1.5fr' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.tokenStandard || '-'), 'USDT', adminNetworkCollectionMethod(n), n.confirmations || 3, adminStatus((n.enabled ?? n.isEnabled) ? '已启用' : '已关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), adminStatus((n.recommended ?? n.isRecommended) ? '推荐' : '普通', (n.recommended ?? n.isRecommended) ? 'success' : 'neutral'), `<button data-action="adminToggleNetwork" data-code="${n.code}" type="button">${(n.enabled ?? n.isEnabled) ? '关闭' : '启用'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}" type="button">设为推荐</button>`]), { title: '暂无支付网络', desc: '当前只开放 TRON / USDT TRC20。' })}</div>`;
     }
     return adminPage('支付中心', '管理支付网络、收款地址、到账交易和支付异常。', body, { tabKey: 'payments', tabs });
   }
@@ -2914,7 +3313,7 @@ function adminContent(tab) {
     return adminPage('售后中心', '处理工单、补发、退款和用户沟通记录。', `${adminToolbar([{ label: '搜索工单', placeholder: '工单号 / 订单号 / 用户' }, { label: '状态', type: 'select', value: '全部状态' }, { label: '优先级', type: 'select', value: '全部优先级' }])}<div class="admin-panel"><div class="mini-tags"><span>请提供截图</span><span>已为您补发</span><span>请等待 1-3 分钟</span><span>发货后不支持退款</span></div>${adminTable([{ label: '工单号' }, { label: '订单号' }, { label: '用户' }, { label: '问题类型' }, { label: '状态' }, { label: '优先级' }, { label: '负责人' }, { label: '创建时间' }, { label: '最后回复' }, { label: '操作', width: '1.4fr' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.orderNo || t.orderId || '-'), escapeHtml(t.user || t.telegramUsername || '-'), escapeHtml(t.type || '售后问题'), adminStatus(t.status || '待处理', adminToneFromStatus(t.status)), escapeHtml(t.priority || '普通'), escapeHtml(t.owner || '未分配'), timeFrom(t.createdAt), timeFrom(t.updatedAt || t.createdAt), `<button data-action="adminReplyTicket" data-id="${t.id}" type="button">回复</button><button data-action="adminDeliver" data-id="${t.orderId}" type="button">补发</button>`]), { title: '暂无售后工单', desc: '用户提交售后后会显示在这里，并可关联订单、补发和退款流程。' })}</div>`);
   }
   if (tab === 'notifications') return adminPage('通知中心', '管理 Telegram、邮件、站内通知模板与发送记录。', `<div class="admin-panel">${adminActionForm('template.save', [['type','模板类型','text','stock_warning'], ['title','标题'], ['content','模板内容','textarea','支持 {{orderNo}} {{skuName}} 等变量'], ['enabled','启用','checkbox']], '保存通知模板')}${adminTable([{ label: '模板类型' }, { label: '标题' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.notificationTemplates || []).map((n) => [escapeHtml(n.type), escapeHtml(n.title), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无通知模板', desc: '库存预警、订单支付、发货成功和售后回复都应配置通知模板。' })}</div><div class="admin-panel">${adminTable([{ label: '类型' }, { label: '渠道' }, { label: '提供方' }, { label: '状态' }, { label: '创建时间' }], state.adminData.notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), escapeHtml(n.provider), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '暂无通知记录', desc: '通知发送成功、失败和重试记录会显示在这里。' })}</div>`);
-  if (tab === 'audit') return adminPage('审计日志', '记录高风险操作、配置修改和人工处理行为。', `<div class="admin-panel">${adminToolbar([{ label: '搜索日志', placeholder: '动作 / 对象 / 操作人' }, { label: '操作类型', type: 'select', value: '全部类型' }, { label: '时间范围', placeholder: '最近 30 天' }])}${adminTable([{ label: '动作' }, { label: '操作人' }, { label: '对象' }, { label: '对象 ID' }, { label: '时间' }], state.adminData.auditLogs.map((log) => [escapeHtml(log.action), `${escapeHtml(log.actorRole)}:${escapeHtml(log.actorId)}`, escapeHtml(log.target), escapeHtml(log.targetId), timeFrom(log.createdAt)]), { title: '暂无审计日志', desc: '修改价格、库存明文查看、收款地址、手动确认支付等操作必须留下审计。' })}</div>`);
+  if (tab === 'audit') return adminPage('审计日志', '记录高风险操作、配置修改和人工处理行为。', `${adminToolbar([{ label: '搜索日志', placeholder: '动作 / 对象 / 操作人' }, { label: '操作类型', type: 'select', value: '全部类型' }, { label: '时间范围', placeholder: '最近 30 天' }])}<div class="admin-panel">${adminTable([{ label: '动作' }, { label: '操作人' }, { label: '对象' }, { label: '对象 ID' }, { label: '时间' }], state.adminData.auditLogs.map((log) => [escapeHtml(log.action), `${escapeHtml(log.actorRole)}:${escapeHtml(log.actorId)}`, escapeHtml(log.target), escapeHtml(log.targetId), timeFrom(log.createdAt)]), { title: '暂无审计日志', desc: '修改价格、库存明文查看、收款地址、手动确认支付等操作必须留下审计。' })}</div>`);
   if (tab === 'users') return adminPage('用户中心', '聚合用户订单、售后、支付记录、风险备注和黑名单。', `<div class="admin-panel">${adminActionForm('blacklist.create', [['kind','类型','text','telegram_id / wallet / ip / device'], ['value','拉黑值'], ['reason','原因'], ['effect','效果','text','block_order'], ['status','状态','text','active']], '加入黑名单')}${adminTable([{ label: '类型' }, { label: '值' }, { label: '原因' }, { label: '效果' }, { label: '状态' }], (ops.blacklists || []).map((b) => [escapeHtml(b.kind), escapeHtml(b.value), escapeHtml(b.reason), escapeHtml(b.effect || '-'), adminStatus(b.status, adminToneFromStatus(b.status))]), { title: '暂无黑名单', desc: '命中风险规则的用户、钱包、IP 或设备会显示在这里。' })}</div>`);
   if (tab === 'content') return adminPage('内容中心', '管理首页配置、FAQ 和购买须知模板。', `<div class="admin-panel">${adminActionForm('content.save', [['key','配置 Key','text','home'], ['value','JSON 内容','textarea','{"heroTitle":"标题","benefits":["即时发货"]}']], '保存内容')}</div><div class="admin-panel">${adminActionForm('faq.create', [['question','问题'], ['answer','答案','textarea'], ['category','分类','text','支付类'], ['sortOrder','排序','number']], '新增 FAQ')}${adminTable([{ label: '问题' }, { label: '分类' }, { label: '状态' }, { label: '答案', width: '2fr' }], (ops.faqs || []).map((f) => [escapeHtml(f.question), escapeHtml(f.category), adminStatus(f.visible ? '显示' : '隐藏', f.visible ? 'success' : 'neutral'), escapeHtml(f.answer)]), { title: '暂无 FAQ', desc: '支付、发货、售后等常见问题可在这里维护。' })}</div><div class="admin-panel">${adminTable([{ label: '模板' }, { label: '商品类型' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.noteTemplates || []).map((n) => [escapeHtml(n.name), escapeHtml(n.productType), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无购买须知模板', desc: '不同商品类型的购买须知和售后规则可独立维护。' })}</div>`);
   if (tab === 'marketing') return adminPage('营销中心', '管理优惠码、商品标签、活动和前台推荐资源位。', `<div class="admin-panel">${adminActionForm('coupon.create', [['name','名称'], ['code','优惠码'], ['discountType','类型','text','amount / percent'], ['discountValue','优惠值'], ['minAmount','最低消费'], ['usageLimit','使用次数','number']], '创建优惠码')}${adminTable([{ label: '优惠码' }, { label: '名称' }, { label: '类型' }, { label: '优惠值' }, { label: '状态' }], (ops.coupons || []).map((c) => [escapeHtml(c.code), escapeHtml(c.name), escapeHtml(c.discountType), escapeHtml(c.discountValue), adminStatus(c.status, adminToneFromStatus(c.status))]), { title: '暂无优惠码', desc: '创建优惠码后可用于活动、客服补偿和复购转化。' })}</div>`);
@@ -2922,28 +3321,104 @@ function adminContent(tab) {
   return adminContent('dashboard');
 }
 
+function solutions() {
+  const scenarios = [
+    {
+      title: '开发者出海工具',
+      desc: '覆盖开发、协作、AI 工具和账号权益，适合个人开发者、小团队快速补齐海外服务能力。',
+      categories: ['软件', '社交'],
+      cta: '查看开发工具'
+    },
+    {
+      title: '内容创作者订阅',
+      desc: '视频、音乐、社媒会员集中采购，适合剪辑、运营、直播和跨平台内容团队。',
+      categories: ['视频', '音乐', '社交'],
+      cta: '查看创作者商品'
+    },
+    {
+      title: '游戏与礼品卡充值',
+      desc: '面向 Steam、Xbox、Apple、Google Play 等充值场景，重点展示区服、库存和交付规则。',
+      categories: ['游戏', '礼品卡'],
+      cta: '查看充值方案'
+    }
+  ];
+  const solutionStats = [
+    ['秒级交付', `${products.filter((item) => item.deliveryType === 'auto').length} 类自动发货商品`],
+    ['支付网络', `${networks.filter((item) => item.enabled).length} 条稳定币网络`],
+    ['售后响应', '订单、支付异常、工单一体追踪']
+  ];
+  const categoryCards = ['社交', '音乐', '视频', '游戏', '软件', '礼品卡'].map((category) => {
+    const items = products.filter((item) => item.category === category);
+    const inStock = items.filter((item) => item.skus.some((sku) => (sku.stockStatus || sku.stock) !== 'sold_out')).length;
+    return `
+      <a class="solution-category" href="#/products" data-category="${category}">
+        ${categoryIcon(category)}
+        <strong>${category}</strong>
+        <span>${items.length || 0} 个商品 · ${inStock} 个有货</span>
+      </a>
+    `;
+  }).join('');
+  shell(`
+    <section class="solution-page">
+      <header class="solution-hero">
+        <span class="eyebrow">Solutions</span>
+        <h1>按业务场景选数字商品</h1>
+        <p>解决方案不是 FAQ。这里按出海开发、内容运营、游戏充值等场景，把商品、支付和交付路径组织起来。</p>
+        <div class="solution-hero-actions">
+          <a class="primary-button" href="#/products">浏览全部商品</a>
+          <a class="text-button" href="#/faq">查看帮助中心</a>
+        </div>
+      </header>
+      <div class="solution-stats">
+        ${solutionStats.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}
+      </div>
+      <section class="solution-scenarios">
+        ${scenarios.map((item, index) => `
+          <article class="solution-card">
+            <span class="solution-index">${String(index + 1).padStart(2, '0')}</span>
+            <h2>${item.title}</h2>
+            <p>${item.desc}</p>
+            <div class="solution-tags">${item.categories.map((category) => `<span>${category}</span>`).join('')}</div>
+            <a href="#/products">${item.cta} →</a>
+          </article>
+        `).join('')}
+      </section>
+      <section class="solution-map">
+        <div>
+          <span class="eyebrow">Category Map</span>
+          <h2>按品类快速进入采购</h2>
+          <p>进入商品中心后可继续使用分类、发货方式、库存和排序筛选。</p>
+        </div>
+        <div class="solution-category-grid">${categoryCards}</div>
+      </section>
+      ${purchaseFlow()}
+      ${platformGuarantee()}
+    </section>
+  `, 'page solution-shell');
+}
+
 function faq() {
   const groups = [
     ['下单类', [
-      ['我需要提供哪些信息？', '至少需要 Telegram 用户名和接收邮箱。部分商品还需要账号 ID、区服、Google 邮箱或备注。'],
-      ['Telegram 或邮箱填错怎么办？', '未发货前可在订单详情提交售后工单申请修改；已发货后需要人工审核是否可补发。'],
-      ['可以修改订单信息吗？', '订单未支付或未发货前可以申请修改，支付后请保留订单号和 TxID。']
+      ['我需要提供哪些信息？', '至少需要邮箱账号。部分商品还需要账号 ID、区服或备注。'],
+      ['邮箱或订单信息填错怎么办？', '未发货前可在订单详情提交售后工单申请修改；已发货后需要人工审核是否可补发。'],
+      ['可以修改订单信息吗？', '订单未支付或未发货前可以申请修改，支付后请保留订单号并联系人工客服。']
     ]],
     ['支付类', [
-      ['支持哪些网络？', '当前支持 TRON、ETH、BSC、BASE 等 USDT 网络，实际可用网络以结算页为准。'],
-      ['付款后没识别怎么办？', '在支付页或订单详情提交 TxID，系统会进入链上检测或人工核验。'],
+      ['支持哪些网络？', '当前只支持 TRON 上的 USDT TRC20，请按支付页展示的精确金额转账。'],
+      ['付款后没识别怎么办？', '系统会自动监听链上到账。长时间未识别时，请联系在线客服进入人工核验。'],
       ['少付、多付、超时付款怎么办？', '订单会进入异常处理，少付需补差价，多付可申请退差额或余额，超时付款需人工匹配。'],
-      ['转错网络怎么办？', '错链支付可能无法找回，请在付款前二次确认网络。发生后请提交 TxID 等待人工处理。']
+      ['转错网络怎么办？', '错链支付可能无法找回，请在付款前二次确认网络。发生后请联系人工客服处理。']
     ]],
     ['发货类', [
       ['自动发货多久完成？', '链上确认后通常 1-3 分钟完成。若库存或接口异常，会进入发货失败队列。'],
       ['手动发货多久完成？', '一般 10 分钟内开始处理，复杂订单或高风险订单可能需要 24 小时内完成。'],
-      ['发货内容在哪里查看？', '发货结果会发送至邮箱和 Telegram，也可以在订单详情查看状态与隐藏后的交付摘要。']
+      ['发货内容在哪里查看？', '发货结果会发送至邮箱和站内消息，也可以在订单详情查看状态与隐藏后的交付摘要。']
     ]],
     ['售后类', [
       ['什么情况可以补发？', '保期内卡密无效、账号无法登录、订阅掉单、自动发货失败等情况可申请补发或协助。'],
       ['什么情况不支持退款？', '已发货且信息正确、用户自身网络或账号条件不满足、已使用的虚拟商品通常不支持无理由退款。'],
-      ['如何提交售后？', '进入订单详情，选择问题类型并填写描述、截图链接或 TxID。后台客服会按工单处理。']
+      ['如何提交售后？', '进入订单详情，选择问题类型并填写描述、截图链接或订单号。后台客服会按工单处理。']
     ]],
     ['账号类', [
       ['账号可以改密码或换绑吗？', '以商品详情的使用限制为准。共享服务通常不支持改密或换绑。'],
@@ -2995,7 +3470,7 @@ function faq() {
           </div>
           <div class="faq-support-card">
             <span>找不到答案？</span>
-            <p>保留订单号、TxID 或收货信息，Telegram 客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
+            <p>保留订单号、支付截图或收货信息，在线客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
             <a class="primary small" href="#/orders/lookup">查询订单</a>
           </div>
         </aside>
@@ -3022,7 +3497,8 @@ function currentPayOrderId() {
 }
 
 function paymentSummaryText(order) {
-  return `订单号：${order.orderNo}\n金额：${order.amountUsdt.toFixed(2)} USDT\n网络：${networkText(order.paymentNetwork)}\n地址：${order.paymentAddress}`;
+  const amount = Number(order.payAmount || order.amountUsdt).toFixed(6).replace(/\.?0+$/, '');
+  return `订单号：${order.orderNo}\n金额：${amount} ${order.payCurrency || 'USDT'}\n网络：${networkText(order.paymentNetwork)}\n地址：${order.paymentAddress}`;
 }
 
 function syncLocalNetwork(local, server) {
@@ -3097,6 +3573,18 @@ function adminNetworks() {
   return source.map((network) => ({ ...network, enabled: network.isEnabled ?? network.enabled, recommended: network.isRecommended ?? network.recommended }));
 }
 
+function paymentChannelLabel(order) {
+  return 'USDT TRC20 直付';
+}
+
+function adminNetworkPayCurrency(network) {
+  return network.code === 'TRON' ? 'USDT' : '未开放';
+}
+
+function adminNetworkCollectionMethod(network) {
+  return network.code === 'TRON' ? escapeHtml(network.address || '-') : '未开放';
+}
+
 async function loadAdminData(force = false) {
   if (isAdminLocked() || state.adminData.loading || (state.adminData.loaded && !force)) return;
   state.adminData.loading = true;
@@ -3158,6 +3646,7 @@ async function route() {
     ['/orders/lookup', () => lookup()],
     ['/account', () => account()],
     ['/admin', () => renderAdmin()],
+    ['/solutions', () => solutions()],
     ['/faq', () => faq()]
   ];
   const staticRoute = routes.find(([path]) => path === hash);
@@ -3201,8 +3690,103 @@ document.addEventListener('click', async (event) => {
   const action = el.dataset.action;
   if (action === 'toggleCurrency') { state.currencyOpen = !state.currencyOpen; return route(); }
   if (action === 'setCurrency') { state.fiatCurrency = el.dataset.code; state.currencyOpen = false; persist(); return route(); }
+  if (action === 'toggleMessages') { state.messageCenterOpen = !state.messageCenterOpen; persist(); return route(); }
+  if (action === 'markMessagesRead') { state.messages = state.messages.map((message) => ({ ...message, read: true })); persist(); return route(); }
+  if (action === 'openAuthPanel') { state.authPanelOpen = true; state.authMode = 'login'; return route(); }
+  if (action === 'openRegisterPanel') { state.authPanelOpen = true; state.authMode = 'register'; return route(); }
+  if (action === 'closeAuthPanel') {
+    if (el.classList.contains('modal-backdrop') && event.target !== el) return;
+    state.authPanelOpen = false;
+    return route();
+  }
+  if (action === 'switchAuthMode') { state.authMode = el.dataset.mode || 'login'; return route(); }
+  if (action === 'submitRegister') {
+    const email = document.querySelector('#authEmail')?.value.trim().toLowerCase();
+    const password = document.querySelector('#authPassword')?.value || '';
+    const password2 = document.querySelector('#authPassword2')?.value || '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
+    if (password.length < 6) return notify('密码至少 6 位');
+    if (password !== password2) return notify('两次密码不一致');
+    const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
+    if (accounts[email]) return notify('该邮箱已注册，请直接登录');
+    const account = ensureEmailAccount(email, password);
+    applyEmailLogin(account);
+    state.authPanelOpen = false;
+    notify('注册成功');
+    return route();
+  }
+  if (action === 'submitLogin') {
+    const email = document.querySelector('#authEmail')?.value.trim().toLowerCase();
+    const password = document.querySelector('#authPassword')?.value || '';
+    const account = emailLogin(email, password);
+    if (!account) return notify('邮箱或密码错误');
+    applyEmailLogin(account);
+    state.authPanelOpen = false;
+    notify('登录成功');
+    return route();
+  }
   if (action === 'telegramLogin') { openTelegramLoginPanel('#/account'); return; }
   if (action === 'logoutAccount') return logoutAccount();
+  if (action === 'selectAccountSection') { state.accountSection = el.dataset.section || 'orders'; persist(); return route(); }
+  if (action === 'saveProfile') {
+    const avatar = document.querySelector('#profileAvatar')?.value.trim() || '';
+    const nickname = document.querySelector('#profileNickname')?.value.trim() || '';
+    if (!nickname || nickname.length > 20) return notify('昵称需为 1-20 个字符');
+    state.profile.avatar = avatar;
+    state.profile.nickname = nickname;
+    if (state.user) state.user.nickname = nickname;
+    addMessage('资料已更新', '头像或昵称已保存。', 'account');
+    notify('个人资料已保存');
+    return route();
+  }
+  if (action === 'createRecharge') {
+    const amount = Number(document.querySelector('#rechargeAmount')?.value || 0);
+    const method = document.querySelector('#rechargeMethod')?.value || 'wechat';
+    if (!amount || amount <= 0) return notify('请输入有效充值金额');
+    state.rechargeDraft = { amount: String(amount), method };
+    walletLedger('充值订单', amount, `${method === 'wechat' ? '微信' : method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
+    addMessage('充值单已创建', `${amount.toFixed(2)} USDT 等待${method === 'usdt_trc20' ? '链上确认' : '聚合支付回调'}。`, 'wallet');
+    notify('充值单已创建，等待支付确认');
+    return route();
+  }
+  if (action === 'simulateRecharge') {
+    const amount = Number(state.rechargeDraft.amount || 20);
+    state.wallet.balance = Number((Number(state.wallet.balance || 0) + amount).toFixed(2));
+    walletLedger('充值入账', amount, '模拟聚合支付/链上确认回调', 'completed');
+    addMessage('充值到账', `${amount.toFixed(2)} USDT 已入账。`, 'wallet');
+    notify('充值已模拟到账');
+    return route();
+  }
+  if (action === 'createSupportTicket') {
+    const orderNo = document.querySelector('#supportOrder')?.value || '';
+    const type = document.querySelector('#supportType')?.value || '其他问题';
+    const description = document.querySelector('#supportBody')?.value.trim() || '';
+    if (!description) return notify('请填写问题描述');
+    const ticket = { id: demoToken('ticket'), ticketNo: `TK${String(Date.now()).slice(-8)}`, orderNo, type, description, status: '待处理', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]');
+    tickets.unshift(ticket);
+    localStorage.setItem('gfTickets', JSON.stringify(tickets));
+    addMessage('售后工单已提交', `${ticket.ticketNo} 已进入后台人工处理。`, 'support');
+    notify(`售后工单已创建：${ticket.ticketNo}`);
+    return route();
+  }
+  if (action === 'changePassword') {
+    const oldPassword = document.querySelector('#oldPassword')?.value || '';
+    const newPassword = document.querySelector('#newPassword')?.value || '';
+    if (newPassword.length < 6) return notify('新密码至少 6 位');
+    const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
+    const account = accounts[userEmail().toLowerCase()];
+    if (account && account.password !== oldPassword) return notify('当前密码不正确');
+    if (account) {
+      account.password = newPassword;
+      localStorage.setItem('gfEmailAccounts', JSON.stringify(accounts));
+    }
+    addMessage('密码已修改', '账号密码已更新，请妥善保存。', 'security');
+    notify('密码已修改');
+    return route();
+  }
+  if (action === 'setPaymentMethod') { state.paymentMethod = el.dataset.method || 'balance'; persist(); return route(); }
+  if (action === 'toggleUseBalance') { state.useBalance = event.target.checked; persist(); return route(); }
   if (action === 'refreshAccountOrders') return loadAccountOrders({ force: true });
   if (action === 'accountOrderFilter') { state.accountOrderFilter = el.dataset.filter || 'all'; return route(); }
   if (action === 'saveAccountPrefs') return saveAccountPreferences();
@@ -3269,35 +3853,17 @@ document.addEventListener('click', async (event) => {
     notify(`售后工单已创建：${result.ticketNo || result.ticket_no || result.id}`);
     return orderDetail(el.dataset.id);
   }
-  if (action === 'submitTxHash') {
-    const txHash = document.querySelector('#txHashInput')?.value.trim();
-    if (!txHash || txHash.length < 12) return notify('请填写有效的 TxID');
-    const response = await fetch(`/api/orders/${el.dataset.id}/txhash`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ txHash })
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) return notify(result.error || 'TxID 提交失败');
-    const order = normalizeServerOrder(result);
-    if (order) saveOrder(order);
-    notify('TxID 已提交，订单进入检测/人工核验');
-    return pay(el.dataset.id);
-  }
   if (action === 'lookupOrder') {
     const orderNo = document.querySelector('#lookupOrder').value.trim();
     const contact = document.querySelector('#lookupContact').value.trim().toLowerCase();
-    const txHash = document.querySelector('#lookupTxHash').value.trim();
     const contactVariants = new Set([contact, contact.startsWith('@') ? contact.slice(1) : `@${contact}`].filter(Boolean));
-    state.lookupResult = txHash
-      ? orders().find((o) => o.raw?.txHash === txHash || o.txHash === txHash)
-      : orders().find((o) => o.orderNo === orderNo && [o.email.toLowerCase(), o.telegramUsername.toLowerCase()].some((value) => contactVariants.has(value)));
+    state.lookupResult = orders().find((o) => o.orderNo === orderNo && [o.email.toLowerCase(), o.telegramUsername.toLowerCase()].some((value) => contactVariants.has(value)));
     if (!state.lookupResult) {
       try {
         const response = await fetch('/api/orders/lookup', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orderNo, contact, txHash })
+          body: JSON.stringify({ orderNo, contact })
         });
         if (response.ok) {
           const apiOrder = await response.json();
@@ -3316,11 +3882,12 @@ document.addEventListener('click', async (event) => {
     if (!state.lookupResult) notify('未找到匹配订单');
     return lookup();
   }
-  if (action === 'adminTab') { state.adminTab = el.dataset.tab; return renderAdmin(); }
+  if (action === 'adminTab') { state.adminTab = el.dataset.tab; persist(); return renderAdmin(); }
   if (action === 'adminSubTab') {
     state.adminTab = el.dataset.tab || state.adminTab;
     state.adminSubTabs[state.adminTab] = el.dataset.subtab;
     if (state.adminTab !== 'inventory' || state.adminSubTabs[state.adminTab] !== 'import') state.adminImportPreview = null;
+    persist();
     return renderAdmin();
   }
   if (action === 'adminClearFilters') {

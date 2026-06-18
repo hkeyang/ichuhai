@@ -8,7 +8,6 @@ import type { OrderRow } from "@/lib/api/types";
 interface LookupBody {
   orderNo?: unknown;
   contact?: unknown;
-  txHash?: unknown;
 }
 
 export async function OPTIONS(request: Request) {
@@ -25,20 +24,11 @@ export async function POST(request: Request) {
 
     const orderNo = body.orderNo ? String(body.orderNo).trim() : "";
     const contact = body.contact ? String(body.contact).trim() : "";
-    const txHash = body.txHash ? String(body.txHash).trim() : "";
 
     let order: OrderRow | null = null;
 
-    // 优先通过 txHash 查询
-    if (txHash) {
-      order = await db
-        .prepare("SELECT * FROM orders WHERE tx_hash = ? LIMIT 1")
-        .bind(txHash)
-        .first<OrderRow>();
-    }
-
     // 通过 orderNo + contact 查询（contact 可以是 email 或 telegramUsername）
-    if (!order && orderNo && contact) {
+    if (orderNo && contact) {
       // 处理 telegramUsername 的 @ 前缀变体
       const contactNormalized = contact.startsWith("@")
         ? contact.slice(1)
