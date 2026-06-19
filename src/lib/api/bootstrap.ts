@@ -439,6 +439,8 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "products", "icon_url", "TEXT");
   await addColumn(db, "products", "cover_url", "TEXT");
   await addColumn(db, "products", "tags_json", "TEXT NOT NULL DEFAULT '[]'");
+  await addColumn(db, "products", "purchase_notice", "TEXT");
+  await addColumn(db, "products", "after_sale_rule", "TEXT");
   await addColumn(db, "products", "is_home_visible", "INTEGER NOT NULL DEFAULT 1");
   await addColumn(db, "products", "is_recommended", "INTEGER NOT NULL DEFAULT 0");
   await addColumn(db, "products", "sort_order", "INTEGER NOT NULL DEFAULT 0");

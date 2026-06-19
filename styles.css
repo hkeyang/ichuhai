@@ -9276,3 +9276,173 @@ body { background: #F5F7FF; }
   .member-stats,
   .profile-grid { grid-template-columns: 1fr; }
 }
+
+/* Late product detail cleanup: remove visual conflicts and keep SKU controls data-driven. */
+.detail-page .product-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.detail-page .product-tags span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #E1E8F6;
+  border-radius: 999px;
+  color: #334061;
+  background: #F8FAFF;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 800;
+}
+.detail-page .purchase-layout {
+  align-items: start;
+}
+.detail-page .purchase-flow {
+  gap: 14px;
+}
+.detail-page .step-panel {
+  border-radius: 18px;
+  overflow: hidden;
+}
+.detail-page .step-options {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+}
+.detail-page .step-options.chips .selection-card {
+  min-height: 46px;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #FFFFFF;
+  text-align: center;
+}
+.detail-page .step-options.chips .selection-card .option-copy {
+  display: block;
+}
+.detail-page .step-options.chips .selection-card .option-copy strong {
+  font-size: 14px;
+  line-height: 20px;
+}
+.detail-page .step-options.chips .selection-card .option-copy small {
+  display: block;
+  margin-top: 2px;
+}
+.detail-page .step-options.plans.chips {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.detail-page .step-options.plans.chips .selection-card {
+  min-height: 88px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+}
+.detail-page .option-select {
+  width: min(420px, 100%);
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #DDE5F4;
+  border-radius: 12px;
+  color: #101B3F;
+  background: #FFFFFF;
+  font-size: 15px;
+  font-weight: 800;
+}
+.detail-page .plan-table {
+  display: grid;
+  gap: 8px;
+}
+.detail-page .plan-table .selection-card {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, auto) minmax(90px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.detail-page .plan-table .selection-card .card-price,
+.detail-page .plan-table .selection-card small {
+  margin: 0;
+}
+.detail-page .selection-card .option-art,
+.detail-page .selection-card .payment-art {
+  display: none;
+}
+.detail-page .selection-card.disabled {
+  opacity: .58;
+}
+.detail-page .option-empty {
+  margin: 0;
+  color: #71809C;
+  font-size: 14px;
+  font-weight: 800;
+}
+.detail-page .order-preview-card .preview-lines div {
+  min-height: 42px;
+}
+.detail-page .sticky-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.detail-page .recommend-card {
+  margin-top: 24px;
+  padding: 26px 28px 32px;
+  border: 1px solid #E1E8F6;
+  border-radius: 22px;
+  background: #FFFFFF;
+  overflow: hidden;
+  box-shadow: 0 18px 42px rgba(55, 73, 154, .06);
+}
+.detail-page .recommend-list {
+  margin-top: 22px;
+}
+.detail-page .recommend-item {
+  border-radius: 16px;
+  background: #FFFFFF;
+  overflow: hidden;
+}
+.detail-page .sticky-pay-button .feature-icon,
+.primary-pay-button .feature-icon,
+.checkout-summary .primary .feature-icon {
+  width: 18px;
+  height: 18px;
+}
+.message-center .icon-pill {
+  color: #4D5B78;
+}
+.message-center .message-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+}
+.admin-product-content-form {
+  grid-template-columns: 1fr;
+  margin-top: 18px;
+}
+.admin-product-content-form label {
+  grid-column: 1 / -1;
+}
+.admin-product-content-form textarea {
+  min-height: 76px;
+}
+
+@media (max-width: 760px) {
+  .detail-page .step-options,
+  .detail-page .step-options.plans.chips {
+    grid-template-columns: 1fr;
+  }
+  .detail-page .step-options.chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .detail-page .step-options.plans.chips {
+    grid-template-columns: 1fr;
+  }
+  .detail-page .plan-table .selection-card {
+    grid-template-columns: 1fr;
+  }
+  .detail-page .recommend-card {
+    border-radius: 18px;
+    padding: 20px 18px 90px;
+  }
+}

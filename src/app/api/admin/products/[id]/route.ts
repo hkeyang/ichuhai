@@ -52,6 +52,11 @@ export async function PATCH(
       status?: unknown;
       deliveryType?: unknown;
       baseCurrency?: unknown;
+      shortDescription?: unknown;
+      featureTags?: unknown;
+      detailDescription?: unknown;
+      purchaseNotice?: unknown;
+      afterSaleRule?: unknown;
     }>(request);
 
     const fields: string[] = [];
@@ -80,6 +85,29 @@ export async function PATCH(
     if (body.baseCurrency !== undefined) {
       fields.push("base_currency = ?");
       values.push(cleanString(body.baseCurrency, "baseCurrency", { max: 10, pattern: /^[A-Z]{3}$/ }));
+    }
+    if (body.shortDescription !== undefined) {
+      fields.push("subtitle = ?");
+      values.push(cleanString(body.shortDescription, "shortDescription", { max: 300, allowEmpty: true }));
+    }
+    if (body.detailDescription !== undefined) {
+      fields.push("description = ?");
+      values.push(cleanString(body.detailDescription, "detailDescription", { max: 2000, allowEmpty: true }));
+    }
+    if (body.purchaseNotice !== undefined) {
+      fields.push("purchase_notice = ?");
+      values.push(cleanString(body.purchaseNotice, "purchaseNotice", { max: 2000, allowEmpty: true }));
+    }
+    if (body.afterSaleRule !== undefined) {
+      fields.push("after_sale_rule = ?");
+      values.push(cleanString(body.afterSaleRule, "afterSaleRule", { max: 2000, allowEmpty: true }));
+    }
+    if (body.featureTags !== undefined) {
+      const tags = Array.isArray(body.featureTags)
+        ? body.featureTags
+        : String(body.featureTags || "").split(/[,，\n]/);
+      fields.push("tags_json = ?");
+      values.push(JSON.stringify(tags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 6).map((tag) => cleanString(tag, "featureTag", { max: 40 }))));
     }
 
     if (fields.length === 0) throw new HttpError(422, "no fields to update");

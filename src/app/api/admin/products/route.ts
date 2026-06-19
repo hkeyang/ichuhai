@@ -74,6 +74,11 @@ export async function POST(request: Request) {
       status?: unknown;
       deliveryType?: unknown;
       baseCurrency?: unknown;
+      shortDescription?: unknown;
+      featureTags?: unknown;
+      detailDescription?: unknown;
+      purchaseNotice?: unknown;
+      afterSaleRule?: unknown;
     }>(request);
 
     const slug = cleanString(body.slug, "slug", {
@@ -88,15 +93,23 @@ export async function POST(request: Request) {
       max: 10,
       pattern: /^[A-Z]{3,6}$/,
     });
+    const featureTags = Array.isArray(body.featureTags)
+      ? body.featureTags
+      : String(body.featureTags || "").split(/[,，\n]/);
+    const tagsJson = JSON.stringify(featureTags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 6).map((tag) => cleanString(tag, "featureTag", { max: 40 })));
+    const shortDescription = cleanString(body.shortDescription, "shortDescription", { max: 300, allowEmpty: true });
+    const detailDescription = cleanString(body.detailDescription, "detailDescription", { max: 2000, allowEmpty: true });
+    const purchaseNotice = cleanString(body.purchaseNotice, "purchaseNotice", { max: 2000, allowEmpty: true });
+    const afterSaleRule = cleanString(body.afterSaleRule, "afterSaleRule", { max: 2000, allowEmpty: true });
 
     const id = crypto.randomUUID();
 
     await db
       .prepare(
-        `INSERT INTO products (id, slug, name, category_id, status, delivery_type, base_currency, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO products (id, slug, name, category_id, status, delivery_type, base_currency, subtitle, description, tags_json, purchase_notice, after_sale_rule, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
       )
-      .bind(id, slug, name, categoryId, status, deliveryType, baseCurrency)
+      .bind(id, slug, name, categoryId, status, deliveryType, baseCurrency, shortDescription, detailDescription, tagsJson, purchaseNotice, afterSaleRule)
       .run();
 
     const product = await db

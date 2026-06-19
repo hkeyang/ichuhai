@@ -55,6 +55,7 @@ const LINE_ICONS = {
   refund: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/>',
   headset: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2Z"/><path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2Z"/><path d="M13 21h3a3 3 0 0 0 3-3"/>',
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
+  bell: '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>'
 };
 
@@ -153,6 +154,7 @@ const products = [
     status: 'active',
     icon: 'discord',
     short: '解锁 Discord 高级聊天体验，享受自定义表情、高清直播与大文件上传。',
+    featureTags: ['自定义表情', '高清直播', '大文件上传'],
     deliveryType: 'auto',
     hot: '98.2k+',
     rating: '4.9 (2.3k)',
@@ -187,6 +189,7 @@ const products = [
     status: 'active',
     icon: 'spotify',
     short: '畅听无广告音乐，支持离线下载与高品质音频。',
+    featureTags: ['无广告畅听', '离线下载', '高品质音频'],
     deliveryType: 'auto',
     optionGroups: [{ key: 'duration', name: '套餐周期', displayType: 'cards', options: ['1个月', '3个月', '12个月'] }],
     skus: [
@@ -204,6 +207,7 @@ const products = [
     status: 'active',
     icon: 'youtube',
     short: '免广告观看视频，支持后台播放与 YouTube Music。',
+    featureTags: ['免广告观看', '后台播放', 'YouTube Music'],
     deliveryType: 'mixed',
     optionGroups: [{ key: 'region', name: '地区', displayType: 'chips', options: ['Global', 'US', 'EU'] }, { key: 'duration', name: '套餐周期', displayType: 'cards', options: ['1个月', '12个月'] }],
     skus: [
@@ -220,6 +224,7 @@ const products = [
     status: 'active',
     icon: 'steam',
     short: 'Steam 钱包充值码与余额补充，适合游戏购买。',
+    featureTags: ['充值码交付', '区服提示', '售后协助'],
     deliveryType: 'manual',
     optionGroups: [{ key: 'amount', name: '面额', displayType: 'cards', options: ['5 USD', '10 USD', '20 USD'] }],
     skus: [
@@ -237,6 +242,7 @@ const products = [
     status: 'active',
     icon: 'office',
     short: 'Office 办公套件订阅，适合文档、表格和云端协作。',
+    featureTags: ['办公套件', '云端协作', '订阅权益'],
     deliveryType: 'auto',
     optionGroups: [{ key: 'plan', name: '套餐', displayType: 'cards', options: ['个人版', '家庭版'] }],
     skus: [
@@ -326,6 +332,36 @@ function selectedOptions(item = product()) {
 
 function findSku(item = product(), options = selectedOptions(item)) {
   return item.skus.find((sku) => Object.entries(sku.optionValues).every(([key, value]) => options[key] === value));
+}
+
+function productShort(item) {
+  return item.shortDescription || item.subtitle || item.short || '';
+}
+
+function productFeatureTags(item) {
+  const source = item.featureTags || item.tags || item.tagsJson || item.tags_json || [];
+  const tags = Array.isArray(source)
+    ? source
+    : String(source || '').split(/[,，\n]/);
+  return tags.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 6);
+}
+
+function configuredOptions(item, group) {
+  const values = new Set(item.skus.map((sku) => sku.optionValues?.[group.key]).filter(Boolean));
+  return group.options.filter((option) => values.has(option));
+}
+
+function optionMatchesPrior(item, group, option, options, priorKeys) {
+  return item.skus.filter((sku) => {
+    if (sku.optionValues?.[group.key] !== option) return false;
+    return priorKeys.every((key) => !options[key] || sku.optionValues?.[key] === options[key]);
+  });
+}
+
+function normalizeSelectedOptions(item, options, changedKey) {
+  const candidates = item.skus.filter((sku) => sku.optionValues?.[changedKey] === options[changedKey]);
+  const sku = candidates.find((entry) => (entry.stockStatus || entry.stock) !== 'sold_out') || candidates[0];
+  return sku ? { ...defaultOptions(item), ...sku.optionValues } : options;
 }
 
 function cartCount() {
@@ -978,7 +1014,6 @@ function header() {
       ${logo()}
       <nav class="header-nav">
         <a href="#/products">数字商品</a>
-        <a href="#/solutions">解决方案</a>
         <a href="#/faq">帮助中心</a>
       </nav>
       <div class="top-actions">
@@ -987,7 +1022,7 @@ function header() {
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
         <div class="message-center ${state.messageCenterOpen ? 'open' : ''}">
-          <button class="pill icon-pill" data-action="toggleMessages" type="button" aria-label="消息中心">${lineIcon('headset', '消息中心', 'message-icon')}${unread ? `<span>${unread}</span>` : ''}</button>
+          <button class="pill icon-pill" data-action="toggleMessages" type="button" aria-label="消息中心">${lineIcon('bell', '消息中心', 'message-icon')}${unread ? `<span>${unread}</span>` : ''}</button>
           ${state.messageCenterOpen ? messageCenterPanel() : ''}
         </div>
         <a class="pill cart" href="#/cart">${navIcon('A06_shopping_cart.png', '购物车')} 购物车${count ? `<span class="cart-count">${count}</span>` : ''}</a>
@@ -1399,7 +1434,6 @@ function optionPanel(item, purchaseMode = false) {
   }
   const sku = findSku(item, opts);
   const steps = item.optionGroups.map((group, idx) => renderPurchaseStep(item, group, idx + 1));
-  steps.push(renderPaymentStep(steps.length + 1));
   return `
     <section class="purchase-layout">
       <div class="purchase-flow" style="--step-count:${steps.length}">
@@ -1411,26 +1445,11 @@ function optionPanel(item, purchaseMode = false) {
 }
 
 function optionLabel(value) {
-  const flags = { Global: '🌐', US: '🇺🇸', EU: '🇪🇺', JP: '🇯🇵' };
-  return `${flags[value] || ''} ${value}`;
+  return String(value || '');
 }
 
-const OPTION_META = {
-  region: {
-    Global: { icon: '🌐', sub: '全球通用' },
-    US: { icon: '🇺🇸', sub: '暂不支持' },
-    EU: { icon: '🇪🇺', sub: '暂不支持' },
-    JP: { icon: '🇯🇵', sub: '暂不支持' }
-  },
-  account: {
-    新号: { icon: '👥', sub: '全新账号' },
-    老号: { icon: '👤', sub: '已有账号' },
-    共享: { icon: '👥', sub: '库存不足' }
-  }
-};
-
 const PAYMENT_META = {
-  TRON: { title: 'USDT (TRC20)', sub: '固定地址 · 自动监听', icon: 'C01_usdt.png' }
+  TRON: { title: 'USDT', sub: '数字货币支付', icon: 'C01_usdt.png' }
 };
 
 function paymentDisplay(code = state.paymentNetwork) {
@@ -1440,24 +1459,19 @@ function paymentDisplay(code = state.paymentNetwork) {
 
 function optionReason(item, group, option, possible) {
   if (possible) return '';
-  const anySku = item.skus.some((sku) => sku.optionValues[group.key] === option);
   const stockSku = item.skus.find((sku) => sku.optionValues[group.key] === option && (sku.stockStatus || sku.stock) === 'sold_out');
   if (stockSku) return '库存不足';
-  if (!anySku) return group.key === 'account' && option === '共享' ? '库存不足' : '暂不支持';
-  return '当前不可用';
+  return '暂不可选';
 }
 
-function renderOptionButton(item, group, option) {
+function renderOptionButton(item, group, option, priorKeys) {
   const opts = selectedOptions(item);
   const next = { ...opts, [group.key]: option };
-  const possible = item.skus.some((sku) => {
-    if (sku.optionValues[group.key] !== option) return false;
-    if ((sku.stockStatus || sku.stock) === 'sold_out') return false;
-    return Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined);
-  });
+  const matches = optionMatchesPrior(item, group, option, next, priorKeys);
+  if (!matches.length) return '';
+  const possible = matches.some((sku) => (sku.stockStatus || sku.stock) !== 'sold_out');
   const active = opts[group.key] === option;
-  const matching = item.skus.find((sku) => sku.optionValues[group.key] === option && (sku.stockStatus || sku.stock) !== 'sold_out' && Object.entries(next).every(([key, value]) => sku.optionValues[key] === value || sku.optionValues[key] === undefined));
-  const meta = OPTION_META[group.key]?.[option] || {};
+  const matching = matches.find((sku) => (sku.stockStatus || sku.stock) !== 'sold_out') || matches[0];
   const isPlan = group.displayType === 'cards' || group.key === 'duration' || group.key === 'plan' || group.key === 'amount';
   const reason = optionReason(item, group, option, possible);
   const className = [
@@ -1478,41 +1492,29 @@ function renderOptionButton(item, group, option) {
   }
 
   return `<button class="${className}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : reason}" ${possible ? '' : 'disabled'}>
-    <span class="option-art">${meta.icon || optionLabel(option).trim().slice(0, 2)}</span>
-    <span class="option-copy"><strong>${option}</strong><small>${possible ? (meta.sub || '可选择') : reason}</small></span>
+    <span class="option-copy"><strong>${option}</strong>${possible ? '' : `<small>${reason}</small>`}</span>
     ${active ? '<i class="checkmark">✓</i>' : ''}
   </button>`;
 }
 
 function renderPurchaseStep(item, group, index) {
-  const typeClass = group.key === 'duration' || group.key === 'plan' || group.key === 'amount' ? 'plans' : group.key;
+  const isPlan = group.key === 'duration' || group.key === 'plan' || group.key === 'amount';
+  const typeClass = isPlan ? 'plans' : group.key;
+  const opts = selectedOptions(item);
+  const priorKeys = item.optionGroups.slice(0, index - 1).map((entry) => entry.key);
+  const options = configuredOptions(item, group).filter((option) => optionMatchesPrior(item, group, option, opts, priorKeys).length);
+  const selectorMode = isPlan && options.length > 5 ? 'table' : options.length >= 6 ? 'select' : 'chips';
+  const optionMarkup = selectorMode === 'select'
+    ? `<select class="option-select" data-action="setOption" data-product="${item.id}" data-key="${group.key}">${options.map((option) => `<option value="${option}" ${opts[group.key] === option ? 'selected' : ''}>${option}</option>`).join('')}</select>`
+    : selectorMode === 'table'
+      ? `<div class="plan-table">${options.map((option) => renderOptionButton(item, group, option, priorKeys)).join('')}</div>`
+      : options.map((option) => renderOptionButton(item, group, option, priorKeys)).join('');
   return `<section class="purchase-step" style="--step-index:${index}">
     <div class="step-marker"><span>${index}</span></div>
     <div class="step-panel">
       <h3>${group.name}</h3>
-      <div class="step-options ${typeClass}">
-        ${group.options.map((option) => renderOptionButton(item, group, option)).join('')}
-      </div>
-    </div>
-  </section>`;
-}
-
-function renderPaymentStep(index) {
-  return `<section class="purchase-step" style="--step-index:${index}">
-    <div class="step-marker"><span>${index}</span></div>
-    <div class="step-panel">
-      <h3>支付方式</h3>
-      <div class="step-options payment-cards">
-        ${networks.map((n) => {
-          const meta = PAYMENT_META[n.code] || { title: networkText(n.code), sub: n.warning, icon: 'C03_wallet.png' };
-          const active = n.code === state.paymentNetwork;
-          return `<button class="selection-card payment-option ${active ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}" type="button">
-            ${n.recommended ? '<em>推荐</em>' : ''}
-            <span class="payment-art">${paymentIcon(meta.icon, meta.title)}</span>
-            <span class="option-copy"><strong>${meta.title}</strong><small>${meta.sub}</small></span>
-            ${active ? '<i class="checkmark">✓</i>' : ''}
-          </button>`;
-        }).join('')}
+      <div class="step-options ${typeClass} ${selectorMode}">
+        ${optionMarkup || '<p class="option-empty">当前选择下暂无可购规格</p>'}
       </div>
     </div>
   </section>`;
@@ -1521,13 +1523,12 @@ function renderPaymentStep(index) {
 function orderPreview(item, sku) {
   const opts = selectedOptions(item);
   const disabled = !sku || (sku.stockStatus || sku.stock) === 'sold_out';
-  const buttonText = disabled ? '请先完成商品选择' : state.user ? `立即支付 ${sku.priceUsdt.toFixed(2)} USDT` : `登录后支付 ${sku.priceUsdt.toFixed(2)} USDT`;
+  const buttonText = disabled ? '请先完成商品选择' : state.user ? `去结算 ${sku.priceUsdt.toFixed(2)} USDT` : `登录后结算 ${sku.priceUsdt.toFixed(2)} USDT`;
   const rows = [
     ['商品', item.name],
     ['地区', opts.region || '不适用'],
     ['账号类型', opts.account || '不适用'],
-    ['套餐周期', opts.duration || opts.plan || opts.amount || '已选择'],
-    ['支付方式', paymentDisplay()]
+    ['套餐周期', opts.duration || opts.plan || opts.amount || '已选择']
   ];
   const trust = [
     ['B04_lock_encryption.png', '安全加密', '全程 SSL 加密，保护您的隐私与交易安全'],
@@ -1545,7 +1546,7 @@ function orderPreview(item, sku) {
     <div class="preview-trust">
       ${trust.map(([iconFile, title, text]) => `<div>${featureIcon(iconFile, title)}<span><strong>${title}</strong><small>${text}</small></span></div>`).join('')}
     </div>
-    <button class="primary-pay-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${featureIcon('B04_lock_encryption.png', '锁定支付')} ${buttonText}</button>
+    <button class="primary-pay-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${featureIcon('B04_lock_encryption.png', '安全结算')} ${buttonText}</button>
     <p class="preview-save">${featureIcon('B02_shield_secure_payment.png', '自动保存')} 登录后订单信息将自动保存</p>
   </aside>`;
 }
@@ -1617,7 +1618,8 @@ function detail(slug = 'discord-nitro') {
   const sku = findSku(item);
   const opts = selectedOptions(item);
   const related = products.filter((p) => p.id !== item.id).slice(0, 3);
-  const payText = state.user ? `立即支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后支付 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
+  const payText = state.user ? `去结算 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后结算 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
+  const tags = productFeatureTags(item);
   persist();
   shell(`
     <div class="breadcrumb">首页 / 商品 / ${item.name}</div>
@@ -1626,8 +1628,8 @@ function detail(slug = 'discord-nitro') {
         ${icon(item.icon)}
         <div>
           <div class="hero-title-row"><h1>${item.name}</h1><span>${featureIcon('B06_check_circle_success.png', '官方正版')} 官方正版</span></div>
-          <p>${item.short}</p>
-          <div class="product-tags"><span>${featureIcon('B06_check_circle_success.png', '自定义表情')} 自定义表情</span><span>${featureIcon('B09_auto_delivery.png', '高清直播')} 高清直播</span><span>${featureIcon('B02_shield_secure_payment.png', '大文件上传')} 大文件上传</span></div>
+          <p>${escapeHtml(productShort(item))}</p>
+          ${tags.length ? `<div class="product-tags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
         </div>
       </div>
       <div class="product-hero-art" aria-hidden="true"><span>${icon(item.icon)}</span><i></i><b></b><em></em></div>
@@ -1649,13 +1651,12 @@ function detail(slug = 'discord-nitro') {
       <div class="sticky-product">${icon(item.icon)}<div><strong>${item.name}</strong><p>${Object.values(opts).join(' · ')}</p></div></div>
       <div class="sticky-meta">
         <div><span>套餐周期</span><strong>${opts.duration || opts.plan || opts.amount || '已选择'}</strong></div>
-        <div><span>支付方式</span><strong>${paymentDisplay()}</strong></div>
         <div><span>应付金额</span><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
       </div>
       <div class="sticky-mobile-price"><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
       <div class="sticky-actions">
         <button class="sticky-cart-button" data-action="addToCart" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${navIcon('A06_shopping_cart.png', '购物车')} 加入购物车</button>
-        <button class="sticky-pay-button" data-action="paySelected" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${paymentIcon('C03_wallet.png', '钱包')} ${payText}</button>
+        <button class="sticky-pay-button" data-action="paySelected" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${featureIcon('B04_lock_encryption.png', '安全结算')} ${payText}</button>
       </div>
     </div>
   `, 'page detail-page');
@@ -1706,19 +1707,20 @@ function checkout() {
           <div class="payment-method-row">
             ${[
               ['balance', '余额支付', `${Number(state.wallet.balance || 0).toFixed(2)} USDT 可用`],
-              ['wechat', '微信支付', '第三方聚合支付'],
-              ['alipay', '支付宝', '第三方聚合支付'],
-              ['usdt_trc20', 'USDT TRC20', '链上确认到账']
+              ['wechat', '微信支付', '适合微信用户'],
+              ['alipay', '支付宝', '适合支付宝用户'],
+              ['usdt_trc20', 'USDT', '数字货币支付']
             ].map(([key, label, desc]) => `<button class="${state.paymentMethod === key ? 'active' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button"><b>${label}</b><span>${desc}</span></button>`).join('')}
           </div>
-          ${state.paymentMethod !== 'balance' ? `<label class="agree balance-offset"><input type="checkbox" data-action="toggleUseBalance" ${state.useBalance ? 'checked' : ''}/> 使用余额抵扣，剩余部分通过${state.paymentMethod === 'wechat' ? '微信' : state.paymentMethod === 'alipay' ? '支付宝' : 'USDT TRC20'}支付</label>` : ''}
-          <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${paymentIcon('C02_tron_trc20.png', n.displayName)} ${n.displayName} (${n.tokenStandard})</button>`).join('')}</div>
-          <div class="network-confirm">
-            <b>你选择的是 ${networkText(state.paymentNetwork)}</b>
-            <span>USDT 只支持 TRC20。微信/支付宝由第三方聚合支付回调确认，TRC20 需要链上确认。</span>
-            <span>错链支付、少付、多付、超时付款都将进入异常订单，需要人工处理。</span>
-            <label class="agree"><input type="checkbox" id="networkConfirm" /> 我已确认支付网络和金额风险</label>
-          </div>
+          ${state.paymentMethod !== 'balance' ? `<label class="agree balance-offset"><input type="checkbox" data-action="toggleUseBalance" ${state.useBalance ? 'checked' : ''}/> 使用余额抵扣，剩余部分通过${state.paymentMethod === 'wechat' ? '微信' : state.paymentMethod === 'alipay' ? '支付宝' : 'USDT'}支付</label>` : ''}
+          ${state.paymentMethod === 'usdt_trc20' ? `
+            <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${n.displayName} ${n.tokenStandard}</button>`).join('')}</div>
+            <div class="network-confirm">
+              <b>请使用 ${networkText(state.paymentNetwork)} 完成支付</b>
+              <span>请按支付页显示的金额付款，并确认钱包网络一致。</span>
+              <label class="agree"><input type="checkbox" id="networkConfirm" /> 我已确认支付金额和钱包网络</label>
+            </div>
+          ` : ''}
         </section>
         <section class="glass panel confirm-box">
           <h3>支付前确认</h3>
@@ -1734,9 +1736,9 @@ function checkout() {
         <div class="line"><span>余额抵扣</span><b>${checkoutBalanceUse(sku.priceUsdt).toFixed(2)} USDT</b></div>
         <div class="line"><span>剩余支付</span><b>${checkoutRemainder(sku.priceUsdt).toFixed(2)} USDT</b></div>
         <div class="line total"><span>应付金额</span>${price(sku.priceUsdt)}</div>
-        <p class="summary-note">订单创建时锁定 USDT 金额，链上手续费由用户承担。登录后，订单及发货信息将自动保存至「我的订单」。</p>
+        <p class="summary-note">提交订单后会锁定应付金额。登录后，订单及发货信息将自动保存至「我的订单」。</p>
         <label class="agree"><input type="checkbox" id="agree" /> 我已阅读并同意 <a>购买须知</a> 与 <a>售后规则</a></label>
-        <button class="primary" data-action="createOrder">${paymentIcon('C01_usdt.png', 'USDT')} ${state.user ? '确认并支付' : '登录后支付'}</button>
+        <button class="primary" data-action="createOrder">${featureIcon('B04_lock_encryption.png', '安全支付')} ${state.user ? '确认并支付' : '登录后支付'}</button>
         <p class="secure">订单数据将自动保存至「我的订单」，登录后可随时查看订单状态与发货信息。</p>
       </aside>
     </section>
@@ -1808,7 +1810,7 @@ function summaryRows(item, sku) {
     ['商品', item.name],
     ['规格', Object.values(selectedOptions(item)).join(' / ')],
     ['订单归属', state.user ? `当前账号 @${state.user.username}` : '登录后自动绑定'],
-    ['支付网络', networkText(state.paymentNetwork)],
+    ['支付方式', state.paymentMethod === 'wechat' ? '微信支付' : state.paymentMethod === 'alipay' ? '支付宝' : state.paymentMethod === 'balance' ? '余额支付' : 'USDT'],
     ['应付金额', `${sku.priceUsdt.toFixed(2)} USDT ≈ ${money(sku.priceUsdt)}`]
   ];
   return `<div class="summary-rows">${rows.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>`;
@@ -1824,7 +1826,7 @@ function createLocalOrder(item, sku) {
   const remainder = checkoutRemainder(amount);
   const paidByBalance = state.paymentMethod === 'balance' && remainder <= 0;
   if (state.paymentMethod === 'balance' && remainder > 0) {
-    notify('余额不足，请选择微信、支付宝或 USDT TRC20 组合支付');
+    notify('余额不足，请选择微信、支付宝或 USDT 组合支付');
     return null;
   }
   if (balanceUsed > 0) {
@@ -1878,7 +1880,7 @@ async function createOrder() {
   if (!sku || (sku.stockStatus || sku.stock) === 'sold_out') return notify('当前 SKU 无法购买，请重新选择规格');
   let serverOrder = null;
   const networkConfirm = document.querySelector('#networkConfirm');
-  if (networkConfirm && !networkConfirm.checked) return notify('请先确认支付网络风险');
+  if (state.paymentMethod === 'usdt_trc20' && networkConfirm && !networkConfirm.checked) return notify('请先确认支付金额和钱包网络');
   if (state.user.authType === 'email') {
     const localOrder = createLocalOrder(item, sku);
     if (!localOrder) return;
@@ -2073,26 +2075,26 @@ async function pay(id) {
   const walletModes = [
     { key: 'browser', label: '浏览器钱包', note: '推荐', icon: paymentIcon('C03_wallet.png', '浏览器钱包', 'wallet-icon') },
     { key: 'mobile', label: '移动钱包', note: 'APP 扫码打开', icon: paymentIcon('C04_qr_code.png', '移动钱包扫码', 'wallet-icon') },
-    { key: 'walletconnect', label: 'WalletConnect', note: '通用连接协议', icon: paymentIcon('C06_address.png', 'WalletConnect', 'wallet-icon') },
+    { key: 'walletconnect', label: 'WalletConnect', note: '连接钱包', icon: paymentIcon('C06_address.png', 'WalletConnect', 'wallet-icon') },
     { key: 'tronlink', label: 'TronLink', note: '浏览器插件', icon: paymentIcon('C02_tron_trc20.png', 'TronLink', 'wallet-icon') }
   ];
   shell(`
     <section class="pay-head">
-      <div><h1>完成支付</h1><p>订单已创建，请在倒计时内完成链上转账，超时将自动取消订单。</p></div>
-      ${statusTracker(['订单已创建', '等待付款', '链上确认', '正在发货', '已完成'], order.status)}
+      <div><h1>完成支付</h1><p>订单已创建，请在倒计时内按页面金额完成付款。</p></div>
+      ${statusTracker(['订单已创建', '等待付款', '确认付款', '正在发货', '已完成'], order.status)}
     </section>
     <section class="pay-grid">
       <div>
         <section class="glass panel pay-info">
           <h3>订单信息</h3>
-          ${[['订单号', order.orderNo + ' ⧉'], ['商品', order.productName + '  ' + Object.values(order.options).join(' / ')], ['精确支付金额', `${paymentAmountText} ≈ ${order.fiatAmount}`], ['支付网络', 'USDT TRC20'], ['支付通道', 'TRON 链上直付'], ['剩余支付时间', '<strong class="timer" data-expires="' + order.expiresAt + '">14:32</strong> <button class="danger">请尽快完成支付</button>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+          ${[['订单号', order.orderNo + ' ⧉'], ['商品', order.productName + '  ' + Object.values(order.options).join(' / ')], ['支付金额', `${paymentAmountText} ≈ ${order.fiatAmount}`], ['支付方式', 'USDT'], ['钱包网络', 'TRC20'], ['剩余支付时间', '<strong class="timer" data-expires="' + order.expiresAt + '">14:32</strong> <button class="danger">请尽快完成支付</button>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
         </section>
         <section class="glass panel wallets">
           <h3>打开钱包并转账 <small>系统将尝试自动唤起您选择的钱包</small></h3>
           <div class="wallet-row">${walletModes.map((wallet) => `<button class="${state.walletMode === wallet.key ? 'active' : ''}" data-action="setWalletMode" data-wallet="${wallet.key}"><span>${wallet.icon}</span><b>${wallet.label}</b><small>${wallet.note}</small></button>`).join('')}</div>
           <button class="primary small" data-action="openWallet">${paymentIcon('C03_wallet.png', '钱包')} 重新打开钱包</button>
         </section>
-        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请严格支付 ${paymentAmountText}，金额用于自动识别订单。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请务必使用 TRON / TRC20 网络转 USDT，其他链无法自动确认。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，链上延迟会额外保留短暂监听窗口。</p></section>
+        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请按页面显示金额付款。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请确认钱包网络为 TRC20。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，超时后请重新下单。</p></section>
       </div>
       <div>
         <section class="glass panel qr-panel">
@@ -2104,7 +2106,7 @@ async function pay(id) {
           <p>${featureIcon('B07_warning_triangle.png', '注意')} 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
         </section>
         <section class="glass panel pay-cta">
-          <p>支付后系统会通过 TronGrid 自动监听，达到 3 次确认后标记为已支付。少付、多付或超时到账会进入后台异常处理。</p>
+          <p>付款完成后，订单状态会自动更新。若长时间未更新，请联系在线客服协助核对。</p>
           <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
         </section>
         <section class="glass panel support"><b>遇到问题？联系在线客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
@@ -2160,13 +2162,13 @@ async function markPaid(id) {
       refreshed.events = [
         { label: '订单已创建', time: timeFrom(refreshed.createdAt || new Date().toISOString()) },
         { label: '已收到付款', time: now() },
-        { label: '链上确认完成', time: now(24) },
+        { label: '付款确认完成', time: now(24) },
         { label: '正在发货', time: now(30) },
         { label: '已完成', time: now(57) }
       ];
       saveOrder(refreshed);
       refreshed.delivery = refreshed.delivery || deliveryResult.delivery || null;
-      notify('链上确认完成，系统已自动发货');
+      notify('付款已确认，系统已自动发货');
       location.hash = `#/order/${refreshed.id}/success`;
       return;
     } catch {
@@ -2182,12 +2184,12 @@ async function markPaid(id) {
       return;
     }
   }
-  notify('支付已提交，等待链上确认');
+  notify('支付已提交，等待确认');
 }
 
 async function success(id) {
   const order = id === 'demo'
-    ? { ...demoOrder(), status: 'completed', paidAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), events: [{ label: '订单已创建', time: '2025-05-20 14:32:21' }, { label: '已收到付款', time: '2025-05-20 14:33:05' }, { label: '链上确认完成', time: '2025-05-20 14:33:29' }, { label: '正在发货', time: '2025-05-20 14:33:35' }, { label: '已完成', time: '2025-05-20 14:34:02' }] }
+    ? { ...demoOrder(), status: 'completed', paidAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), events: [{ label: '订单已创建', time: '2025-05-20 14:32:21' }, { label: '已收到付款', time: '2025-05-20 14:33:05' }, { label: '付款确认完成', time: '2025-05-20 14:33:29' }, { label: '正在发货', time: '2025-05-20 14:33:35' }, { label: '已完成', time: '2025-05-20 14:34:02' }] }
     : (await loadServerOrder(id)) || findExactOrder(id);
   if (!order) return home();
   const item = products.find((p) => p.id === order.productId) || products[0];
@@ -2198,7 +2200,7 @@ async function success(id) {
     : [
         { label: '订单已创建', time: timeFrom(order.createdAt) },
         { label: '已收到付款', time: timeFrom(order.paidAt || order.createdAt) },
-        { label: '链上确认完成', time: timeFrom(order.paidAt || order.createdAt) },
+        { label: '付款确认完成', time: timeFrom(order.paidAt || order.createdAt) },
         { label: '正在发货', time: timeFrom(order.deliveredAt || order.paidAt || order.createdAt) },
         { label: '已完成', time: timeFrom(order.deliveredAt || order.paidAt || order.createdAt) }
       ];
@@ -2269,7 +2271,7 @@ async function orderDetail(id) {
           <b class="order-status ${escapeHtml(order.status)}">${statusLabel(order.status)}</b>
           <small>${canPay ? '请在订单有效期内完成支付，超时需重新下单。' : '支付、发货和售后记录均会关联到该订单。'}</small>
         </div>
-        ${statusTracker(['已创建', '等待付款', '链上确认', '发货中', '已完成'], order.status)}
+        ${statusTracker(['已创建', '等待付款', '确认付款', '发货中', '已完成'], order.status)}
       </section>
 
       <section class="order-detail-layout">
@@ -2482,7 +2484,7 @@ function accountStatCards() {
 
 function accountOverviewCards(userName) {
   const cards = [
-    ['个人信息', `<div class="overview-profile">${navIcon('A07_user_login.png', '头像', 'overview-avatar')}<span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料'],
+    ['个人信息', `<div class="overview-profile"><span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料'],
     ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button type="button">充值</button><button type="button">提现</button></div>', ''],
     ['邮箱账号', `<b>${escapeHtml(userEmail() || 'user@example.com')}</b><em class="bound">已绑定</em><small>暂不支持更换</small>`, ''],
     ['默认货币', '<b>USD</b>', '更改货币'],
@@ -2561,7 +2563,7 @@ function accountSections() {
     { key: 'content', label: '我的内容', icon: 'lightning', desc: '集中查看已交付的卡密、账号密码、兑换码、链接和文字说明。' },
     { key: 'wallet', label: '余额中心', icon: 'card', desc: '管理 USDT 余额、充值记录、消费流水和组合支付。' },
     { key: 'support', label: '售后服务', icon: 'headset', desc: '提交工单，后台人工处理退款、补发和异常问题。' },
-    { key: 'profile', label: '个人资料', icon: 'user', desc: '修改头像和昵称，邮箱账号只读且暂不支持更换。' },
+    { key: 'profile', label: '个人资料', icon: 'user', desc: '修改昵称，邮箱账号只读且暂不支持更换。' },
     { key: 'security', label: '安全设置', icon: 'shield-check', desc: '修改密码、查看登录记录和退出其他设备。' },
     { key: 'notifications', label: '通知设置', icon: 'refund', desc: '设置邮件和站内通知，右上角消息中心展示通知记录。' },
     { key: 'help', label: '帮助中心', icon: 'more', desc: '查看购买、充值、TRC20 支付、发货和售后规则。' }
@@ -2631,21 +2633,21 @@ function accountContentPanel() {
 
 function accountWalletPanel() {
   const ledger = state.wallet.ledger?.length ? state.wallet.ledger : [
-    { type: '充值入账', amount: 100, note: 'USDT TRC20 确认到账', status: 'completed', createdAt: '2025-05-26T11:00:00Z' },
+    { type: '充值入账', amount: 100, note: 'USDT 充值到账', status: 'completed', createdAt: '2025-05-26T11:00:00Z' },
     { type: '订单消费', amount: -1.8, note: 'Discord Nitro 订单支付', status: 'completed', createdAt: '2025-05-28T14:32:18Z' }
   ];
   return `<section class="wallet-layout">
     <div class="wallet-balance">
       <span>当前余额</span>
       <strong>${Number(state.wallet.balance || 0).toFixed(2)} USDT</strong>
-      <p>微信/支付宝充值会按聚合支付回调入账；USDT TRC20 需要链上确认。</p>
+      <p>支持微信、支付宝和 USDT 充值，到账后会计入余额。</p>
     </div>
     <form class="wallet-recharge">
       <h3>余额充值</h3>
       <label>充值金额<input id="rechargeAmount" type="number" min="1" step="0.01" value="${escapeHtml(state.rechargeDraft.amount)}" /></label>
       <label>充值方式<select id="rechargeMethod"><option value="wechat">微信支付</option><option value="alipay">支付宝支付</option><option value="usdt_trc20">USDT TRC20</option></select></label>
       <button class="primary" data-action="createRecharge" type="button">创建充值单</button>
-      <small>第三方聚合支付/链上监听接入后会自动完成入账；当前环境可用模拟回调验证界面。</small>
+      <small>充值创建后请按页面提示完成支付，到账后余额会自动更新。</small>
     </form>
     <section class="member-panel wide">
       <div class="section-toolbar"><b>余额流水</b><button data-action="simulateRecharge" type="button">模拟最近充值到账</button></div>
@@ -2676,10 +2678,8 @@ function accountSupportPanel() {
 function accountProfilePanel() {
   return `<section class="member-panel profile-form">
     <div class="profile-editor">
-      <span class="member-avatar">${state.profile.avatar ? `<img src="${escapeHtml(state.profile.avatar)}" alt="头像" />` : userInitials()}</span>
       <div><h3>${escapeHtml(userNickname())}</h3><p>${escapeHtml(userEmail())}</p></div>
     </div>
-    <label>头像 URL<input id="profileAvatar" value="${escapeHtml(state.profile.avatar || '')}" placeholder="https://example.com/avatar.png" /></label>
     <label>昵称<input id="profileNickname" value="${escapeHtml(userNickname())}" maxlength="20" /></label>
     <label>邮箱账号<input value="${escapeHtml(userEmail())}" disabled /></label>
     <label>用户 ID<input value="${escapeHtml(state.user.id)}" disabled /></label>
@@ -2789,7 +2789,6 @@ function account() {
     <section class="member-center">
       <aside class="member-sidebar">
         <div class="member-user">
-          <button class="member-avatar avatar-button" data-action="selectAccountSection" data-section="profile" type="button">${state.profile.avatar ? `<img src="${escapeHtml(state.profile.avatar)}" alt="头像" />` : userInitials()}</button>
           <h2>${escapeHtml(userName)}</h2>
           <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
           <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
@@ -3234,12 +3233,23 @@ function adminContent(tab) {
       ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USDT`, Number(sku.stockQuantity ?? productStockCount(product)), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), '<button type="button">编辑</button>']), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
     } else if (sub === 'edit') {
       const product = productList[0] || {};
+      const productTags = productFeatureTags(product).join('，');
+      const productNotice = product.purchaseNotice || product.notice?.usageGuide || '';
+      const afterSaleRule = product.afterSaleRule || product.notice?.refundRule || product.notice?.attention || '';
       body = `<div class="admin-panel">
         <div class="admin-editor-layout">
           <aside>${['基础信息','购买字段','SKU 配置','库存绑定','发货规则','购买须知','展示设置'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</aside>
           <div>
             <h2>${escapeHtml(product.name || '选择商品')}</h2>
-            <p>商品编辑页按业务对象拆分配置，不再把所有字段堆在公共页面。购买字段、SKU、库存、发货规则都归属到当前商品。</p>
+            <p>商品文案和前台展示内容都应由后台配置，前端只负责按字段渲染。</p>
+            <form class="admin-form admin-product-content-form" data-action="adminProductContent" data-id="${escapeHtml(product.id || '')}">
+              <label>商品短描述<textarea name="shortDescription" placeholder="一句话介绍商品">${escapeHtml(product.shortDescription || product.subtitle || product.short || '')}</textarea></label>
+              <label>商品卖点标签<textarea name="featureTags" placeholder="最多 6 个，用逗号或换行分隔">${escapeHtml(productTags)}</textarea></label>
+              <label>商品详情说明<textarea name="detailDescription" placeholder="商品详情、适用场景、使用限制">${escapeHtml(product.detailDescription || product.description || '')}</textarea></label>
+              <label>购买须知<textarea name="purchaseNotice" placeholder="购买前需要用户确认的规则">${escapeHtml(productNotice)}</textarea></label>
+              <label>售后规则<textarea name="afterSaleRule" placeholder="保修、补发、退款等规则">${escapeHtml(afterSaleRule)}</textarea></label>
+              <div class="admin-form-actions"><button class="primary small" type="submit">保存商品文案</button></div>
+            </form>
             ${adminActionForm('purchaseField.create', [['productId','商品 ID','text', product.id || ''], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / quantity / text / email / number / textarea / switch'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global","subtitle":"全球通用"}]'], ['affectsSku','影响 SKU','checkbox']], '保存购买字段')}
           </div>
         </div>
@@ -3321,82 +3331,6 @@ function adminContent(tab) {
   return adminContent('dashboard');
 }
 
-function solutions() {
-  const scenarios = [
-    {
-      title: '开发者出海工具',
-      desc: '覆盖开发、协作、AI 工具和账号权益，适合个人开发者、小团队快速补齐海外服务能力。',
-      categories: ['软件', '社交'],
-      cta: '查看开发工具'
-    },
-    {
-      title: '内容创作者订阅',
-      desc: '视频、音乐、社媒会员集中采购，适合剪辑、运营、直播和跨平台内容团队。',
-      categories: ['视频', '音乐', '社交'],
-      cta: '查看创作者商品'
-    },
-    {
-      title: '游戏与礼品卡充值',
-      desc: '面向 Steam、Xbox、Apple、Google Play 等充值场景，重点展示区服、库存和交付规则。',
-      categories: ['游戏', '礼品卡'],
-      cta: '查看充值方案'
-    }
-  ];
-  const solutionStats = [
-    ['秒级交付', `${products.filter((item) => item.deliveryType === 'auto').length} 类自动发货商品`],
-    ['支付网络', `${networks.filter((item) => item.enabled).length} 条稳定币网络`],
-    ['售后响应', '订单、支付异常、工单一体追踪']
-  ];
-  const categoryCards = ['社交', '音乐', '视频', '游戏', '软件', '礼品卡'].map((category) => {
-    const items = products.filter((item) => item.category === category);
-    const inStock = items.filter((item) => item.skus.some((sku) => (sku.stockStatus || sku.stock) !== 'sold_out')).length;
-    return `
-      <a class="solution-category" href="#/products" data-category="${category}">
-        ${categoryIcon(category)}
-        <strong>${category}</strong>
-        <span>${items.length || 0} 个商品 · ${inStock} 个有货</span>
-      </a>
-    `;
-  }).join('');
-  shell(`
-    <section class="solution-page">
-      <header class="solution-hero">
-        <span class="eyebrow">Solutions</span>
-        <h1>按业务场景选数字商品</h1>
-        <p>解决方案不是 FAQ。这里按出海开发、内容运营、游戏充值等场景，把商品、支付和交付路径组织起来。</p>
-        <div class="solution-hero-actions">
-          <a class="primary-button" href="#/products">浏览全部商品</a>
-          <a class="text-button" href="#/faq">查看帮助中心</a>
-        </div>
-      </header>
-      <div class="solution-stats">
-        ${solutionStats.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}
-      </div>
-      <section class="solution-scenarios">
-        ${scenarios.map((item, index) => `
-          <article class="solution-card">
-            <span class="solution-index">${String(index + 1).padStart(2, '0')}</span>
-            <h2>${item.title}</h2>
-            <p>${item.desc}</p>
-            <div class="solution-tags">${item.categories.map((category) => `<span>${category}</span>`).join('')}</div>
-            <a href="#/products">${item.cta} →</a>
-          </article>
-        `).join('')}
-      </section>
-      <section class="solution-map">
-        <div>
-          <span class="eyebrow">Category Map</span>
-          <h2>按品类快速进入采购</h2>
-          <p>进入商品中心后可继续使用分类、发货方式、库存和排序筛选。</p>
-        </div>
-        <div class="solution-category-grid">${categoryCards}</div>
-      </section>
-      ${purchaseFlow()}
-      ${platformGuarantee()}
-    </section>
-  `, 'page solution-shell');
-}
-
 function faq() {
   const groups = [
     ['下单类', [
@@ -3405,13 +3339,13 @@ function faq() {
       ['可以修改订单信息吗？', '订单未支付或未发货前可以申请修改，支付后请保留订单号并联系人工客服。']
     ]],
     ['支付类', [
-      ['支持哪些网络？', '当前只支持 TRON 上的 USDT TRC20，请按支付页展示的精确金额转账。'],
-      ['付款后没识别怎么办？', '系统会自动监听链上到账。长时间未识别时，请联系在线客服进入人工核验。'],
+      ['支持哪些支付方式？', '支持微信、支付宝和 USDT。选择 USDT 时，请按支付页展示的金额付款。'],
+      ['付款后没识别怎么办？', '长时间未更新时，请联系在线客服协助核对。'],
       ['少付、多付、超时付款怎么办？', '订单会进入异常处理，少付需补差价，多付可申请退差额或余额，超时付款需人工匹配。'],
-      ['转错网络怎么办？', '错链支付可能无法找回，请在付款前二次确认网络。发生后请联系人工客服处理。']
+      ['USDT 支付需要注意什么？', '请在付款前确认金额和钱包网络。发生问题后请联系人工客服处理。']
     ]],
     ['发货类', [
-      ['自动发货多久完成？', '链上确认后通常 1-3 分钟完成。若库存或接口异常，会进入发货失败队列。'],
+      ['自动发货多久完成？', '付款确认后通常 1-3 分钟完成。若库存或接口异常，会进入发货失败队列。'],
       ['手动发货多久完成？', '一般 10 分钟内开始处理，复杂订单或高风险订单可能需要 24 小时内完成。'],
       ['发货内容在哪里查看？', '发货结果会发送至邮箱和站内消息，也可以在订单详情查看状态与隐藏后的交付摘要。']
     ]],
@@ -3616,7 +3550,7 @@ async function loadAdminData(force = false) {
 }
 
 function statusLabel(status) {
-  return { created: '待付款', pending_payment: '待付款', payment_confirming: '链上确认中', paid: '已付款', delivering: '发货中', completed: '已完成', expired: '已超时', failed: '支付失败', refunding: '退款中', refunded: '已退款' }[status] || status;
+  return { created: '待付款', pending_payment: '待付款', payment_confirming: '确认付款中', paid: '已付款', delivering: '发货中', completed: '已完成', expired: '已超时', failed: '支付失败', refunding: '退款中', refunded: '已退款' }[status] || status;
 }
 
 function timeFrom(iso) {
@@ -3646,7 +3580,6 @@ async function route() {
     ['/orders/lookup', () => lookup()],
     ['/account', () => account()],
     ['/admin', () => renderAdmin()],
-    ['/solutions', () => solutions()],
     ['/faq', () => faq()]
   ];
   const staticRoute = routes.find(([path]) => path === hash);
@@ -3729,13 +3662,11 @@ document.addEventListener('click', async (event) => {
   if (action === 'logoutAccount') return logoutAccount();
   if (action === 'selectAccountSection') { state.accountSection = el.dataset.section || 'orders'; persist(); return route(); }
   if (action === 'saveProfile') {
-    const avatar = document.querySelector('#profileAvatar')?.value.trim() || '';
     const nickname = document.querySelector('#profileNickname')?.value.trim() || '';
     if (!nickname || nickname.length > 20) return notify('昵称需为 1-20 个字符');
-    state.profile.avatar = avatar;
     state.profile.nickname = nickname;
     if (state.user) state.user.nickname = nickname;
-    addMessage('资料已更新', '头像或昵称已保存。', 'account');
+    addMessage('资料已更新', '昵称已保存。', 'account');
     notify('个人资料已保存');
     return route();
   }
@@ -3745,14 +3676,14 @@ document.addEventListener('click', async (event) => {
     if (!amount || amount <= 0) return notify('请输入有效充值金额');
     state.rechargeDraft = { amount: String(amount), method };
     walletLedger('充值订单', amount, `${method === 'wechat' ? '微信' : method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
-    addMessage('充值单已创建', `${amount.toFixed(2)} USDT 等待${method === 'usdt_trc20' ? '链上确认' : '聚合支付回调'}。`, 'wallet');
+    addMessage('充值单已创建', `${amount.toFixed(2)} USDT 充值待确认。`, 'wallet');
     notify('充值单已创建，等待支付确认');
     return route();
   }
   if (action === 'simulateRecharge') {
     const amount = Number(state.rechargeDraft.amount || 20);
     state.wallet.balance = Number((Number(state.wallet.balance || 0) + amount).toFixed(2));
-    walletLedger('充值入账', amount, '模拟聚合支付/链上确认回调', 'completed');
+    walletLedger('充值入账', amount, '充值已确认', 'completed');
     addMessage('充值到账', `${amount.toFixed(2)} USDT 已入账。`, 'wallet');
     notify('充值已模拟到账');
     return route();
@@ -3815,7 +3746,14 @@ document.addEventListener('click', async (event) => {
   if (action === 'toggleHomeFaq') { state.homeFaqActive = Number(el.dataset.index || 0); return route(); }
   if (action === 'stockOnly') { state.stockFilter = event.target.checked; return route(); }
   if (action === 'selectProduct') { state.selectedProductId = el.dataset.id; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
-  if (action === 'setOption') { const item = products.find((p) => p.id === el.dataset.product); state.selectedOptions[item.id] = { ...selectedOptions(item), [el.dataset.key]: el.dataset.value }; persist(); return route(); }
+  if (action === 'setOption') {
+    const item = products.find((p) => p.id === el.dataset.product);
+    const value = el.value || el.dataset.value;
+    const next = { ...selectedOptions(item), [el.dataset.key]: value };
+    state.selectedOptions[item.id] = normalizeSelectedOptions(item, next, el.dataset.key);
+    persist();
+    return route();
+  }
   if (action === 'setNoticeTab') { state.noticeTab = el.dataset.tab || 'basic'; persist(); return route(); }
   if (action === 'quickProduct') { state.selectedProductId = event.target.value; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
   if (action === 'quickSku') { const sku = product().skus.find((s) => s.id === event.target.value); state.selectedOptions[product().id] = sku.optionValues; persist(); return route(); }
@@ -3833,7 +3771,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'removeCartItem') return removeCartItem(el.dataset.key);
   if (action === 'clearCart') return clearCart();
   if (action === 'checkoutCartItem') return checkoutCartItem(el.dataset.key);
-  if (action === 'paySelected') return createOrder();
+  if (action === 'paySelected') { syncInputs(); location.hash = '#/checkout'; }
   if (action === 'createOrder') return createOrder();
   if (action === 'markPaid') return markPaid(el.dataset.id);
   if (action === 'submitTicket') {
@@ -4020,6 +3958,35 @@ document.addEventListener('submit', async (event) => {
     state.adminData.loaded = false;
     state.adminImportPreview = null;
     notify('库存已导入并写入审计');
+    return renderAdmin();
+  }
+  const productContentForm = event.target.closest('[data-action="adminProductContent"]');
+  if (productContentForm) {
+    event.preventDefault();
+    const id = productContentForm.dataset.id;
+    const data = new FormData(productContentForm);
+    const featureTags = String(data.get('featureTags') || '')
+      .split(/[,，\n]/)
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+    const payload = {
+      shortDescription: data.get('shortDescription') || '',
+      featureTags,
+      detailDescription: data.get('detailDescription') || '',
+      purchaseNotice: data.get('purchaseNotice') || '',
+      afterSaleRule: data.get('afterSaleRule') || ''
+    };
+    const response = await adminFetch(`/api/admin/products/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    const updated = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(updated.error || '商品文案保存失败');
+    const local = products.find((item) => item.id === updated.id);
+    if (local) Object.assign(local, updated);
+    state.adminData.products = state.adminData.products.map((item) => (item.id === updated.id ? { ...item, ...updated } : item));
+    notify('商品文案已保存');
     return renderAdmin();
   }
   const form = event.target.closest('[data-action="adminOps"]');

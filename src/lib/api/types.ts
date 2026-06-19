@@ -6,6 +6,14 @@ export interface ProductRow {
   slug: string;
   name: string;
   category_id: string;
+  product_type?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  icon_url?: string | null;
+  cover_url?: string | null;
+  tags_json?: string | null;
+  purchase_notice?: string | null;
+  after_sale_rule?: string | null;
   status: "active" | "hidden" | "archived";
   delivery_type: "auto" | "manual" | "mixed";
   base_currency: string;
