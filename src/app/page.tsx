@@ -31,7 +31,7 @@ export default function HomePage() {
         <SeoHomeContent />
       </div>
       <ToastRegion />
-      <Script src="/app.js?v=product-options-20260619a" type="module" strategy="afterInteractive" />
+      <Script src="/app.js?v=next-routes-20260620a" type="module" strategy="afterInteractive" />
     </>
   );
 }

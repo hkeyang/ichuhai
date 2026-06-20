@@ -56,7 +56,11 @@ const LINE_ICONS = {
   headset: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2Z"/><path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2Z"/><path d="M13 21h3a3 3 0 0 0 3-3"/>',
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
   bell: '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/>',
-  chevron: '<path d="m6 9 6 6 6-6"/>'
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off': '<path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
 };
 
 const CATEGORY_ICON_KEYS = {
@@ -264,11 +268,18 @@ const state = {
   telegramUsername: localStorage.getItem('telegramUsername') || '',
   email: localStorage.getItem('email') || '',
   user: JSON.parse(localStorage.getItem('gfUser') || 'null'),
-  authPanelOpen: false,
   authMode: 'login',
+  loginPasswordVisible: false,
+  loginAgree: false,
+  loginReturnTo: '/account',
+  loginStep: 'form',          // form | verify
+  loginVerifyEmail: '',       // 待验证邮箱
+  loginVerifyCode: '',        // 验证码输入暂存
+  loginResendAt: 0,           // 下次可重发时间戳
+  loginBusy: false,           // 请求中，防重复提交
   messageCenterOpen: false,
   accountSection: localStorage.getItem('accountSection') || 'orders',
-  profile: JSON.parse(localStorage.getItem('gfProfile') || '{"avatar":"","nickname":""}'),
+  profile: JSON.parse(localStorage.getItem('gfProfile') || '{"nickname":""}'),
   wallet: JSON.parse(localStorage.getItem('gfWallet') || '{"balance":128.6,"ledger":[]}'),
   rechargeDraft: { amount: '20', method: 'wechat' },
   messages: JSON.parse(localStorage.getItem('gfMessages') || '[]'),
@@ -428,7 +439,7 @@ function checkoutCartItem(key) {
   state.selectedProductId = entry.product.id;
   state.selectedOptions[entry.product.id] = { ...entry.options };
   persist();
-  location.hash = '#/checkout';
+  navigate('/checkout');
 }
 
 function persist() {
@@ -464,52 +475,8 @@ function userNickname() {
   return state.profile.nickname || state.user?.nickname || (userEmail() ? userEmail().split('@')[0] : state.user?.username) || '用户昵称';
 }
 
-function userInitials() {
-  return userNickname().slice(0, 2).toUpperCase();
-}
-
 function demoToken(prefix = 'auth') {
   return `${prefix}_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
-
-function ensureEmailAccount(email, password) {
-  const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
-  const key = email.toLowerCase();
-  if (!accounts[key]) {
-    accounts[key] = {
-      id: `user_${Date.now()}`,
-      email: key,
-      password,
-      nickname: `用户${String(Date.now()).slice(-5)}`,
-      createdAt: new Date().toISOString()
-    };
-    localStorage.setItem('gfEmailAccounts', JSON.stringify(accounts));
-  }
-  return accounts[key];
-}
-
-function emailLogin(email, password) {
-  const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
-  const account = accounts[email.toLowerCase()];
-  if (!account || account.password !== password) return null;
-  return account;
-}
-
-function applyEmailLogin(account) {
-  state.user = {
-    id: account.id,
-    email: account.email,
-    username: account.email.split('@')[0],
-    nickname: account.nickname,
-    authType: 'email',
-    defaultCurrency: state.fiatCurrency,
-    createdAt: account.createdAt
-  };
-  state.email = account.email;
-  state.profile.nickname = state.profile.nickname || account.nickname;
-  localStorage.setItem('gfAuthToken', demoToken('email'));
-  addMessage('账号登录', `${account.email} 已登录，订单和余额会绑定到该邮箱。`, 'account');
-  persist();
 }
 
 function addMessage(title, text, type = 'system') {
@@ -545,13 +512,13 @@ function applyTelegramLogin(result) {
   persist();
 }
 
-function rememberTelegramReturnTo(returnTo = '#/account') {
-  state.telegramReturnTo = returnTo || '#/account';
+function rememberTelegramReturnTo(returnTo = '/account') {
+  state.telegramReturnTo = normalizeRouteTarget(returnTo || '/account');
   localStorage.setItem('telegramReturnTo', state.telegramReturnTo);
 }
 
 function clearTelegramReturnTo() {
-  state.telegramReturnTo = '#/account';
+  state.telegramReturnTo = '/account';
   localStorage.removeItem('telegramReturnTo');
 }
 
@@ -563,7 +530,6 @@ function logoutAccount() {
   state.user = null;
   state.telegramUsername = '';
   state.email = '';
-  state.authPanelOpen = false;
   state.messageCenterOpen = false;
   state.telegramPanelOpen = false;
   state.telegramDeeplink = null;
@@ -577,8 +543,7 @@ function logoutAccount() {
   stopTelegramPolling();
   persist();
   notify('已退出登录');
-  location.hash = '#/account';
-  route();
+  navigate('/account');
 }
 
 function finishTelegramLogin(result, message = 'Telegram 登录成功') {
@@ -588,10 +553,10 @@ function finishTelegramLogin(result, message = 'Telegram 登录成功') {
   state.telegramDeeplinkStatus = 'completed';
   clearTelegramPendingLogin();
   notify(message);
-  const returnTo = state.telegramReturnTo || '#/account';
+  const returnTo = normalizeRouteTarget(state.telegramReturnTo || '/account');
   clearTelegramReturnTo();
-  if (returnTo && location.hash !== returnTo) {
-    location.hash = returnTo;
+  if (returnTo && currentAppPath() !== returnTo) {
+    navigate(returnTo);
     return;
   }
   route();
@@ -923,7 +888,7 @@ async function pollTelegramDeeplink() {
   }
 }
 
-function openTelegramLoginPanel(returnTo = '#/account') {
+function openTelegramLoginPanel(returnTo = '/account') {
   rememberTelegramReturnTo(returnTo);
   state.telegramPanelOpen = true;
   state.telegramDeeplink = null;
@@ -993,8 +958,30 @@ async function handleTelegramRedirectAuth() {
   return true;
 }
 
+function normalizeRouteTarget(target = '/') {
+  const raw = String(target || '/').trim();
+  const withoutOrigin = raw.startsWith(location.origin) ? raw.slice(location.origin.length) : raw;
+  const path = withoutOrigin.startsWith('#/') ? withoutOrigin.slice(1) : withoutOrigin;
+  const clean = path.split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+  return clean.startsWith('/') ? clean : `/${clean}`;
+}
+
+function currentAppPath() {
+  const hashPath = location.hash.startsWith('#/') ? location.hash.slice(1) : '';
+  return normalizeRouteTarget(hashPath || location.pathname || '/');
+}
+
+function navigate(target) {
+  const path = normalizeRouteTarget(target);
+  if (currentAppPath() !== path || location.hash) {
+    history.pushState(null, '', path);
+  }
+  route();
+  window.scrollTo?.(0, 0);
+}
+
 function logo() {
-  return `<a class="brand" href="#/" aria-label="ichuhai 首页"><img class="logo-horizontal" src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>`;
+  return `<a class="brand" href="/" aria-label="ichuhai 首页"><img class="logo-horizontal" src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>`;
 }
 
 function icon(type) {
@@ -1003,18 +990,19 @@ function icon(type) {
 }
 
 function header() {
-  const isDetail = location.hash.startsWith('#/product/') || location.hash.startsWith('#/products/');
+  const path = currentAppPath();
+  const isDetail = path.startsWith('/product/') || path.startsWith('/products/');
   const count = cartCount();
   const accountAction = state.user
-    ? `<a class="pill telegram-pill logged-in" href="#/account">${navIcon('A07_user_login.png', '已登录')}${escapeHtml(userNickname())}</a>`
-    : `<button class="pill telegram-pill" data-action="openAuthPanel">${navIcon('A07_user_login.png', '登录')}邮箱登录</button>`;
+    ? `<a class="pill telegram-pill logged-in" href="/account">${navIcon('A07_user_login.png', '已登录')}${escapeHtml(userNickname())}</a>`
+    : `<a class="pill telegram-pill" href="/login">${navIcon('A07_user_login.png', '登录')}登录</a>`;
   const unread = unreadMessages();
   return `
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
       <nav class="header-nav">
-        <a href="#/products">数字商品</a>
-        <a href="#/faq">帮助中心</a>
+        <a href="/products">数字商品</a>
+        <a href="/faq">帮助中心</a>
       </nav>
       <div class="top-actions">
         <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
@@ -1025,11 +1013,10 @@ function header() {
           <button class="pill icon-pill" data-action="toggleMessages" type="button" aria-label="消息中心">${lineIcon('bell', '消息中心', 'message-icon')}${unread ? `<span>${unread}</span>` : ''}</button>
           ${state.messageCenterOpen ? messageCenterPanel() : ''}
         </div>
-        <a class="pill cart" href="#/cart">${navIcon('A06_shopping_cart.png', '购物车')} 购物车${count ? `<span class="cart-count">${count}</span>` : ''}</a>
+        <a class="pill cart" href="/cart">${navIcon('A06_shopping_cart.png', '购物车')} 购物车${count ? `<span class="cart-count">${count}</span>` : ''}</a>
         ${accountAction}
       </div>
     </header>
-    ${state.authPanelOpen ? authPanel() : ''}
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
   `;
 }
@@ -1048,26 +1035,6 @@ function messageCenterPanel() {
       </article>`).join('')}
     </div>
   </section>`;
-}
-
-function authPanel() {
-  const isRegister = state.authMode === 'register';
-  return `
-    <div class="modal-backdrop" data-action="closeAuthPanel">
-      <section class="glass auth-panel">
-        <button class="modal-close" data-action="closeAuthPanel" type="button" aria-label="关闭登录窗口">×</button>
-        <span class="console-eyebrow">${isRegister ? 'Create account' : 'Sign in'}</span>
-        <h2>${isRegister ? '邮箱注册' : '邮箱登录'}</h2>
-        <p>${isRegister ? '邮箱将作为唯一登录账号，暂不支持更换。' : '使用邮箱和密码进入个人中心、余额和售后工单。'}</p>
-        <label>邮箱账号<input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(state.email || '')}" /></label>
-        <label>密码<input id="authPassword" type="password" autocomplete="${isRegister ? 'new-password' : 'current-password'}" placeholder="至少 6 位" /></label>
-        ${isRegister ? '<label>确认密码<input id="authPassword2" type="password" autocomplete="new-password" placeholder="再次输入密码" /></label>' : ''}
-        <button class="primary" data-action="${isRegister ? 'submitRegister' : 'submitLogin'}" type="button">${isRegister ? '创建账号' : '登录'}</button>
-        <button class="secondary auth-switch" data-action="switchAuthMode" data-mode="${isRegister ? 'login' : 'register'}" type="button">${isRegister ? '已有账号，去登录' : '没有账号，去注册'}</button>
-        <small>忘记密码将通过邮箱验证码重置，接口接入后启用。</small>
-      </section>
-    </div>
-  `;
 }
 
 function telegramLoginPanel() {
@@ -1142,7 +1109,8 @@ function currencyMenu() {
 
 function shell(content, className = '') {
   document.documentElement.classList.remove('admin-hash-loading');
-  app.innerHTML = `${className.includes('admin-page') ? '' : header()}<main class="${className}">${content}</main>`;
+  const hideHeader = className.includes('admin-page') || className.includes('login-page-shell');
+  app.innerHTML = `${hideHeader ? '' : header()}<main class="${className}">${content}</main>`;
   enhanceSelects();
 }
 
@@ -1160,6 +1128,263 @@ function chevronIcon() {
   const template = document.createElement('template');
   template.innerHTML = lineIcon('chevron', '展开选项', 'select-chevron').trim();
   return template.content.firstElementChild;
+}
+
+function applyServerLogin(result) {
+  // result: { token, user: { id, email, nickname, authType, defaultCurrency } }
+  const user = result.user || {};
+  state.user = {
+    id: user.id,
+    email: user.email,
+    username: user.email ? user.email.split('@')[0] : (user.nickname || '用户'),
+    nickname: user.nickname || (user.email ? user.email.split('@')[0] : '用户'),
+    authType: user.authType || 'email',
+    defaultCurrency: user.defaultCurrency || state.fiatCurrency
+  };
+  state.email = user.email || '';
+  state.profile.nickname = state.profile.nickname || state.user.nickname;
+  if (result.token) localStorage.setItem('gfAuthToken', result.token);
+  addMessage('账号登录', `${user.email || '账号'} 已登录，订单和余额会绑定到该账户。`, 'account');
+  persist();
+}
+
+function finishLoginRedirect(message) {
+  state.loginPasswordVisible = false;
+  state.loginStep = 'form';
+  state.loginVerifyEmail = '';
+  state.loginVerifyCode = '';
+  state.loginBusy = false;
+  notify(message);
+  const target = state.loginReturnTo || '/account';
+  state.loginReturnTo = '/account';
+  navigate(target);
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
+
+async function submitLoginPageLogin() {
+  if (state.loginBusy) return;
+  const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
+  const password = document.querySelector('#loginPassword')?.value || '';
+  const agree = document.querySelector('.login-agree input')?.checked;
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
+  if (!password) return notify('请输入密码');
+  if (!agree) return notify('请阅读并同意《用户协议》和《隐私政策》');
+  state.loginBusy = true;
+  try {
+    const { response, data } = await postJson('/api/auth/login', { email, password });
+    if (response.status === 403 && data.next === 'verify') {
+      // 邮箱未验证：转到验证码步骤并自动发码
+      state.loginBusy = false;
+      notify(data.error || '邮箱尚未验证，请完成验证');
+      return startVerifyStep(email, { sendNow: true });
+    }
+    if (!response.ok) {
+      state.loginBusy = false;
+      return notify(data.error || '登录失败');
+    }
+    applyServerLogin(data);
+    finishLoginRedirect('登录成功');
+  } catch {
+    state.loginBusy = false;
+    notify('网络异常，请稍后重试');
+  }
+}
+
+async function submitLoginPageRegister() {
+  if (state.loginBusy) return;
+  const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
+  const password = document.querySelector('#loginPassword')?.value || '';
+  const password2 = document.querySelector('#loginPassword2')?.value || '';
+  const agree = document.querySelector('.login-agree input')?.checked;
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
+  if (password.length < 6) return notify('密码至少 6 位');
+  if (password !== password2) return notify('两次密码不一致');
+  if (!agree) return notify('请阅读并同意《用户协议》和《隐私政策》');
+  state.loginBusy = true;
+  try {
+    const { response, data } = await postJson('/api/auth/register', { email, password });
+    state.loginBusy = false;
+    if (!response.ok) return notify(data.error || '注册失败');
+    notify('验证码已发送到邮箱');
+    startVerifyStep(email, { sendNow: false });
+  } catch {
+    state.loginBusy = false;
+    notify('网络异常，请稍后重试');
+  }
+}
+
+function startVerifyStep(email, { sendNow } = {}) {
+  state.loginStep = 'verify';
+  state.loginVerifyEmail = email;
+  state.loginVerifyCode = '';
+  state.loginResendAt = Date.now() + 60 * 1000;
+  route();
+  if (sendNow) resendVerifyCode();
+}
+
+async function submitVerifyCode() {
+  if (state.loginBusy) return;
+  const code = (document.querySelector('#loginCode')?.value || '').trim();
+  if (!/^\d{6}$/.test(code)) return notify('请输入 6 位验证码');
+  state.loginBusy = true;
+  try {
+    const { response, data } = await postJson('/api/auth/verify-email', {
+      email: state.loginVerifyEmail,
+      code
+    });
+    if (!response.ok) {
+      state.loginBusy = false;
+      return notify(data.error || '验证失败');
+    }
+    applyServerLogin(data);
+    finishLoginRedirect('注册成功，已登录');
+  } catch {
+    state.loginBusy = false;
+    notify('网络异常，请稍后重试');
+  }
+}
+
+async function resendVerifyCode() {
+  if (Date.now() < state.loginResendAt) {
+    const left = Math.ceil((state.loginResendAt - Date.now()) / 1000);
+    return notify(`请 ${left} 秒后再重发`);
+  }
+  try {
+    const { response, data } = await postJson('/api/auth/resend-code', { email: state.loginVerifyEmail });
+    if (!response.ok) return notify(data.error || '重发失败');
+    state.loginResendAt = Date.now() + 60 * 1000;
+    notify('验证码已重新发送');
+    route();
+  } catch {
+    notify('网络异常，请稍后重试');
+  }
+}
+
+function loginVerifySection() {
+  const email = escapeHtml(state.loginVerifyEmail || '');
+  const resendLeft = Math.max(0, Math.ceil((state.loginResendAt - Date.now()) / 1000));
+  return `
+    <div class="login-verify">
+      <span class="login-verify-icon">${lineIcon('mail', '邮箱验证', 'login-icon')}</span>
+      <h2 class="login-verify-title">验证您的邮箱</h2>
+      <p class="login-verify-desc">验证码已发送至 <b>${email}</b>，请在 5 分钟内输入 6 位验证码。</p>
+      <form class="login-fields" data-action="loginVerifySubmit">
+        <label class="login-field">
+          <span class="login-field-label">验证码</span>
+          <span class="login-input">
+            ${lineIcon('shield-check', '验证码', 'login-field-icon')}
+            <input id="loginCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="请输入 6 位验证码" />
+          </span>
+        </label>
+        <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>验证并登录</button>
+      </form>
+      <div class="login-verify-actions">
+        <button data-action="loginResendCode" type="button" ${resendLeft ? 'disabled' : ''}>${resendLeft ? `重新发送 (${resendLeft}s)` : '重新发送验证码'}</button>
+        <button data-action="loginBackToForm" type="button">返回修改邮箱</button>
+      </div>
+    </div>`;
+}
+
+function loginPage() {
+  const isRegister = state.authMode === 'register';
+  const features = [
+    { icon: 'shield-check', title: '安全可靠', desc: '邮箱验证 + 加密存储，多重防护保障账户安全' },
+    { icon: 'lightning', title: '极速便捷', desc: '流程简单高效，快速完成注册与登录' },
+    { icon: 'headset', title: '专属服务', desc: '7×24 小时在线支持，为您提供专业帮助' }
+  ];
+  const steps = [
+    { icon: 'mail', title: '注册账号', desc: '填写邮箱地址' },
+    { icon: 'shield-check', title: '验证邮箱', desc: '查收邮件并完成验证' },
+    { icon: 'user', title: '登录使用', desc: '开启安全便捷体验' }
+  ];
+  const passwordType = state.loginPasswordVisible ? 'text' : 'password';
+  shell(`
+    <div class="login-page">
+      <div class="login-card">
+        <aside class="login-brand">
+          <a class="login-logo" href="/" aria-label="ichuhai 首页"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>
+          <h1 class="login-title">一站式获取<span>全球数字商品</span></h1>
+          <p class="login-subtitle">ChatGPT、Claude、礼品卡一站式购买</p>
+          <div class="login-features">
+            ${features.map((f) => `
+              <article class="login-feature">
+                <span class="login-feature-icon">${lineIcon(f.icon, f.title, 'login-icon')}</span>
+                <b>${f.title}</b>
+                <small>${f.desc}</small>
+              </article>`).join('')}
+          </div>
+          <div class="login-flow">
+            <h2>只需三步，开启您的数字商品之旅</h2>
+            <div class="login-flow-steps">
+              ${steps.map((s, i) => `
+                ${i ? '<span class="login-flow-arrow">→</span>' : ''}
+                <div class="login-flow-step">
+                  <span class="login-flow-index">${i + 1}</span>
+                  <span class="login-flow-icon">${lineIcon(s.icon, s.title, 'login-icon')}</span>
+                  <b>${s.title}</b>
+                  <small>${s.desc}</small>
+                </div>`).join('')}
+            </div>
+          </div>
+        </aside>
+        <section class="login-form">
+          ${state.loginStep === 'verify' ? loginVerifySection() : `
+          <div class="login-tabs" role="tablist">
+            <button class="login-tab ${isRegister ? '' : 'active'}" data-action="switchAuthMode" data-mode="login" type="button">登录</button>
+            <button class="login-tab ${isRegister ? 'active' : ''}" data-action="switchAuthMode" data-mode="register" type="button">创建账号</button>
+          </div>
+          <form class="login-fields" data-action="loginFormSubmit">
+            <label class="login-field">
+              <span class="login-field-label">邮箱地址</span>
+              <span class="login-input">
+                ${lineIcon('mail', '邮箱', 'login-field-icon')}
+                <input id="loginEmail" type="email" autocomplete="email" placeholder="请输入您的邮箱地址" value="${escapeHtml(state.email || '')}" />
+              </span>
+            </label>
+            <label class="login-field">
+              <span class="login-field-label">密码</span>
+              <span class="login-input">
+                ${lineIcon('lock', '密码', 'login-field-icon')}
+                <input id="loginPassword" type="${passwordType}" autocomplete="${isRegister ? 'new-password' : 'current-password'}" placeholder="请输入密码" />
+                <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
+              </span>
+            </label>
+            ${isRegister ? `
+            <label class="login-field">
+              <span class="login-field-label">确认密码</span>
+              <span class="login-input">
+                ${lineIcon('lock', '确认密码', 'login-field-icon')}
+                <input id="loginPassword2" type="${passwordType}" autocomplete="new-password" placeholder="请再次输入密码" />
+              </span>
+            </label>` : '<button class="login-forgot" data-action="loginForgot" type="button">忘记密码?</button>'}
+            <label class="login-agree">
+              <input type="checkbox" data-action="toggleLoginAgree" ${state.loginAgree ? 'checked' : ''} />
+              <span>我已阅读并同意<a href="/faq">《用户协议》</a>和<a href="/faq">《隐私政策》</a></span>
+            </label>
+            <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>${isRegister ? '创建账号' : '登录'}</button>
+          </form>
+          <div class="login-switch">
+            ${isRegister
+              ? '已有账号? <button data-action="switchAuthMode" data-mode="login" type="button">立即登录</button>'
+              : '还没有账号? <button data-action="switchAuthMode" data-mode="register" type="button">立即创建</button>'}
+          </div>`}
+        </section>
+      </div>
+      <div class="login-footer">
+        <a class="login-back" href="/">← 返回 ichuhai 首页</a>
+        <p class="login-trust">${lineIcon('shield-check', '安全', 'login-trust-icon')} 安全 · 快速 · 可靠</p>
+      </div>
+    </div>
+  `, 'login-page-shell');
 }
 
 function home() {
@@ -1237,7 +1462,7 @@ function productBrowser(full = false) {
       <div class="product-row">
         ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
       </div>
-      ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="#/products">查看全部商品 →</a></div>' : ''}
+      ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="/products">查看全部商品 →</a></div>' : ''}
     </section>
   `;
 }
@@ -1319,14 +1544,14 @@ function siteFooter() {
         </div>
         <div class="footer-column">
           <h4>平台</h4>
-          <a href="#/products">商品中心</a>
-          <a href="#/faq">帮助中心</a>
-          <a href="#/">关于我们</a>
+          <a href="/products">商品中心</a>
+          <a href="/faq">帮助中心</a>
+          <a href="/">关于我们</a>
         </div>
         <div class="footer-column">
           <h4>支持</h4>
-          <a href="#/faq">新手指南</a>
-          <a href="#/faq">常见问题</a>
+          <a href="/faq">新手指南</a>
+          <a href="/faq">常见问题</a>
           <a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a>
         </div>
         <div class="footer-column">
@@ -1342,9 +1567,9 @@ function siteFooter() {
       <div class="footer-bottom">
         <span>© 2026 ichuhai. 保留所有权利。</span>
         <div>
-          <a href="#/">服务条款</a>
-          <a href="#/">隐私政策</a>
-          <a href="#/">免责声明</a>
+          <a href="/">服务条款</a>
+          <a href="/">隐私政策</a>
+          <a href="/">免责声明</a>
         </div>
       </div>
     </footer>
@@ -1357,7 +1582,7 @@ function card(item) {
   const deliveryClass = item.deliveryType === 'auto' ? 'auto' : item.deliveryType === 'mixed' ? 'mixed' : 'manual';
   const stock = sku.stockStatus || sku.stock;
   return `
-    <a class="product-card" href="#/product/${item.slug}">
+    <a class="product-card" href="/products/${item.slug}">
       <span class="product-card-top">
         ${icon(item.icon)}
         <em class="delivery-chip ${deliveryClass}">${deliveryLabel(item.deliveryType)}</em>
@@ -1638,7 +1863,7 @@ function detail(slug = 'discord-nitro') {
     ${optionPanel(item, true)}
     ${noticePanel(item)}
     <section class="recommend-card">
-      <div class="section-header"><div><h2>相关推荐</h2><p>更多优质数字商品推荐</p></div><a href="#/products">查看全部 ›</a></div>
+      <div class="section-header"><div><h2>相关推荐</h2><p>更多优质数字商品推荐</p></div><a href="/products">查看全部 ›</a></div>
       <div class="recommend-list">
         ${related.map((p) => {
           const relatedSku = findSku(p, defaultOptions(p)) || p.skus[0];
@@ -1757,7 +1982,7 @@ function cartPage() {
           <p>先保存想买的商品，确认规格、库存和金额后再进入支付流程。</p>
         </div>
         <div class="cart-head-actions">
-          <a class="secondary link-button" href="#/products">继续选购</a>
+          <a class="secondary link-button" href="/products">继续选购</a>
           ${items.length ? '<button class="secondary" data-action="clearCart" type="button">清空购物车</button>' : ''}
         </div>
       </div>
@@ -1798,7 +2023,7 @@ function cartPage() {
           ${navIcon('A06_shopping_cart.png', '空购物车', 'empty-cart-icon')}
           <h2>购物车还是空的</h2>
           <p>在商品详情页选择规格后点击“加入购物车”，稍后再统一确认。</p>
-          <a class="primary link-button" href="#/products">去选购商品</a>
+          <a class="primary link-button" href="/products">去选购商品</a>
         </section>
       `}
     </section>
@@ -1868,10 +2093,9 @@ function createLocalOrder(item, sku) {
 async function createOrder() {
   syncInputs();
   if (!state.user) {
-    state.authPanelOpen = true;
-    state.authMode = 'login';
-    route();
-    return notify('请先使用邮箱登录后再支付');
+    state.loginReturnTo = '/checkout';
+    notify('请先使用邮箱登录后再支付');
+    return navigate('/login');
   }
   const agree = document.querySelector('#agree');
   if (agree && !agree.checked) return notify('请先勾选购买须知与售后规则');
@@ -1885,7 +2109,7 @@ async function createOrder() {
     const localOrder = createLocalOrder(item, sku);
     if (!localOrder) return;
     notify(localOrder.status === 'completed' ? '余额支付成功，订单已完成' : '订单已创建，请继续完成剩余支付');
-    location.hash = localOrder.status === 'completed' ? `#/order/${localOrder.id}/success` : `#/pay/${localOrder.id}`;
+    navigate(localOrder.status === 'completed' ? `/order/${localOrder.id}/success` : `/pay/${localOrder.id}`);
     return;
   }
   const accountUsername = state.telegramUsername || `@${state.user.username}`;
@@ -1917,7 +2141,7 @@ async function createOrder() {
     notify('订单已创建，但无法读取支付信息');
     return;
   }
-  location.hash = `#/pay/${order.id}`;
+  navigate(`/pay/${order.id}`);
 }
 
 function orders() {
@@ -1975,7 +2199,7 @@ async function loadAccountOrders({ force = false } = {}) {
   const loadedFor = `${state.user.id}:${authToken()}`;
   if (!force && (state.accountOrders.loading || state.accountOrders.loadedFor === loadedFor)) return;
   state.accountOrders = { ...state.accountOrders, loading: true, error: '' };
-  if (location.hash === '#/account') route();
+  if (currentAppPath() === '/account') route();
   try {
     const response = await fetch('/api/me/orders', {
       headers: { authorization: `Bearer ${authToken()}` }
@@ -1996,7 +2220,7 @@ async function loadAccountOrders({ force = false } = {}) {
       error: error instanceof Error ? error.message : '订单同步失败'
     };
   }
-  if (location.hash === '#/account') route();
+  if (currentAppPath() === '/account') route();
 }
 
 async function saveAccountPreferences() {
@@ -2153,7 +2377,7 @@ async function markPaid(id) {
         refreshed.status = deliveryResult.order?.status || refreshed.status || 'paid';
         saveOrder(refreshed);
         notify('订单已支付，当前 SKU 需要人工发货');
-        location.hash = `#/order/${refreshed.id}`;
+        navigate(`/order/${refreshed.id}`);
         return;
       }
       refreshed.status = 'completed';
@@ -2169,7 +2393,7 @@ async function markPaid(id) {
       saveOrder(refreshed);
       refreshed.delivery = refreshed.delivery || deliveryResult.delivery || null;
       notify('付款已确认，系统已自动发货');
-      location.hash = `#/order/${refreshed.id}/success`;
+      navigate(`/order/${refreshed.id}/success`);
       return;
     } catch {
       notify('演示支付失败，请检查本地服务');
@@ -2180,7 +2404,7 @@ async function markPaid(id) {
   if (statusResponse.ok) {
     const status = await statusResponse.json();
     if (status.status === 'completed') {
-      location.hash = `#/order/${order.id}/success`;
+      navigate(`/order/${order.id}/success`);
       return;
     }
   }
@@ -2225,11 +2449,11 @@ async function success(id) {
           <small>交付内容</small>
           <pre>${escapeHtml(deliveryContent || deliveryPreview)}</pre>
         </div>
-        ${deliveryContent ? `<button class="secondary small" data-copy="${escapeHtml(deliveryContent)}" type="button">复制交付内容</button>` : '<a class="primary small link-button" href="#/order/' + order.id + '">查看订单详情</a>'}
+        ${deliveryContent ? `<button class="secondary small" data-copy="${escapeHtml(deliveryContent)}" type="button">复制交付内容</button>` : '<a class="primary small link-button" href="/order/' + order.id + '">查看订单详情</a>'}
       </section>
       <section class="glass panel next-actions">
         <h3>后续操作</h3>
-        <a href="#/orders/lookup">查看订单详情</a><a href="#/">再次购买</a><a href="#/orders/lookup">前往订单查询</a><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
+        <a href="/orders/lookup">查看订单详情</a><a href="/">再次购买</a><a href="/orders/lookup">前往订单查询</a><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
       </section>
     </section>
     <section class="glass bottom-help"><span>关于保质期<br/><b>查看保质期说明 ›</b></span><span>售后咨询<br/><b>提交工单 / 联系支持 ›</b></span><span>常见问题<br/><b>访问 FAQ ›</b></span></section>
@@ -2261,7 +2485,7 @@ async function orderDetail(id) {
         </div>
         <div class="pro-hero-actions">
           <a class="primary small link-button" href="${action.href}">${action.label}</a>
-          <a class="secondary" href="#/orders/lookup">返回查询</a>
+          <a class="secondary" href="/orders/lookup">返回查询</a>
         </div>
       </header>
 
@@ -2319,7 +2543,7 @@ async function orderDetail(id) {
               ['创建时间', timeFrom(order.createdAt)],
               ['更新时间', timeFrom(order.updatedAt)]
             ].map(([a, b]) => `<div class="account-field"><span>${a}</span><b>${escapeHtml(b)}</b></div>`).join('')}
-            ${canPay ? `<a class="primary small link-button" href="#/pay/${order.id}">继续支付</a>` : ''}
+            ${canPay ? `<a class="primary small link-button" href="/pay/${order.id}">继续支付</a>` : ''}
           </section>
           <section class="detail-panel-block support-ticket">
             <h2>提交售后</h2>
@@ -2345,7 +2569,7 @@ async function lookup() {
           <p>用订单号、邮箱或 TxID 找回订单；查询结果可直接继续支付、查看发货或提交售后。</p>
         </div>
         <div class="pro-hero-actions">
-          <a class="secondary" href="#/account">返回个人中心</a>
+          <a class="secondary" href="/account">返回个人中心</a>
           <a class="primary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
         </div>
       </header>
@@ -2379,14 +2603,14 @@ async function lookup() {
       </section>
 
       ${result ? `<section class="lookup-result pro-section">
-        <div class="account-section-head"><div><h2>查询结果</h2><p>已匹配到订单，可继续处理当前状态。</p></div><a href="#/order/${result.id}">查看完整详情</a></div>
+        <div class="account-section-head"><div><h2>查询结果</h2><p>已匹配到订单，可继续处理当前状态。</p></div><a href="/order/${result.id}">查看完整详情</a></div>
         ${accountOrderCard(result)}
       </section>` : ''}
 
       <section class="pro-section">
         <div class="account-section-head">
           <div><h2>${state.user ? '我的订单' : '本机订单'}</h2><p>${state.user ? '展示当前邮箱账号与本机缓存订单。' : '登录后可同步当前邮箱账号的线上订单。'}</p></div>
-          ${state.user ? '<button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>' : '<button class="secondary" data-action="openAuthPanel" type="button">邮箱登录</button>'}
+          ${state.user ? '<button class="secondary" data-action="refreshAccountOrders" type="button">同步订单</button>' : '<a class="secondary" href="/login">邮箱登录</a>'}
         </div>
         <div class="account-order-stack">${savedOrders.length ? savedOrders.slice(0, 8).map(accountOrderCard).join('') : accountEmptyOrders()}</div>
       </section>
@@ -2396,7 +2620,7 @@ async function lookup() {
 
 function orderItem(order, detail = false) {
   const canPay = ['created', 'pending_payment', 'payment_confirming'].includes(order.status);
-  return `<a class="order-item" href="#/order/${order.id}">
+  return `<a class="order-item" href="/order/${order.id}">
     <b>${order.orderNo}</b>
     <span>${order.productName}</span>
     <span class="order-status ${order.status}">${statusLabel(order.status)}</span>
@@ -2408,10 +2632,10 @@ function orderItem(order, detail = false) {
 
 function orderPrimaryAction(order) {
   if (!order) return { label: '查看详情', href: '#/orders/lookup', tone: 'neutral' };
-  if (['created', 'pending_payment', 'payment_confirming'].includes(order.status)) return { label: '继续支付', href: `#/pay/${order.id}`, tone: 'warning' };
-  if (['paid', 'delivering'].includes(order.status)) return { label: '查看发货', href: `#/order/${order.id}`, tone: 'info' };
-  if (order.status === 'completed') return { label: '查看交付', href: `#/order/${order.id}`, tone: 'success' };
-  return { label: '处理异常', href: `#/order/${order.id}`, tone: 'danger' };
+  if (['created', 'pending_payment', 'payment_confirming'].includes(order.status)) return { label: '继续支付', href: `/pay/${order.id}`, tone: 'warning' };
+  if (['paid', 'delivering'].includes(order.status)) return { label: '查看发货', href: `/order/${order.id}`, tone: 'info' };
+  if (order.status === 'completed') return { label: '查看交付', href: `/order/${order.id}`, tone: 'success' };
+  return { label: '处理异常', href: `/order/${order.id}`, tone: 'danger' };
 }
 
 function accountTimeline(orderList) {
@@ -2764,9 +2988,9 @@ function account() {
           <h1>登录后管理订单、余额与售后</h1>
           <p>使用邮箱账号登录。注册后系统会分配昵称，邮箱作为登录账号暂时不能更换。</p>
           <div class="console-actions">
-            <button class="primary account-login" data-action="openAuthPanel" type="button">${navIcon('A07_user_login.png', '登录')} 邮箱登录</button>
-            <button class="secondary" data-action="openRegisterPanel" type="button">创建账号</button>
-            <a class="secondary" href="#/orders/lookup">找回订单</a>
+            <a class="primary account-login" href="/login">${navIcon('A07_user_login.png', '登录')} 邮箱登录</a>
+            <a class="secondary" href="/login">创建账号</a>
+            <a class="secondary" href="/orders/lookup">找回订单</a>
           </div>
         </div>
         <div class="account-guest-modules">
@@ -2818,7 +3042,7 @@ function accountEmptyOrders() {
     <div class="account-empty">
       <b>当前账号暂无订单</b>
       <span>购买后订单会自动出现在这里；如果你在其他设备下过单，可用订单号和邮箱找回。</span>
-      <div><a class="primary small link-button" href="#/products">去选购商品</a><a class="secondary link-button" href="#/orders/lookup">找回订单</a></div>
+      <div><a class="primary small link-button" href="/products">去选购商品</a><a class="secondary link-button" href="/orders/lookup">找回订单</a></div>
     </div>
   `;
 }
@@ -2831,7 +3055,7 @@ function adminLoginPanel() {
   return `
     <section class="admin-shell admin-login-shell">
       <div class="admin-login-visual">
-        <a class="admin-brand login-brand" href="#/"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营控制台</span></a>
+        <a class="admin-brand login-brand" href="/"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营控制台</span></a>
         <div class="admin-login-copy">
           <span class="admin-login-eyebrow">Secure operation desk</span>
           <h1>虚拟商品运营后台</h1>
@@ -2892,7 +3116,7 @@ async function renderAdmin() {
   shell(`
     <section class="admin-shell">
       <aside class="admin-nav">
-        <a class="admin-brand" href="#/admin"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营后台</span></a>
+        <a class="admin-brand" href="/admin"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营后台</span></a>
         <nav>${adminMenu().map((item) => `<button class="${tab === item.key ? 'active' : ''}" data-action="adminTab" data-tab="${item.key}" type="button"><span>${item.icon}</span>${item.label}</button>`).join('')}</nav>
       </aside>
       <section class="admin-main">
@@ -3298,7 +3522,7 @@ function adminContent(tab) {
   if (tab === 'orders') {
     const scope = adminFilterScope(tab);
     const visibleOrders = filterAdminOrders(orderList, adminFiltersFor(scope));
-    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram' }, { name: 'status', label: '订单状态', type: 'select', value: '全部状态', options: ['待付款','链上确认中','已付款','发货中','已完成','已超时','支付失败','退款中','已退款'] }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'date', label: '时间范围', placeholder: '最近 30 天' }], '', scope)}<div class="admin-tabs static">${['全部订单','待支付','已支付','待发货','已发货','发货失败','异常订单','已取消','售后中'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</div><div class="admin-panel">${adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '金额' }, { label: '支付通道', width: '1.2fr' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.6fr' }], visibleOrders.map((o) => [`<b>${escapeHtml(o.orderNo)}</b>`, escapeHtml(o.telegramUsername || o.email || '-'), `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`, o.quantity || 1, `${Number(o.payAmount || o.amountUsdt || 0).toFixed(6).replace(/\.?0+$/, '')} ${escapeHtml(o.payCurrency || 'USDT')}`, paymentChannelLabel(o), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), adminStatus(o.deliveryStatus || statusLabel(o.status), adminToneFromStatus(o.deliveryStatus || o.status)), adminStatus(o.ticketStatus || '无售后', 'neutral'), timeFrom(o.createdAt), `<a href="#/order/${o.id}">详情</a><button data-action="adminMarkPaid" data-id="${o.id}" type="button">手动确认</button><button data-action="adminDeliver" data-id="${o.id}" type="button">人工发货</button>`]), { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPager(visibleOrders.length)}</div><div class="admin-panel admin-detail-skeleton"><h2>订单详情页结构</h2>${['订单状态时间线','用户信息','商品快照','SKU 快照','用户填写信息','支付信息','发货信息','售后记录','通知记录','操作日志','管理员备注'].map((label) => `<span>${label}</span>`).join('')}</div>`);
+    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram' }, { name: 'status', label: '订单状态', type: 'select', value: '全部状态', options: ['待付款','链上确认中','已付款','发货中','已完成','已超时','支付失败','退款中','已退款'] }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'date', label: '时间范围', placeholder: '最近 30 天' }], '', scope)}<div class="admin-tabs static">${['全部订单','待支付','已支付','待发货','已发货','发货失败','异常订单','已取消','售后中'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</div><div class="admin-panel">${adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '金额' }, { label: '支付通道', width: '1.2fr' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.6fr' }], visibleOrders.map((o) => [`<b>${escapeHtml(o.orderNo)}</b>`, escapeHtml(o.telegramUsername || o.email || '-'), `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`, o.quantity || 1, `${Number(o.payAmount || o.amountUsdt || 0).toFixed(6).replace(/\.?0+$/, '')} ${escapeHtml(o.payCurrency || 'USDT')}`, paymentChannelLabel(o), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), adminStatus(o.deliveryStatus || statusLabel(o.status), adminToneFromStatus(o.deliveryStatus || o.status)), adminStatus(o.ticketStatus || '无售后', 'neutral'), timeFrom(o.createdAt), `<a href="/order/${o.id}">详情</a><button data-action="adminMarkPaid" data-id="${o.id}" type="button">手动确认</button><button data-action="adminDeliver" data-id="${o.id}" type="button">人工发货</button>`]), { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPager(visibleOrders.length)}</div><div class="admin-panel admin-detail-skeleton"><h2>订单详情页结构</h2>${['订单状态时间线','用户信息','商品快照','SKU 快照','用户填写信息','支付信息','发货信息','售后记录','通知记录','操作日志','管理员备注'].map((label) => `<span>${label}</span>`).join('')}</div>`);
   }
   if (tab === 'payments') {
     const sub = currentAdminSubTab(tab, 'networks');
@@ -3405,7 +3629,7 @@ function faq() {
           <div class="faq-support-card">
             <span>找不到答案？</span>
             <p>保留订单号、支付截图或收货信息，在线客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
-            <a class="primary small" href="#/orders/lookup">查询订单</a>
+            <a class="primary small" href="/orders/lookup">查询订单</a>
           </div>
         </aside>
         <div class="faq-content">
@@ -3427,7 +3651,7 @@ function networkText(code) {
 }
 
 function currentPayOrderId() {
-  return location.hash.match(/^#\/pay\/([^/]+)/)?.[1] || '';
+  return currentAppPath().match(/^\/pay\/([^/]+)/)?.[1] || '';
 }
 
 function paymentSummaryText(order) {
@@ -3571,7 +3795,7 @@ function syncInputs() {
 }
 
 async function route() {
-  const hash = location.hash.replace(/^#/, '') || '/';
+  const hash = currentAppPath();
   const routes = [
     ['/', () => home()],
     ['/products', () => productsPage()],
@@ -3579,6 +3803,7 @@ async function route() {
     ['/checkout', () => checkout()],
     ['/orders/lookup', () => lookup()],
     ['/account', () => account()],
+    ['/login', () => loginPage()],
     ['/admin', () => renderAdmin()],
     ['/faq', () => faq()]
   ];
@@ -3612,6 +3837,25 @@ document.addEventListener('input', (event) => {
   }
 });
 
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('a[href]');
+  if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (link.target || link.hasAttribute('download')) return;
+  const href = link.getAttribute('href') || '';
+  if (href.startsWith('#/')) {
+    event.preventDefault();
+    navigate(href);
+    return;
+  }
+  if (!href.startsWith('/')) return;
+  const url = new URL(href, location.origin);
+  if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+  event.preventDefault();
+  history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  route();
+  window.scrollTo?.(0, 0);
+});
+
 document.addEventListener('click', async (event) => {
   const copy = event.target.closest('[data-copy]');
   if (copy) {
@@ -3625,40 +3869,33 @@ document.addEventListener('click', async (event) => {
   if (action === 'setCurrency') { state.fiatCurrency = el.dataset.code; state.currencyOpen = false; persist(); return route(); }
   if (action === 'toggleMessages') { state.messageCenterOpen = !state.messageCenterOpen; persist(); return route(); }
   if (action === 'markMessagesRead') { state.messages = state.messages.map((message) => ({ ...message, read: true })); persist(); return route(); }
-  if (action === 'openAuthPanel') { state.authPanelOpen = true; state.authMode = 'login'; return route(); }
-  if (action === 'openRegisterPanel') { state.authPanelOpen = true; state.authMode = 'register'; return route(); }
-  if (action === 'closeAuthPanel') {
-    if (el.classList.contains('modal-backdrop') && event.target !== el) return;
-    state.authPanelOpen = false;
+  if (action === 'switchAuthMode') {
+    const emailInput = document.querySelector('#loginEmail');
+    if (emailInput) state.email = emailInput.value.trim();
+    state.authMode = el.dataset.mode || 'login';
     return route();
   }
-  if (action === 'switchAuthMode') { state.authMode = el.dataset.mode || 'login'; return route(); }
-  if (action === 'submitRegister') {
-    const email = document.querySelector('#authEmail')?.value.trim().toLowerCase();
-    const password = document.querySelector('#authPassword')?.value || '';
-    const password2 = document.querySelector('#authPassword2')?.value || '';
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
-    if (password.length < 6) return notify('密码至少 6 位');
-    if (password !== password2) return notify('两次密码不一致');
-    const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
-    if (accounts[email]) return notify('该邮箱已注册，请直接登录');
-    const account = ensureEmailAccount(email, password);
-    applyEmailLogin(account);
-    state.authPanelOpen = false;
-    notify('注册成功');
+  if (action === 'toggleLoginPassword') {
+    state.loginPasswordVisible = !state.loginPasswordVisible;
+    const inputs = document.querySelectorAll('#loginPassword, #loginPassword2');
+    const eye = el.closest('.login-input')?.querySelector('.login-eye');
+    inputs.forEach((input) => { input.type = state.loginPasswordVisible ? 'text' : 'password'; });
+    if (eye) {
+      eye.setAttribute('aria-label', state.loginPasswordVisible ? '隐藏密码' : '显示密码');
+      eye.innerHTML = lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon');
+    }
+    return;
+  }
+  if (action === 'toggleLoginAgree') { state.loginAgree = !!event.target.checked; return; }
+  if (action === 'loginForgot') { return notify('忘记密码将通过邮箱验证码重置，接口接入后启用。'); }
+  if (action === 'loginResendCode') { return resendVerifyCode(); }
+  if (action === 'loginBackToForm') {
+    state.loginStep = 'form';
+    state.loginVerifyCode = '';
+    state.loginBusy = false;
     return route();
   }
-  if (action === 'submitLogin') {
-    const email = document.querySelector('#authEmail')?.value.trim().toLowerCase();
-    const password = document.querySelector('#authPassword')?.value || '';
-    const account = emailLogin(email, password);
-    if (!account) return notify('邮箱或密码错误');
-    applyEmailLogin(account);
-    state.authPanelOpen = false;
-    notify('登录成功');
-    return route();
-  }
-  if (action === 'telegramLogin') { openTelegramLoginPanel('#/account'); return; }
+  if (action === 'telegramLogin') { state.loginReturnTo = '/account'; return navigate('/login'); }
   if (action === 'logoutAccount') return logoutAccount();
   if (action === 'selectAccountSection') { state.accountSection = el.dataset.section || 'orders'; persist(); return route(); }
   if (action === 'saveProfile') {
@@ -3702,19 +3939,9 @@ document.addEventListener('click', async (event) => {
     return route();
   }
   if (action === 'changePassword') {
-    const oldPassword = document.querySelector('#oldPassword')?.value || '';
     const newPassword = document.querySelector('#newPassword')?.value || '';
     if (newPassword.length < 6) return notify('新密码至少 6 位');
-    const accounts = JSON.parse(localStorage.getItem('gfEmailAccounts') || '{}');
-    const account = accounts[userEmail().toLowerCase()];
-    if (account && account.password !== oldPassword) return notify('当前密码不正确');
-    if (account) {
-      account.password = newPassword;
-      localStorage.setItem('gfEmailAccounts', JSON.stringify(accounts));
-    }
-    addMessage('密码已修改', '账号密码已更新，请妥善保存。', 'security');
-    notify('密码已修改');
-    return route();
+    return notify('修改密码功能即将上线，敬请期待。');
   }
   if (action === 'setPaymentMethod') { state.paymentMethod = el.dataset.method || 'balance'; persist(); return route(); }
   if (action === 'toggleUseBalance') { state.useBalance = event.target.checked; persist(); return route(); }
@@ -3741,7 +3968,7 @@ document.addEventListener('click', async (event) => {
     closeTelegramLoginPanel();
     return;
   }
-  if (action === 'openProduct') { location.hash = `#/product/${el.dataset.slug}`; return; }
+  if (action === 'openProduct') { navigate(`/products/${el.dataset.slug}`); return; }
   if (action === 'filterCategory') { state.categoryFilter = el.dataset.category; return route(); }
   if (action === 'toggleHomeFaq') { state.homeFaqActive = Number(el.dataset.index || 0); return route(); }
   if (action === 'stockOnly') { state.stockFilter = event.target.checked; return route(); }
@@ -3766,12 +3993,12 @@ document.addEventListener('click', async (event) => {
     await navigator.clipboard?.writeText(paymentSummaryText(order));
     return notify('支付信息已复制');
   }
-  if (action === 'goCheckout') { syncInputs(); location.hash = '#/checkout'; }
+  if (action === 'goCheckout') { syncInputs(); navigate('/checkout'); }
   if (action === 'addToCart') return addSelectedToCart();
   if (action === 'removeCartItem') return removeCartItem(el.dataset.key);
   if (action === 'clearCart') return clearCart();
   if (action === 'checkoutCartItem') return checkoutCartItem(el.dataset.key);
-  if (action === 'paySelected') { syncInputs(); location.hash = '#/checkout'; }
+  if (action === 'paySelected') { syncInputs(); navigate('/checkout'); }
   if (action === 'createOrder') return createOrder();
   if (action === 'markPaid') return markPaid(el.dataset.id);
   if (action === 'submitTicket') {
@@ -3927,11 +4154,21 @@ document.addEventListener('click', async (event) => {
     notify('推荐支付网络已更新');
     return renderAdmin();
   }
-  if (action === 'home') { location.hash = '#/'; }
+  if (action === 'home') { navigate('/'); }
   if (action === 'revealSecret') { document.querySelector('.secret').classList.add('revealed'); notify('完整交付内容已解锁'); }
 });
 
 document.addEventListener('submit', async (event) => {
+  const loginPageForm = event.target.closest('[data-action="loginFormSubmit"]');
+  if (loginPageForm) {
+    event.preventDefault();
+    return state.authMode === 'register' ? submitLoginPageRegister() : submitLoginPageLogin();
+  }
+  const verifyForm = event.target.closest('[data-action="loginVerifySubmit"]');
+  if (verifyForm) {
+    event.preventDefault();
+    return submitVerifyCode();
+  }
   const loginForm = event.target.closest('[data-action="adminLoginForm"]');
   if (loginForm) {
     event.preventDefault();
@@ -4015,6 +4252,7 @@ document.addEventListener('change', (event) => {
 });
 
 window.addEventListener('hashchange', route);
+window.addEventListener('popstate', route);
 await Promise.all([loadConfig(), loadCatalog()]);
 const handledTelegramRedirect = await handleTelegramRedirectAuth();
 if (!handledTelegramRedirect) {

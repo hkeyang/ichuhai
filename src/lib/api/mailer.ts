@@ -62,6 +62,52 @@ export async function sendMail(
   };
 }
 
+export async function sendVerificationEmail(
+  to: string,
+  code: string,
+  env: CloudflareEnv
+): Promise<MailResult> {
+  const subject = "ichuhai 邮箱验证码";
+  const text = `您的 ichuhai 注册验证码是 ${code}，5 分钟内有效。如果不是您本人操作，请忽略本邮件。`;
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#0B1538">
+    <p>您正在注册 <b>ichuhai</b> 账号，验证码为：</p>
+    <p style="font-size:30px;font-weight:800;letter-spacing:6px;color:#4F7CFF;margin:18px 0">${code}</p>
+    <p style="color:#64708B">验证码 5 分钟内有效。如果不是您本人操作，请忽略本邮件。</p>
+  </div>`;
+
+  // 优先使用 Resend HTTP API（Cloudflare Workers 可用）
+  if (env.RESEND_API_KEY) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: `ichuhai <${env.MAIL_FROM || "noreply@ichuhai.shop"}>`,
+        to: [to],
+        subject,
+        text,
+        html,
+      }),
+    });
+    if (response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { id?: string };
+      return { ok: true, provider: "resend", messageId: data.id ?? `resend_${Date.now()}` };
+    }
+    const errorText = await response.text().catch(() => "resend error");
+    return { ok: false, provider: "resend", messageId: null, error: errorText };
+  }
+
+  // 未配置 Resend：降级走 MailChannels（生产可能已失效），仍失败则记日志，便于本地联调。
+  const fallback = await sendMail({ to, subject, text, html }, env);
+  if (!fallback.ok) {
+    console.log(`[dev] 邮箱验证码 to=${to} code=${code}`);
+    return { ok: true, provider: "dev-log", messageId: `dev_${Date.now()}` };
+  }
+  return fallback;
+}
+
 export async function sendOrderCreatedEmail(
   order: OrderRow,
   env: CloudflareEnv

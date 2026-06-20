@@ -48,13 +48,18 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
 );
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  telegram_id TEXT NOT NULL UNIQUE,
-  telegram_username TEXT NOT NULL,
+  telegram_id TEXT UNIQUE,
+  telegram_username TEXT,
+  email TEXT UNIQUE,
+  password_hash TEXT,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  nickname TEXT,
   default_currency TEXT NOT NULL DEFAULT 'CNY',
   last_login_at TEXT NOT NULL DEFAULT (datetime('now')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   order_no TEXT NOT NULL UNIQUE,
@@ -390,6 +395,18 @@ CREATE TABLE IF NOT EXISTS telegram_login_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_tg_login_sessions_expires ON telegram_login_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_tg_login_sessions_status ON telegram_login_sessions(status);
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'register' CHECK(purpose IN ('register','reset')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_expires ON email_verifications(expires_at);
 CREATE INDEX IF NOT EXISTS idx_purchase_fields_product ON purchase_fields(product_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(match_status);
@@ -475,5 +492,57 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "deliveries", "status", "TEXT NOT NULL DEFAULT 'sent'");
   await addColumn(db, "deliveries", "failure_reason", "TEXT");
 
+  await ensureUsersEmailSchema(db);
+
   await db.prepare("UPDATE payment_networks SET is_enabled = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, is_recommended = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, confirmations = CASE WHEN code = 'TRON' THEN 3 ELSE confirmations END, updated_at = datetime('now')").run();
+}
+
+/**
+ * 邮箱账号体系的 users 表演进：
+ *  - 旧库 users.telegram_id 是 NOT NULL UNIQUE，邮箱用户没有 telegram_id，必须放宽。
+ *    SQLite 不能直接改列约束，需 重命名 → 建新表 → 拷贝 → 删旧表。
+ *  - 新库（内联 DDL 已是新结构）只需补齐 email 相关列即可。
+ */
+async function ensureUsersEmailSchema(db: D1Database): Promise<void> {
+  const info = await db.prepare("PRAGMA table_info(users)").all<{ name: string; notnull: number }>();
+  if (!info.results.length) return; // 表还没建（理论上不会发生，schemaSql 已建）
+
+  const telegramIdCol = info.results.find((row) => row.name === "telegram_id");
+  const needsRebuild = telegramIdCol ? telegramIdCol.notnull === 1 : false;
+
+  if (needsRebuild) {
+    // 旧库：重建表以放宽 telegram_id / telegram_username 约束并补列
+    const statements = [
+      "ALTER TABLE users RENAME TO users_legacy_email_migration",
+      `CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        telegram_id TEXT UNIQUE,
+        telegram_username TEXT,
+        email TEXT UNIQUE,
+        password_hash TEXT,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        nickname TEXT,
+        default_currency TEXT NOT NULL DEFAULT 'CNY',
+        last_login_at TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `INSERT INTO users (id, telegram_id, telegram_username, default_currency, last_login_at, created_at)
+        SELECT id, telegram_id, telegram_username, default_currency, last_login_at, created_at
+        FROM users_legacy_email_migration`,
+      "DROP TABLE users_legacy_email_migration",
+      "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
+      "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+    ];
+    for (const sql of statements) {
+      await db.prepare(sql).run();
+    }
+    return;
+  }
+
+  // 新结构：幂等补列（兼容介于两版之间的库）
+  await addColumn(db, "users", "email", "TEXT");
+  await addColumn(db, "users", "password_hash", "TEXT");
+  await addColumn(db, "users", "email_verified", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "users", "nickname", "TEXT");
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)").run();
 }

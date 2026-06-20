@@ -2,19 +2,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
+import { resolveUserId } from "@/lib/api/user-session";
 import type { DeliveryRow, OrderRow } from "@/lib/api/types";
-
-function userIdFromRequest(request: Request): string | null {
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
-  const parts = token.split(".");
-  if (parts.length !== 3 || parts[0] !== "dev" || parts[2] !== "token") return null;
-  try {
-    return atob(parts[1]);
-  } catch {
-    return null;
-  }
-}
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
@@ -67,32 +56,46 @@ export async function GET(request: Request) {
   const cloudflareEnv = env as CloudflareEnv;
 
   try {
-    const userId = userIdFromRequest(request);
+    const userId = await resolveUserId(request, cloudflareEnv);
     if (!userId) throw new HttpError(401, "unauthorized");
 
     const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
 
     const user = await db
-      .prepare("SELECT id, telegram_username FROM users WHERE id = ?")
+      .prepare("SELECT id, telegram_username, email FROM users WHERE id = ?")
       .bind(userId)
-      .first<{ id: string; telegram_username: string }>();
+      .first<{ id: string; telegram_username: string | null; email: string | null }>();
 
     if (!user) throw new HttpError(404, "user not found");
 
-    const username = user.telegram_username.startsWith("@")
-      ? user.telegram_username.slice(1)
-      : user.telegram_username;
-    const usernameWithAt = `@${username}`;
+    // 订单可能按 telegram_username（Telegram 用户）或 email（邮箱用户）关联
+    const matchValues: string[] = [];
+    if (user.telegram_username) {
+      const username = user.telegram_username.startsWith("@")
+        ? user.telegram_username.slice(1)
+        : user.telegram_username;
+      matchValues.push(username, `@${username}`);
+    }
+    const conditions: string[] = [];
+    if (matchValues.length) {
+      conditions.push(`telegram_username IN (${matchValues.map(() => "?").join(",")})`);
+    }
+    if (user.email) conditions.push("email = ?");
 
+    if (!conditions.length) {
+      return jsonResponse({ orders: [] }, 200, request, cloudflareEnv);
+    }
+
+    const bindValues = [...matchValues, ...(user.email ? [user.email] : [])];
     const result = await db
       .prepare(
         `SELECT * FROM orders
-         WHERE telegram_username = ? OR telegram_username = ?
+         WHERE ${conditions.join(" OR ")}
          ORDER BY created_at DESC
          LIMIT 50`
       )
-      .bind(username, usernameWithAt)
+      .bind(...bindValues)
       .all<OrderRow>();
 
     const deliveries = result.results.length

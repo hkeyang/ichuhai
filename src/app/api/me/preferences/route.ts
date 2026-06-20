@@ -2,6 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
+import { resolveUserId } from "@/lib/api/user-session";
 
 // 支持的货币列表（与 exchange_rates 种子数据保持一致）
 const SUPPORTED_CURRENCIES = new Set([
@@ -44,22 +45,8 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Phase 1：从 Authorization header 解析 token 获取 userId
-    // token 格式：dev.${btoa(userId)}.token
-    const authHeader = request.headers.get("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
-
-    let userId: string | null = null;
-    if (token) {
-      const parts = token.split(".");
-      if (parts.length === 3 && parts[0] === "dev" && parts[2] === "token") {
-        try {
-          userId = atob(parts[1]);
-        } catch {
-          // 无效 base64，忽略
-        }
-      }
-    }
+    // 兼容新签名 token 与旧 dev.<base64>.token
+    const userId = await resolveUserId(request, cloudflareEnv);
 
     if (!userId) {
       throw new HttpError(401, "unauthorized");

@@ -21,7 +21,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=admin-login-20260523a" type="module" strategy="afterInteractive" />;
+  return <Script src="/app.js?v=next-routes-20260620a" type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {
@@ -220,7 +220,7 @@ export function ProductPageContent({ product }: { product: SeoProduct }) {
               <p>{sku ? `${sku.priceUsdt.toFixed(2)} USDT 起` : "选择规格后下单"}</p>
             </div>
           </div>
-          <a className="sticky-pay-button" href={`/#/product/${product.slug}`}>打开交互购买页</a>
+          <a className="sticky-pay-button" href={`/products/${product.slug}`}>打开交互购买页</a>
         </div>
       </main>
     </>
