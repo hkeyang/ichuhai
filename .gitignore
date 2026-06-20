@@ -19,6 +19,7 @@ cloudflare-env.d.ts
 # Local runtime data
 data/*.json
 artifacts/
+test-results/
 
 # Logs
 *.log
