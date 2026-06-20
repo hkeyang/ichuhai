@@ -270,7 +270,7 @@ const state = {
   user: JSON.parse(localStorage.getItem('gfUser') || 'null'),
   authMode: 'login',
   loginPasswordVisible: false,
-  loginAgree: false,
+  loginAgree: true,
   loginReturnTo: '/account',
   loginStep: 'form',          // form | verify
   loginVerifyEmail: '',       // 待验证邮箱
@@ -1312,6 +1312,13 @@ function loginPage() {
       <div class="login-card">
         <aside class="login-brand">
           <a class="login-logo" href="/" aria-label="ichuhai 首页"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>
+          <div class="login-hero-art" aria-hidden="true">
+            <span class="login-art-bubble bubble-one"></span>
+            <span class="login-art-bubble bubble-two"></span>
+            <span class="login-art-prism prism-one"></span>
+            <span class="login-art-prism prism-two"></span>
+            <span class="login-art-cube"><i></i><b></b></span>
+          </div>
           <h1 class="login-title">一站式获取<span>全球数字商品</span></h1>
           <p class="login-subtitle">ChatGPT、Claude、礼品卡一站式购买</p>
           <div class="login-features">
