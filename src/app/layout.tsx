@@ -40,10 +40,15 @@ export const metadata = {
   }
 };
 
+const bootScript = `(function(){var d=document.documentElement;d.classList.add('app-booting');setTimeout(function(){d.classList.remove('app-booting');},4000);})();`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: bootScript }} />
+        {children}
+      </body>
     </html>
   );
 }

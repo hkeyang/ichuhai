@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "ichuhai-exchange-rate-cron",
+  "main": "index.js",
+  "compatibility_date": "2026-05-12",
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "0 * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ichuhai-db",
+      "database_id": "3d131a6d-db08-4296-b70d-5c7ca7b9906e",
+      "migrations_dir": "../../migrations"
+    }
+  ]
+}

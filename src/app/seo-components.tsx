@@ -106,7 +106,7 @@ export function ProductGrid({
                 <span>{deliveryLabel(product.deliveryType)}</span>
                 <span>{sku ? stockLabel(sku.stock) : "库存待确认"}</span>
               </div>
-              <strong>{sku ? `${sku.priceUsdt.toFixed(2)} USDT 起` : "查看规格"}</strong>
+              <strong>{sku ? `${sku.priceUsdt.toFixed(2)} USD 起` : "查看规格"}</strong>
             </a>
           );
         })}
@@ -162,7 +162,7 @@ export function ProductPageContent({ product }: { product: SeoProduct }) {
               </div>
             </div>
           </div>
-          <div className="product-price">{sku ? `${sku.priceUsdt.toFixed(2)} USDT 起` : "查看规格"}</div>
+          <div className="product-price">{sku ? `${sku.priceUsdt.toFixed(2)} USD 起` : "查看规格"}</div>
         </section>
 
         <section className="seo-detail-grid">
@@ -190,7 +190,7 @@ export function ProductPageContent({ product }: { product: SeoProduct }) {
             {product.skus.map((item) => (
               <div className="seo-sku-row" key={item.id}>
                 <strong>{Object.values(item.optionValues).join(" / ")}</strong>
-                <span>{item.priceUsdt.toFixed(2)} USDT</span>
+                <span>{item.priceUsdt.toFixed(2)} USD</span>
                 <span>{stockLabel(item.stock)}</span>
                 <span>{deliveryLabel(item.deliveryType)}</span>
               </div>
@@ -217,7 +217,7 @@ export function ProductPageContent({ product }: { product: SeoProduct }) {
             <img className="product-icon" src={productImage(product)} alt="" />
             <div>
               <strong>{product.name}</strong>
-              <p>{sku ? `${sku.priceUsdt.toFixed(2)} USDT 起` : "选择规格后下单"}</p>
+              <p>{sku ? `${sku.priceUsdt.toFixed(2)} USD 起` : "选择规格后下单"}</p>
             </div>
           </div>
           <a className="sticky-pay-button" href={`/products/${product.slug}`}>打开交互购买页</a>

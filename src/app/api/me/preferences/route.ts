@@ -6,7 +6,6 @@ import { resolveUserId } from "@/lib/api/user-session";
 
 // 支持的货币列表（与 exchange_rates 种子数据保持一致）
 const SUPPORTED_CURRENCIES = new Set([
-  "USD",
   "CNY",
   "GBP",
   "EUR",
