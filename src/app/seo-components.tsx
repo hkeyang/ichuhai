@@ -21,7 +21,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=login-route-20260620b" type="module" strategy="afterInteractive" />;
+  return <Script src="/app.js?v=nav-cleanup-20260621" type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {
