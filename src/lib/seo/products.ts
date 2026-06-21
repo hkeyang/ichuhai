@@ -241,7 +241,7 @@ export const seoProducts: SeoProduct[] = [
 export const homeFaqs = [
   { question: "购买需要登录吗？", answer: "需要。ichuhai 使用邮箱账号绑定订单、余额、发货信息和售后工单。" },
   { question: "支持哪些支付方式？", answer: "支持余额支付、微信/支付宝聚合支付，以及 TRON 上的 USDT TRC20 支付。" },
-  { question: "如何查询订单？", answer: "用户可以在订单查询页使用订单号、邮箱或交易 Hash 找回订单。" },
+  { question: "如何查询订单？", answer: "登录后进入个人中心，即可查看当前邮箱账号绑定的订单状态、发货信息和售后记录。" },
   { question: "发货速度有多快？", answer: "自动发货商品通常在支付确认后秒级交付，人工商品会进入客服处理队列。" },
   { question: "虚拟商品可以退款吗？", answer: "未发货订单可联系售后处理；已发货或已开通的虚拟商品通常不支持退款。" },
 ];

@@ -31,7 +31,7 @@ export default function HomePage() {
         <SeoHomeContent />
       </div>
       <ToastRegion />
-      <Script src="/app.js?v=nav-cleanup-20260621" type="module" strategy="afterInteractive" />
+      <Script src="/app.js?v=account-center-20260621" type="module" strategy="afterInteractive" />
     </>
   );
 }

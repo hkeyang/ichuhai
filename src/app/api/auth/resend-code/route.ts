@@ -33,7 +33,10 @@ export async function POST(request: Request) {
     if (user && user.email_verified === 0) {
       const result = await issueVerificationCode(db, email, cloudflareEnv);
       if (!result.ok) {
-        throw new HttpError(429, `请求过于频繁，请 ${result.throttledSeconds ?? 60} 秒后重试`);
+        if (result.throttledSeconds) {
+          throw new HttpError(429, `请求过于频繁，请 ${result.throttledSeconds} 秒后重试`);
+        }
+        throw new HttpError(502, "验证码发送失败，请稍后重试");
       }
     }
 

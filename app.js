@@ -1001,7 +1001,6 @@ function header() {
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
       <nav class="header-nav">
-        <a href="/products">数字商品</a>
         <a href="/faq">帮助中心</a>
       </nav>
       <div class="top-actions">
@@ -1150,6 +1149,7 @@ function applyServerLogin(result) {
 
 function finishLoginRedirect(message) {
   state.loginPasswordVisible = false;
+  stopVerifyCountdown();
   state.loginStep = 'form';
   state.loginVerifyEmail = '';
   state.loginVerifyCode = '';
@@ -1228,7 +1228,35 @@ function startVerifyStep(email, { sendNow } = {}) {
   state.loginVerifyCode = '';
   state.loginResendAt = Date.now() + 60 * 1000;
   route();
+  startVerifyCountdown();
   if (sendNow) resendVerifyCode();
+}
+
+// ── 验证码重发倒计时 ──────────────────────────────────────────
+// 模板只在 route() 渲染时算一次 resendLeft，定时器每秒刷新按钮 DOM，
+// 到点切为可点击，避免整页重渲染闪烁。
+function startVerifyCountdown() {
+  if (window.verifyTimer) clearInterval(window.verifyTimer);
+  const tick = () => {
+    const btn = document.querySelector('[data-action="loginResendCode"]');
+    if (!btn) { clearInterval(window.verifyTimer); window.verifyTimer = null; return; }
+    const left = Math.max(0, Math.ceil((state.loginResendAt - Date.now()) / 1000));
+    if (left > 0) {
+      btn.disabled = true;
+      btn.textContent = `重新发送 (${left}s)`;
+    } else {
+      btn.disabled = false;
+      btn.textContent = '重新发送验证码';
+      clearInterval(window.verifyTimer);
+      window.verifyTimer = null;
+    }
+  };
+  tick();
+  window.verifyTimer = setInterval(tick, 1000);
+}
+
+function stopVerifyCountdown() {
+  if (window.verifyTimer) { clearInterval(window.verifyTimer); window.verifyTimer = null; }
 }
 
 async function submitVerifyCode() {
@@ -1254,16 +1282,13 @@ async function submitVerifyCode() {
 }
 
 async function resendVerifyCode() {
-  if (Date.now() < state.loginResendAt) {
-    const left = Math.ceil((state.loginResendAt - Date.now()) / 1000);
-    return notify(`请 ${left} 秒后再重发`);
-  }
   try {
     const { response, data } = await postJson('/api/auth/resend-code', { email: state.loginVerifyEmail });
     if (!response.ok) return notify(data.error || '重发失败');
     state.loginResendAt = Date.now() + 60 * 1000;
     notify('验证码已重新发送');
     route();
+    startVerifyCountdown();
   } catch {
     notify('网络异常，请稍后重试');
   }
@@ -1309,42 +1334,28 @@ function loginPage() {
   const passwordType = state.loginPasswordVisible ? 'text' : 'password';
   shell(`
     <div class="login-page">
-      <div class="login-card">
-        <aside class="login-brand">
+      <section class="login-card login-card-reference">
+        <aside class="login-brand-reference">
           <a class="login-logo" href="/" aria-label="ichuhai 首页"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /></a>
-          <div class="login-hero-art" aria-hidden="true">
-            <span class="login-art-bubble bubble-one"></span>
-            <span class="login-art-bubble bubble-two"></span>
-            <span class="login-art-prism prism-one"></span>
-            <span class="login-art-prism prism-two"></span>
-            <span class="login-art-cube"><i></i><b></b></span>
+          <div class="login-brand-copy">
+            <h1>数字产品，轻松拥有</h1>
+            <p>自动发货 · 安全可靠 · 专业服务</p>
           </div>
-          <h1 class="login-title">一站式获取<span>全球数字商品</span></h1>
-          <p class="login-subtitle">ChatGPT、Claude、礼品卡一站式购买</p>
-          <div class="login-features">
-            ${features.map((f) => `
-              <article class="login-feature">
-                <span class="login-feature-icon">${lineIcon(f.icon, f.title, 'login-icon')}</span>
-                <b>${f.title}</b>
-                <small>${f.desc}</small>
-              </article>`).join('')}
-          </div>
-          <div class="login-flow">
-            <h2>只需三步，开启您的数字商品之旅</h2>
-            <div class="login-flow-steps">
-              ${steps.map((s, i) => `
-                ${i ? '<span class="login-flow-arrow">→</span>' : ''}
-                <div class="login-flow-step">
-                  <span class="login-flow-index">${i + 1}</span>
-                  <span class="login-flow-icon">${lineIcon(s.icon, s.title, 'login-icon')}</span>
-                  <b>${s.title}</b>
-                  <small>${s.desc}</small>
-                </div>`).join('')}
-            </div>
+          <div class="login-shop-art" aria-hidden="true">
+            <span class="login-bag"><i></i></span>
+            <span class="login-float login-float-discord">${icon('discord')}</span>
+            <span class="login-float login-float-spotify">${icon('spotify')}</span>
+            <span class="login-float login-float-youtube">${icon('youtube')}</span>
+            <span class="login-float login-float-steam">${icon('steam')}</span>
+            <span class="login-float login-float-office">${icon('office')}</span>
           </div>
         </aside>
         <section class="login-form">
           ${state.loginStep === 'verify' ? loginVerifySection() : `
+          <div class="login-form-title">
+            <h1>${isRegister ? '创建账号' : '欢迎回来'}</h1>
+            <p>登录后查看订单、余额和自动发货内容。</p>
+          </div>
           <div class="login-tabs" role="tablist">
             <button class="login-tab ${isRegister ? '' : 'active'}" data-action="switchAuthMode" data-mode="login" type="button">登录</button>
             <button class="login-tab ${isRegister ? 'active' : ''}" data-action="switchAuthMode" data-mode="register" type="button">创建账号</button>
@@ -1385,7 +1396,7 @@ function loginPage() {
               : '还没有账号? <button data-action="switchAuthMode" data-mode="register" type="button">立即创建</button>'}
           </div>`}
         </section>
-      </div>
+      </section>
       <div class="login-footer">
         <a class="login-back" href="/">← 返回 ichuhai 首页</a>
         <p class="login-trust">${lineIcon('shield-check', '安全', 'login-trust-icon')} 安全 · 快速 · 可靠</p>
@@ -2460,7 +2471,7 @@ async function success(id) {
       </section>
       <section class="glass panel next-actions">
         <h3>后续操作</h3>
-        <a href="/orders/lookup">查看订单详情</a><a href="/">再次购买</a><a href="/orders/lookup">前往订单查询</a><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
+        <a href="/account">查看订单详情</a><a href="/">再次购买</a><a href="/account">前往个人中心</a><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系支持</a>
       </section>
     </section>
     <section class="glass bottom-help"><span>关于保质期<br/><b>查看保质期说明 ›</b></span><span>售后咨询<br/><b>提交工单 / 联系支持 ›</b></span><span>常见问题<br/><b>访问 FAQ ›</b></span></section>
@@ -2492,7 +2503,7 @@ async function orderDetail(id) {
         </div>
         <div class="pro-hero-actions">
           <a class="primary small link-button" href="${action.href}">${action.label}</a>
-          <a class="secondary" href="/orders/lookup">返回查询</a>
+          <a class="secondary" href="/account">返回个人中心</a>
         </div>
       </header>
 
@@ -2572,8 +2583,8 @@ async function lookup() {
       <header class="pro-hero lookup-hero">
         <div>
           <span class="pro-kicker">Order Service</span>
-          <h1>订单查询与异常处理</h1>
-          <p>用订单号、邮箱或 TxID 找回订单；查询结果可直接继续支付、查看发货或提交售后。</p>
+          <h1>个人中心订单与售后</h1>
+          <p>用订单号、邮箱或 TxID 查看订单；查询结果可直接继续支付、查看发货或提交售后。</p>
         </div>
         <div class="pro-hero-actions">
           <a class="secondary" href="/account">返回个人中心</a>
@@ -2638,7 +2649,7 @@ function orderItem(order, detail = false) {
 }
 
 function orderPrimaryAction(order) {
-  if (!order) return { label: '查看详情', href: '#/orders/lookup', tone: 'neutral' };
+  if (!order) return { label: '查看详情', href: '/account', tone: 'neutral' };
   if (['created', 'pending_payment', 'payment_confirming'].includes(order.status)) return { label: '继续支付', href: `/pay/${order.id}`, tone: 'warning' };
   if (['paid', 'delivering'].includes(order.status)) return { label: '查看发货', href: `/order/${order.id}`, tone: 'info' };
   if (order.status === 'completed') return { label: '查看交付', href: `/order/${order.id}`, tone: 'success' };
@@ -2997,7 +3008,7 @@ function account() {
           <div class="console-actions">
             <a class="primary account-login" href="/login">${navIcon('A07_user_login.png', '登录')} 邮箱登录</a>
             <a class="secondary" href="/login">创建账号</a>
-            <a class="secondary" href="/orders/lookup">找回订单</a>
+            <a class="secondary" href="/account">查看订单</a>
           </div>
         </div>
         <div class="account-guest-modules">
@@ -3049,7 +3060,7 @@ function accountEmptyOrders() {
     <div class="account-empty">
       <b>当前账号暂无订单</b>
       <span>购买后订单会自动出现在这里；如果你在其他设备下过单，可用订单号和邮箱找回。</span>
-      <div><a class="primary small link-button" href="/products">去选购商品</a><a class="secondary link-button" href="/orders/lookup">找回订单</a></div>
+      <div><a class="primary small link-button" href="/products">去选购商品</a><a class="secondary link-button" href="/account">查看订单</a></div>
     </div>
   `;
 }
@@ -3636,7 +3647,7 @@ function faq() {
           <div class="faq-support-card">
             <span>找不到答案？</span>
             <p>保留订单号、支付截图或收货信息，在线客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
-            <a class="primary small" href="/orders/lookup">查询订单</a>
+            <a class="primary small" href="/account">查询订单</a>
           </div>
         </aside>
         <div class="faq-content">
@@ -3808,7 +3819,7 @@ async function route() {
     ['/products', () => productsPage()],
     ['/cart', () => cartPage()],
     ['/checkout', () => checkout()],
-    ['/orders/lookup', () => lookup()],
+    ['/orders/lookup', () => account()],
     ['/account', () => account()],
     ['/login', () => loginPage()],
     ['/admin', () => renderAdmin()],
@@ -3897,6 +3908,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'loginForgot') { return notify('忘记密码将通过邮箱验证码重置，接口接入后启用。'); }
   if (action === 'loginResendCode') { return resendVerifyCode(); }
   if (action === 'loginBackToForm') {
+    stopVerifyCountdown();
     state.loginStep = 'form';
     state.loginVerifyCode = '';
     state.loginBusy = false;

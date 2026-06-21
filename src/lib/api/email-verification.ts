@@ -28,14 +28,16 @@ interface VerificationRow {
 }
 
 /**
- * 签发验证码并发信。返回 { ok } 或在节流时抛错。
- * dev 模式（无 Resend 且 MailChannels 失败）会把验证码记到日志。
+ * 签发验证码并发信。
+ * - 节流命中：返回 { ok: false, throttledSeconds }
+ * - 发信失败（配置了 Resend 但 API 报错）：返回 { ok: false, sendError }
+ * - dev 模式（无 Resend 且 MailChannels 失败）会把验证码记到日志，仍算成功。
  */
 export async function issueVerificationCode(
   db: D1Database,
   email: string,
   env: CloudflareEnv
-): Promise<{ ok: boolean; throttledSeconds?: number }> {
+): Promise<{ ok: boolean; throttledSeconds?: number; sendError?: string }> {
   const normalized = email.toLowerCase();
 
   // 节流：60 秒内不可重复发送
@@ -72,7 +74,14 @@ export async function issueVerificationCode(
     .bind(crypto.randomUUID(), normalized, codeHash, expiresAt)
     .run();
 
-  await sendVerificationEmail(normalized, code, env);
+  const sendResult = await sendVerificationEmail(normalized, code, env);
+  // dev-log（本地联调降级）视为成功；其他 provider 失败需透出，避免"提示已发送但收不到"。
+  if (!sendResult.ok && sendResult.provider !== "dev-log") {
+    console.warn(
+      `[email] 验证码发信失败 to=${normalized} provider=${sendResult.provider} error=${sendResult.error}`
+    );
+    return { ok: false, sendError: sendResult.error || "发信失败" };
+  }
   return { ok: true };
 }
 

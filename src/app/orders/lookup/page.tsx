@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AppRouteShell } from "../../route-shell";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "订单查询",
+  title: "个人中心",
   robots: {
     index: false,
     follow: false,
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function OrderLookupPage() {
-  return <AppRouteShell title="订单查询" />;
+  redirect("/account");
 }

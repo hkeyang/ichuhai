@@ -1,5 +1,5 @@
 // src/lib/api/mailer.ts
-// MailChannels 发信封装
+// Resend / MailChannels 发信封装
 
 import type { OrderRow } from "./types";
 
@@ -21,6 +21,31 @@ export async function sendMail(
   options: MailOptions,
   env: CloudflareEnv
 ): Promise<MailResult> {
+  if (env.RESEND_API_KEY) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: `ichuhai <${env.MAIL_FROM || "noreply@ichuhai.shop"}>`,
+        to: [options.to],
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+      }),
+    });
+
+    if (response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { id?: string };
+      return { ok: true, provider: "resend", messageId: data.id ?? `resend_${Date.now()}` };
+    }
+
+    const errorText = await response.text().catch(() => "resend error");
+    return { ok: false, provider: "resend", messageId: null, error: errorText };
+  }
+
   const response = await fetch("https://api.mailchannels.net/tx/v1/send", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -74,30 +99,6 @@ export async function sendVerificationEmail(
     <p style="font-size:30px;font-weight:800;letter-spacing:6px;color:#4F7CFF;margin:18px 0">${code}</p>
     <p style="color:#64708B">验证码 5 分钟内有效。如果不是您本人操作，请忽略本邮件。</p>
   </div>`;
-
-  // 优先使用 Resend HTTP API（Cloudflare Workers 可用）
-  if (env.RESEND_API_KEY) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: `ichuhai <${env.MAIL_FROM || "noreply@ichuhai.shop"}>`,
-        to: [to],
-        subject,
-        text,
-        html,
-      }),
-    });
-    if (response.ok) {
-      const data = (await response.json().catch(() => ({}))) as { id?: string };
-      return { ok: true, provider: "resend", messageId: data.id ?? `resend_${Date.now()}` };
-    }
-    const errorText = await response.text().catch(() => "resend error");
-    return { ok: false, provider: "resend", messageId: null, error: errorText };
-  }
 
   // 未配置 Resend：降级走 MailChannels（生产可能已失效），仍失败则记日志，便于本地联调。
   const fallback = await sendMail({ to, subject, text, html }, env);

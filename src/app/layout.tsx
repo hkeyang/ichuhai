@@ -18,13 +18,13 @@ export const metadata = {
     locale: 'zh_CN',
     siteName: 'ichuhai',
     title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
-    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、订单查询与售后处理。',
+    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、个人中心订单管理与售后处理。',
     images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ichuhai - 全球数字商品 USDT 支付与自动发货商城',
-    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、订单查询与售后处理。',
+    description: '购买数字商品，支持 USDT TRC20 支付、自动发货、个人中心订单管理与售后处理。',
     images: ['/assets/brand/logo/ichuhai-logo-horizontal-color.png']
   },
   icons: {
@@ -44,7 +44,7 @@ const bootScript = `(function(){var d=document.documentElement;d.classList.add('
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className="app-booting" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: bootScript }} />
         {children}
