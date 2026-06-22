@@ -141,10 +141,10 @@ const seed = {
     { id: 'ms-family', productId: 'microsoft-365', optionValues: { plan: '家庭版' }, priceUsdt: '8.80', stockStatus: 'in_stock', deliveryType: 'auto' }
   ],
   paymentNetworks: [
-    { id: 'net_tron', code: 'TRON', displayName: 'TRON', tokenStandard: 'TRC20', isEnabled: true, isRecommended: true, address: 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ', confirmations: 1 },
-    { id: 'net_eth', code: 'ETH', displayName: 'ETH', tokenStandard: 'ERC20', isEnabled: true, isRecommended: false, address: '0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001', confirmations: 12 },
-    { id: 'net_bsc', code: 'BSC', displayName: 'BSC', tokenStandard: 'BEP20', isEnabled: true, isRecommended: false, address: '0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002', confirmations: 15 },
-    { id: 'net_base', code: 'BASE', displayName: 'BASE', tokenStandard: 'ERC20', isEnabled: true, isRecommended: false, address: '0xBA5E000000000000000000000000000000000001', confirmations: 12 }
+    { id: 'net_tron', code: 'TRON', displayName: 'TRON', tokenStandard: 'TRC20', isEnabled: true, isRecommended: true, address: 'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6', confirmations: 3 },
+    { id: 'net_eth', code: 'ETH', displayName: 'ETH', tokenStandard: 'ERC20', isEnabled: false, isRecommended: false, address: '0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001', confirmations: 12 },
+    { id: 'net_bsc', code: 'BSC', displayName: 'BSC', tokenStandard: 'BEP20', isEnabled: false, isRecommended: false, address: '0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002', confirmations: 15 },
+    { id: 'net_base', code: 'BASE', displayName: 'BASE', tokenStandard: 'ERC20', isEnabled: false, isRecommended: false, address: '0xBA5E000000000000000000000000000000000001', confirmations: 12 }
   ],
   exchangeRates: { USD: '1', CNY: '7.22', GBP: '0.79', EUR: '0.93', AUD: '1.52', JPY: '155', HKD: '7.82', KRW: '1360' },
   users: [],
@@ -794,7 +794,11 @@ async function api(req, res, url) {
     const input = await body(req);
     for (const key of ['address', 'isEnabled', 'isRecommended', 'confirmations', 'warningText']) {
       if (input[key] === undefined) continue;
-      if (key === 'address') network[key] = cleanString(input[key], key, { max: 120, pattern: /^[a-zA-Z0-9]+$/ });
+      if (key === 'address') {
+        const address = cleanString(input[key], key, { max: 120, pattern: /^[a-zA-Z0-9]+$/ });
+        if (network.code === 'TRON' && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)) throw new HttpError(422, 'TRON address is invalid');
+        network[key] = address;
+      }
       if (key === 'isEnabled' || key === 'isRecommended') network[key] = Boolean(input[key]);
       if (key === 'confirmations') {
         const confirmations = Number(input[key]);

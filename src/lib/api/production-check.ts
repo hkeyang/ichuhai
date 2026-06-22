@@ -12,13 +12,14 @@
 export function requireProductionConfig(env: CloudflareEnv): void {
   if (env.NODE_ENV !== "production") return;
 
+  const tronEnv = env as CloudflareEnv & { TRON_GRID_API_KEY?: string; Trongrid?: string };
+  const tronGridApiKey = tronEnv.TRON_GRID_API_KEY || tronEnv.Trongrid || "";
   const checks: [string, number][] = [
     ["ADMIN_USERNAME", 3],
     ["ADMIN_PASSWORD", 12],
     ["ADMIN_SESSION_SECRET", 32],
     ["INTERNAL_API_SECRET", 32],
     ["INVENTORY_ENCRYPTION_KEY", 32],
-    ["TRON_GRID_API_KEY", 16],
   ];
 
   const missing = checks
@@ -32,6 +33,10 @@ export function requireProductionConfig(env: CloudflareEnv): void {
     throw new Error(
       `Missing or weak production secrets: ${missing.join(", ")}`
     );
+  }
+
+  if (tronGridApiKey.length < 16) {
+    throw new Error("Missing or weak production secrets: TRON_GRID_API_KEY");
   }
 
   if (env.ADMIN_PASSWORD === "admin") {

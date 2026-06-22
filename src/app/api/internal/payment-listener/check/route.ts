@@ -68,12 +68,13 @@ export async function POST(request: Request) {
     }
 
     const minCreatedAt = Math.min(...results.map((order) => new Date(order.created_at).getTime()));
-    const tronEnv = cloudflareEnv as CloudflareEnv & { TRON_GRID_API_KEY?: string };
+    const tronEnv = cloudflareEnv as CloudflareEnv & { TRON_GRID_API_KEY?: string; Trongrid?: string };
+    const tronGridApiKey = tronEnv.TRON_GRID_API_KEY || tronEnv.Trongrid || "";
     let transfers: Awaited<ReturnType<typeof fetchTronUsdtTransfers>>;
     try {
       transfers = await fetchTronUsdtTransfers({
         address: network.address,
-        apiKey: tronEnv.TRON_GRID_API_KEY,
+        apiKey: tronGridApiKey,
         minTimestamp: Number.isFinite(minCreatedAt) ? minCreatedAt : Date.now() - 30 * 60 * 1000,
         limit: 200,
       });

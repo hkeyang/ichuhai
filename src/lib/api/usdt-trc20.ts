@@ -1,6 +1,7 @@
 import type { OrderRow, PaymentNetworkRow } from "./types";
 
 export const TRON_USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+export const DEFAULT_TRON_USDT_ADDRESS = "TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6";
 export const PAYMENT_AMOUNT_SCALE = 1000;
 export const DEFAULT_PAYMENT_EXPIRY_MINUTES = 15;
 export const DEFAULT_PAYMENT_GRACE_MINUTES = 5;
@@ -26,6 +27,11 @@ export interface TronGridTransfer {
 
 export function normalizeTronAddress(value: string | null | undefined): string {
   return String(value || "").trim();
+}
+
+export function isValidTronAddressFormat(value: string | null | undefined): boolean {
+  const address = normalizeTronAddress(value);
+  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
 }
 
 export function amountToUnits(value: string | number, scale = PAYMENT_AMOUNT_SCALE): number {

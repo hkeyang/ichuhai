@@ -6483,6 +6483,11 @@ body {
   color: #64748b;
   font-size: 11px;
 }
+.admin-nav-svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
 .admin-page .admin-nav button.active {
   color: #fff;
   background: linear-gradient(135deg, #4f46e5, #2563eb);
@@ -6877,6 +6882,16 @@ body {
 .admin-form .admin-field-wide {
   grid-column: 1 / -1;
 }
+.admin-payment-address-form .admin-field-wide {
+  grid-column: span 2;
+}
+.admin-form-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 18px;
+}
 .admin-form .checkline {
   display: flex;
   align-items: center;
@@ -6895,6 +6910,57 @@ body {
   justify-content: flex-end;
   gap: 8px;
   min-width: max-content;
+}
+
+@media (max-width: 1180px) {
+  .admin-topbar {
+    grid-template-columns: minmax(160px, 1fr) minmax(220px, 1fr) auto;
+  }
+  .admin-account,
+  .admin-icon-button {
+    display: none;
+  }
+  .admin-toolbar,
+  .admin-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-toolbar-actions,
+  .admin-form-actions {
+    justify-content: start;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .admin-page .admin-shell {
+    grid-template-columns: 1fr;
+  }
+  .admin-page .admin-nav {
+    position: relative;
+    height: auto;
+  }
+  .admin-nav nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-main {
+    grid-template-rows: auto 1fr;
+  }
+  .admin-topbar {
+    position: relative;
+    grid-template-columns: 1fr;
+    padding: 14px 16px;
+  }
+  .admin-content {
+    padding: 18px 16px 36px;
+  }
+  .admin-toolbar,
+  .admin-form,
+  .admin-section-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-payment-address-form .admin-field-wide {
+    grid-column: 1 / -1;
+  }
 }
 .admin-editor-layout {
   display: grid;

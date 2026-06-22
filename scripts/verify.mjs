@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const requiredFiles = ['index.html', 'styles.css', 'app.js', 'RUNBOOK.md', '.env.example', 'scripts/smoke.mjs', 'scripts/security-check.mjs', 'COMPLETION_AUDIT.md'];
+const requiredFiles = ['index.html', 'styles.css', 'app.js', 'RUNBOOK.md', '.env.example', 'scripts/smoke.mjs', 'scripts/security-check.mjs', 'scripts/usdt-trc20-mock-test.mjs', 'COMPLETION_AUDIT.md'];
 for (const file of requiredFiles) readFileSync(file, 'utf8');
 
 const html = readFileSync('index.html', 'utf8');
@@ -11,6 +11,7 @@ const plan = readFileSync('PRODUCT_PLAN.md', 'utf8');
 const report = readFileSync('ACCEPTANCE_REPORT.md', 'utf8');
 const runbook = readFileSync('RUNBOOK.md', 'utf8');
 const smoke = readFileSync('scripts/smoke.mjs', 'utf8');
+const paymentMockTest = readFileSync('scripts/usdt-trc20-mock-test.mjs', 'utf8');
 const securityCheck = readFileSync('scripts/security-check.mjs', 'utf8');
 const audit = readFileSync('COMPLETION_AUDIT.md', 'utf8');
 const visualAuditScript = readFileSync('scripts/visual-audit.mjs', 'utf8');
@@ -57,6 +58,7 @@ const checks = [
   ['runbook', runbook.includes('本地启动') && runbook.includes('生产接入顺序')],
   ['smoke test', smoke.includes('/api/orders') && smoke.includes('/api/admin/deliveries')],
   ['security check', securityCheck.includes('untrusted origin') && securityCheck.includes('inventory should be stored as versioned encrypted payload')],
+  ['usdt trc20 mock test', paymentMockTest.includes('tx_exact') && paymentMockTest.includes('underpaid') && paymentMockTest.includes('duplicate_tx')],
   ['visual audit script', visualAuditScript.includes('01.png') && visualAuditScript.includes('05.png')],
   ['completion audit', audit.includes('目标拆解') && audit.includes('未完成或弱验证项')]
 ];

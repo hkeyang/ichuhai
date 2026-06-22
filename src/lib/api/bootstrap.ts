@@ -177,7 +177,7 @@ INSERT OR IGNORE INTO skus (id, product_id, option_values, price_usdt, stock_sta
   ('ms-personal','microsoft-365','{"plan":"个人版"}','3.50','in_stock','auto',1),
   ('ms-family','microsoft-365','{"plan":"家庭版"}','8.80','in_stock','auto',0);
 INSERT OR IGNORE INTO payment_networks (id, code, display_name, token_standard, is_enabled, is_recommended, address, confirmations) VALUES
-  ('net_tron','TRON','TRON','TRC20',1,1,'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',3),
+  ('net_tron','TRON','TRON','TRC20',1,1,'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6',3),
   ('net_eth','ETH','ETH','ERC20',0,0,'0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001',12),
   ('net_bsc','BSC','BSC','BEP20',0,0,'0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002',15),
   ('net_base','BASE','USDC Base','Base',0,0,'0xBA5E000000000000000000000000000000000001',12);
@@ -494,6 +494,7 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await ensureUsersEmailSchema(db);
 
   await db.prepare("UPDATE payment_networks SET is_enabled = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, is_recommended = CASE WHEN code = 'TRON' THEN 1 ELSE 0 END, confirmations = CASE WHEN code = 'TRON' THEN 3 ELSE confirmations END, updated_at = datetime('now')").run();
+  await db.prepare("UPDATE payment_networks SET address = 'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6', updated_at = datetime('now') WHERE code = 'TRON' AND address = 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ'").run();
 }
 
 /**

@@ -31,7 +31,7 @@ INSERT OR IGNORE INTO skus (id, product_id, option_values, price_usdt, stock_sta
 
 -- 支付网络（4条）
 INSERT OR IGNORE INTO payment_networks (id, code, display_name, token_standard, is_enabled, is_recommended, address, confirmations) VALUES
-  ('net_tron', 'TRON', 'TRON', 'TRC20', 1, 1, 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',              1),
+  ('net_tron', 'TRON', 'TRON', 'TRC20', 1, 1, 'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6',              3),
   ('net_eth',  'ETH',  'ETH',  'ERC20', 1, 0, '0x7fE9A4b11cE5A9E2fA40eB3fA2465d9E4c07F001',       12),
   ('net_bsc',  'BSC',  'BSC',  'BEP20', 1, 0, '0xB35b2C2f9B5f3A7D61d5b3f82D82d9a89Ce7b002',       15),
   ('net_base', 'BASE', 'BASE', 'ERC20', 1, 0, '0xBA5E000000000000000000000000000000000001',         12);

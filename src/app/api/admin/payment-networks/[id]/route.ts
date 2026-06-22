@@ -7,8 +7,10 @@ import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
+import { writeAuditLog } from "@/lib/api/audit";
 import { cleanString } from "@/lib/api/validators";
 import { formatPaymentNetwork } from "@/lib/api/formatters";
+import { isValidTronAddressFormat } from "@/lib/api/usdt-trc20";
 import type { PaymentNetworkRow } from "@/lib/api/types";
 
 export async function OPTIONS(request: Request) {
@@ -59,8 +61,12 @@ export async function PATCH(
       values.push(cleanString(body.displayName, "displayName", { max: 80 }));
     }
     if (body.address !== undefined) {
+      const nextAddress = cleanString(body.address, "address", { max: 200 });
+      if (existing.code === "TRON" && !isValidTronAddressFormat(nextAddress)) {
+        throw new HttpError(422, "TRON address is invalid");
+      }
       fields.push("address = ?");
-      values.push(cleanString(body.address, "address", { max: 200 }));
+      values.push(nextAddress);
     }
     if (body.isEnabled !== undefined) {
       fields.push("is_enabled = ?");
@@ -106,6 +112,21 @@ export async function PATCH(
       .prepare("SELECT * FROM payment_networks WHERE id = ?")
       .bind(existing.id)
       .first<PaymentNetworkRow>();
+
+    await writeAuditLog(
+      db,
+      request,
+      { actorId: "admin", role: "admin" },
+      "payment_network.update",
+      "payment_network",
+      existing.id,
+      {
+        code: existing.code,
+        changedFields: Object.keys(body),
+        previousAddress: body.address !== undefined ? existing.address : undefined,
+        nextAddress: body.address !== undefined ? updated?.address : undefined,
+      }
+    );
 
     return jsonResponse(updated ? formatPaymentNetwork(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {

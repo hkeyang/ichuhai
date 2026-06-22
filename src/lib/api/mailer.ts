@@ -21,12 +21,14 @@ export async function sendMail(
   options: MailOptions,
   env: CloudflareEnv
 ): Promise<MailResult> {
-  if (env.RESEND_API_KEY) {
+  const envAliases = env as CloudflareEnv & { Resend?: string; Resend2?: string };
+  const resendApiKey = env.RESEND_API_KEY || envAliases.Resend || envAliases.Resend2 || "";
+  if (resendApiKey) {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        authorization: `Bearer ${resendApiKey}`,
       },
       body: JSON.stringify({
         from: `ichuhai <${env.MAIL_FROM || "noreply@ichuhai.shop"}>`,

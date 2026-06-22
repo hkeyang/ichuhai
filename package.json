@@ -20,6 +20,7 @@
     "worker:payments": "node workers/payment-listener.mjs",
     "worker:orders": "node workers/order-maintenance.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "test:payments": "node scripts/usdt-trc20-mock-test.mjs",
     "visual:audit": "node scripts/visual-audit.mjs",
     "verify": "node scripts/verify.mjs",
     "security:check": "node scripts/security-check.mjs"

@@ -433,6 +433,7 @@ const state = {
 const app = document.querySelector('#app');
 const toast = document.querySelector('#toast');
 let productSearchTimer = null;
+let adminFilterTimer = null;
 
 function money(usdt, currency = state.fiatCurrency) {
   const c = CURRENCIES[currency] || CURRENCIES.CNY;
@@ -2467,7 +2468,7 @@ function createLocalOrder(item, sku) {
     fiatAmount: money(amount),
     paymentMethod: state.paymentMethod,
     paymentNetwork: 'TRON',
-    paymentAddress: 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',
+    paymentAddress: 'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6',
     payAmount: remainder || amount,
     payCurrency: 'USDT',
     balanceUsed,
@@ -2677,7 +2678,7 @@ function demoOrder() {
     fiatCurrency: state.fiatCurrency,
     fiatAmount: money(sku.priceUsdt),
     paymentNetwork: 'TRON',
-    paymentAddress: 'TXL8d1e7hVKZy8vY8g9a6n3sJX4mP6u6wJ',
+    paymentAddress: 'TPPHD2bUCbRLEt7aBMRoWQbD3aY69NnEe6',
     status: 'pending_payment',
     deliveryType: 'auto',
     createdAt: new Date().toISOString(),
@@ -3512,7 +3513,7 @@ async function renderAdmin() {
     <section class="admin-shell">
       <aside class="admin-nav">
         <a class="admin-brand" href="/admin"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营后台</span></a>
-        <nav>${adminMenu().map((item) => `<button class="${tab === item.key ? 'active' : ''}" data-action="adminTab" data-tab="${item.key}" type="button"><span>${item.icon}</span>${item.label}</button>`).join('')}</nav>
+        <nav>${adminMenu().map((item) => `<button class="${tab === item.key ? 'active' : ''}" data-action="adminTab" data-tab="${item.key}" type="button"><span>${lineIcon(item.icon, item.label, 'admin-nav-svg')}</span>${item.label}</button>`).join('')}</nav>
       </aside>
       <section class="admin-main">
         <header class="admin-topbar">
@@ -3530,19 +3531,19 @@ async function renderAdmin() {
 
 function adminMenu() {
   return [
-    { key: 'dashboard', label: '运营看板', icon: '⌘' },
-    { key: 'products', label: '商品中心', icon: '品' },
-    { key: 'inventory', label: '库存中心', icon: '库' },
-    { key: 'orders', label: '订单中心', icon: '单' },
-    { key: 'payments', label: '支付中心', icon: '付' },
-    { key: 'delivery', label: '发货中心', icon: '发' },
-    { key: 'support', label: '售后中心', icon: '售' },
-    { key: 'users', label: '用户中心', icon: '客' },
-    { key: 'content', label: '内容中心', icon: '文' },
-    { key: 'marketing', label: '营销中心', icon: '销' },
-    { key: 'notifications', label: '通知中心', icon: '知' },
-    { key: 'system', label: '系统设置', icon: '设' },
-    { key: 'audit', label: '审计日志', icon: '审' }
+    { key: 'dashboard', label: '运营看板', icon: 'all' },
+    { key: 'products', label: '商品中心', icon: 'package' },
+    { key: 'inventory', label: '库存中心', icon: 'gift' },
+    { key: 'orders', label: '订单中心', icon: 'receipt' },
+    { key: 'payments', label: '支付中心', icon: 'wallet' },
+    { key: 'delivery', label: '发货中心', icon: 'lightning' },
+    { key: 'support', label: '售后中心', icon: 'headset' },
+    { key: 'users', label: '用户中心', icon: 'user' },
+    { key: 'content', label: '内容中心', icon: 'mail' },
+    { key: 'marketing', label: '营销中心', icon: 'card' },
+    { key: 'notifications', label: '通知中心', icon: 'bell' },
+    { key: 'system', label: '系统设置', icon: 'shield-check' },
+    { key: 'audit', label: '审计日志', icon: 'check-circle' }
   ];
 }
 
@@ -3930,7 +3931,7 @@ function adminContent(tab) {
     const providerBanner = `<div class="admin-risk-callout"><b>当前支付通道：USDT TRC20 直付</b><span>新订单使用固定 TRON 收款地址、三位小数尾差和 TronGrid 轮询自动确认。</span></div>`;
     let body = '';
     if (sub === 'addresses') {
-      body = `${providerBanner}<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '最近到账' }, { label: '操作人' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), adminNetworkCollectionMethod(n), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), '-', 'admin', '<button type="button">二次确认修改</button><button data-action="adminTab" data-tab="audit" type="button">日志</button>']), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
+      body = `${providerBanner}<div class="admin-panel"><div class="admin-section-title"><h2>USDT TRC20 收款配置</h2><span>固定地址收款，订单通过精确金额自动匹配。</span></div>${adminPaymentAddressForm(networkList)}${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '确认数' }, { label: '操作人' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), adminNetworkCollectionMethod(n), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), n.confirmations || 3, 'admin', '<button data-action="adminSubTab" data-tab="payments" data-subtab="addresses" type="button">修改地址</button><button data-action="adminTab" data-tab="audit" type="button">日志</button>']), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
     } else if (sub === 'transactions') {
       body = `<div class="admin-panel">${adminActionForm('paymentTransaction.create', [['txHash','交易 Hash'], ['network','网络','text','TRON'], ['toAddress','收款地址'], ['amount','到账金额'], ['orderNo','绑定订单号'], ['matchStatus','匹配状态','text','manual_confirm'], ['note','处理备注']], '记录到账交易')}${adminTable([{ label: 'Hash', width: '1.8fr' }, { label: '网络' }, { label: '金额' }, { label: '付款地址' }, { label: '收款地址' }, { label: '匹配订单' }, { label: '状态' }, { label: '检测时间' }, { label: '操作' }], (ops.paymentTransactions || []).map((t) => [`<b>${escapeHtml(t.txHash)}</b>`, escapeHtml(t.network), `${escapeHtml(t.amount)} ${escapeHtml(t.token || 'USDT')}`, escapeHtml(t.fromAddress || '-'), escapeHtml(t.toAddress || '-'), escapeHtml(t.matchedOrderNo || t.orderNo || '未绑定'), adminStatus(t.matchStatus || 'unmatched', adminToneFromStatus(t.matchStatus)), timeFrom(t.detectedAt || t.createdAt), '<button type="button">绑定订单</button>']), { title: '暂无监听交易', desc: '链上监听或手动录入的到账交易会显示在这里。' })}</div>`;
     } else if (sub === 'exceptions') {
@@ -4171,6 +4172,30 @@ function adminNetworkCollectionMethod(network) {
   return network.code === 'TRON' ? escapeHtml(network.address || '-') : '未开放';
 }
 
+function isTronAddress(value) {
+  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(value || '').trim());
+}
+
+function adminPaymentAddressForm(networkList) {
+  const tron = networkList.find((n) => n.code === 'TRON') || networks.find((n) => n.code === 'TRON') || {};
+  const address = tron.address || '';
+  return `
+    <form class="admin-form admin-payment-address-form" data-action="adminPaymentAddress">
+      <label class="admin-field-wide">TRON 收款地址
+        <input name="address" value="${escapeHtml(address)}" placeholder="T 开头的 TRON 地址" autocomplete="off" />
+      </label>
+      <label>确认修改
+        <input name="confirmText" placeholder="输入 确认修改" autocomplete="off" />
+      </label>
+      <label>确认数
+        <input name="confirmations" type="number" min="1" max="20" value="${Number(tron.confirmations || 3)}" />
+      </label>
+      <div class="admin-form-actions"><button class="primary small" type="submit">保存收款地址</button></div>
+      <p class="admin-form-note">地址修改只影响新订单；旧订单继续使用创建时保存的地址。TronGrid Key 仍通过 Cloudflare 环境变量配置。</p>
+    </form>
+  `;
+}
+
 async function loadAdminData(force = false) {
   if (isAdminLocked() || state.adminData.loading || (state.adminData.loaded && !force)) return;
   state.adminData.loading = true;
@@ -4249,7 +4274,9 @@ document.addEventListener('input', (event) => {
   if (event.target.matches('[data-field]')) syncInputs();
   if (event.target.matches('[data-action="adminFilter"]')) {
     setAdminFilter(event.target.dataset.filterScope || adminFilterScope(), event.target.name, event.target.value);
-    return renderAdmin();
+    clearTimeout(adminFilterTimer);
+    adminFilterTimer = setTimeout(() => renderAdmin(), 220);
+    return;
   }
   if (event.target.matches('[data-action="searchProducts"]')) {
     state.searchQuery = event.target.value;
@@ -4685,6 +4712,26 @@ document.addEventListener('submit', async (event) => {
     if (local) Object.assign(local, updated);
     state.adminData.products = state.adminData.products.map((item) => (item.id === updated.id ? { ...item, ...updated } : item));
     notify('商品文案已保存');
+    return renderAdmin();
+  }
+  const paymentAddressForm = event.target.closest('[data-action="adminPaymentAddress"]');
+  if (paymentAddressForm) {
+    event.preventDefault();
+    const data = new FormData(paymentAddressForm);
+    const address = String(data.get('address') || '').trim();
+    const confirmText = String(data.get('confirmText') || '').trim();
+    const confirmations = Math.max(1, Math.floor(Number(data.get('confirmations') || 3)));
+    if (!isTronAddress(address)) return notify('请输入有效的 TRON 地址');
+    if (confirmText !== '确认修改') return notify('请在确认框输入：确认修改');
+    const response = await adminFetch('/api/admin/payment-networks/TRON', {
+      method: 'PATCH',
+      body: JSON.stringify({ address, confirmations })
+    });
+    const updated = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(updated.error || '收款地址保存失败');
+    syncLocalNetwork(networks.find((network) => network.code === 'TRON'), updated);
+    state.adminData.paymentNetworks = state.adminData.paymentNetworks.map((item) => (item.code === updated.code ? updated : item));
+    notify('USDT TRC20 收款地址已更新');
     return renderAdmin();
   }
   const form = event.target.closest('[data-action="adminOps"]');
