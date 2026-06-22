@@ -432,6 +432,7 @@ const state = {
 
 const app = document.querySelector('#app');
 const toast = document.querySelector('#toast');
+let productSearchTimer = null;
 
 function money(usdt, currency = state.fiatCurrency) {
   const c = CURRENCIES[currency] || CURRENCIES.CNY;
@@ -1722,7 +1723,7 @@ function productBrowser(full = false) {
       <div class="catalog-main">
         <div class="product-header">
           <div class="catalog-tools">
-            <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称或关键词" /></label>
+            <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${escapeHtml(state.searchQuery)}" placeholder="搜索商品名称或关键词" /></label>
             <label class="catalog-sort"><span class="sort-current">${escapeHtml(state.sortBy || '默认排序')}</span>${lineIcon('chevron', '展开排序', 'sort-chevron')}<select data-action="sortProducts" aria-label="排序"><option>默认排序</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
           </div>
         </div>
@@ -1739,6 +1740,14 @@ function productBrowser(full = false) {
       </div>
     </section>
   `;
+}
+
+function renderProductResults() {
+  const list = document.querySelector('.catalog-list');
+  if (!list) return route();
+  const full = !!document.querySelector('.catalog-shell.is-full');
+  const visible = visibleProducts(full);
+  list.innerHTML = visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>';
 }
 
 function purchaseFlow() {
@@ -4244,7 +4253,9 @@ document.addEventListener('input', (event) => {
   }
   if (event.target.matches('[data-action="searchProducts"]')) {
     state.searchQuery = event.target.value;
-    return route();
+    clearTimeout(productSearchTimer);
+    productSearchTimer = setTimeout(renderProductResults, 120);
+    return;
   }
   if (event.target.matches('[data-action="filterDelivery"]')) {
     state.deliveryFilter = event.target.value;

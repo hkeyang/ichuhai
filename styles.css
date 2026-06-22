@@ -13614,3 +13614,62 @@ textarea:focus {
     gap: 10px !important;
   }
 }
+
+/* Home catalog canvas alignment pass. */
+.catalog-list {
+  gap: 8px !important;
+}
+
+.catalog-card {
+  min-height: 92px !important;
+  align-items: center !important;
+  padding-block: 14px !important;
+}
+
+.catalog-card-media,
+.catalog-card-info,
+.catalog-card-price,
+.catalog-card-stock,
+.catalog-card .buy-button {
+  align-self: center !important;
+}
+
+.catalog-card-media {
+  justify-content: flex-start !important;
+}
+
+.catalog-card-info {
+  justify-content: center !important;
+  text-align: left !important;
+}
+
+.catalog-card-title,
+.catalog-tags {
+  justify-content: flex-start !important;
+}
+
+.catalog-card-price {
+  justify-items: start !important;
+  text-align: left !important;
+}
+
+.catalog-card-stock {
+  justify-items: start !important;
+  text-align: left !important;
+}
+
+.catalog-tools .search input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .catalog-card {
+    min-height: 0 !important;
+    padding-block: 12px !important;
+  }
+
+  .catalog-card-stock {
+    justify-self: start !important;
+  }
+}
