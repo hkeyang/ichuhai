@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppRouteShell } from "../route-shell";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "购物车",
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function CartPage() {
-  return <AppRouteShell title="购物车" />;
+  redirect("/products");
 }

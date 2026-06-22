@@ -10223,6 +10223,12 @@ body {
   color: var(--primary);
 }
 
+.catalog-side-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
 .catalog-category-list {
   display: grid;
   gap: 9px;
@@ -11831,4 +11837,382 @@ textarea {
 .catalog-category-list .category-tab em {
   flex: 0 0 auto !important;
   background: transparent !important;
+}
+
+/* 2026-06-22 purchase-flow simplification and alignment pass */
+.header-nav {
+  pointer-events: none;
+}
+
+.top-actions .cart {
+  display: none !important;
+}
+
+.catalog-page,
+.detail-page {
+  margin-top: 22px;
+}
+
+.catalog-main {
+  padding: 24px 28px 26px;
+}
+
+.product-header {
+  margin-bottom: 18px;
+}
+
+.product-title-block {
+  display: none !important;
+}
+
+.catalog-tools {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 178px;
+  gap: 14px;
+}
+
+.catalog-tools .search {
+  width: 100% !important;
+  height: 54px;
+  border-radius: 18px;
+}
+
+.catalog-sort {
+  position: relative;
+  min-width: 0;
+  width: 178px;
+  height: 54px;
+  justify-content: center;
+  border-radius: 18px;
+}
+
+.catalog-sort .sort-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.catalog-sort select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.catalog-card {
+  min-height: 102px;
+  grid-template-columns: 68px minmax(0, 1fr) 160px 106px 132px;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.catalog-card-media .product-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+.catalog-card-info {
+  gap: 5px;
+}
+
+.catalog-card-title b {
+  font-size: 16px;
+}
+
+.catalog-badge {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.catalog-card-spec {
+  color: #53617b;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.catalog-card-price .price-main {
+  font-size: 21px;
+}
+
+.catalog-card .buy-button {
+  min-height: 42px;
+  border: 1px solid rgba(79, 124, 255, .24);
+  background: rgba(79, 124, 255, .08);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.catalog-card:hover .buy-button,
+.catalog-card .buy-button.is-featured {
+  border-color: transparent;
+  background: var(--brand-gradient);
+  color: #fff;
+  box-shadow: 0 12px 22px rgba(79, 124, 255, .22);
+}
+
+.catalog-trust {
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(226, 232, 246, .75);
+  border-radius: 14px;
+  background: rgba(247, 249, 255, .62);
+}
+
+.catalog-trust-item {
+  gap: 9px;
+}
+
+.catalog-trust-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(79, 124, 255, .10);
+}
+
+.catalog-trust-copy b {
+  font-size: 13px;
+}
+
+.catalog-trust-copy small {
+  font-size: 11px;
+}
+
+.catalog-help-card {
+  gap: 10px;
+}
+
+.catalog-help-button.secondary {
+  background: rgba(255, 255, 255, .72);
+  color: #53617b;
+  box-shadow: none;
+}
+
+.product-detail-layout {
+  grid-template-columns: minmax(430px, .96fr) minmax(440px, 1fr);
+  gap: 22px;
+}
+
+.product-detail-visual {
+  gap: 12px;
+  padding: 22px;
+}
+
+.gallery-main {
+  min-height: 430px;
+}
+
+.gallery-art .product-icon {
+  width: 260px;
+  height: 260px;
+  border-radius: 58px;
+}
+
+.gallery-thumbs {
+  gap: 14px;
+}
+
+.gallery-thumb {
+  height: 74px;
+}
+
+.product-purchase-panel {
+  padding: 26px 28px;
+  gap: 18px;
+}
+
+.product-purchase-panel h1 {
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.detail-tags span,
+.delivery-chip,
+.catalog-badge,
+.admin-status,
+.mini-tags span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.detail-price-block {
+  align-items: center;
+  padding-bottom: 18px;
+}
+
+.detail-price-main {
+  display: grid;
+  gap: 5px;
+}
+
+.detail-price-main .price-main {
+  font-size: 34px;
+}
+
+.detail-price-main .price-fiat {
+  margin-top: 0;
+}
+
+.detail-spec-group {
+  gap: 8px;
+}
+
+.detail-spec-options {
+  gap: 10px;
+}
+
+.detail-spec-pill {
+  min-height: 48px;
+  min-width: 94px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 14px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.detail-spec-pill b {
+  font-size: 14px;
+}
+
+.detail-spec-pill small {
+  color: #8b97ad;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-payment-methods {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-payment-methods button,
+.payment-method-row button {
+  min-height: 58px;
+  align-items: center !important;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.detail-payment-methods button b,
+.payment-method-row button b {
+  font-size: 15px;
+}
+
+.detail-payment-methods button.is-disabled,
+.payment-method-row button.is-disabled {
+  opacity: .62;
+  cursor: not-allowed;
+}
+
+.detail-buy-button {
+  min-height: 52px;
+  border-radius: 18px;
+  box-shadow: 0 14px 26px rgba(79, 124, 255, .22);
+}
+
+.product-detail-info {
+  padding: 22px 26px;
+}
+
+.detail-info-text {
+  white-space: pre-line;
+}
+
+.admin-page button,
+.admin-tabs button,
+.admin-toolbar button,
+.admin-table button,
+.admin-pager button,
+.metric-grid button,
+.category-tab,
+.catalog-card .buy-button,
+.detail-buy-button,
+.catalog-help-button {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.admin-page button,
+.admin-tabs button,
+.admin-toolbar button,
+.admin-table button,
+.admin-pager button,
+.metric-grid button {
+  min-height: 34px;
+  line-height: 1.25;
+}
+
+.admin-table > div {
+  align-items: center;
+}
+
+.admin-data-table .admin-empty {
+  min-width: 0 !important;
+  width: 100%;
+  box-sizing: border-box;
+  justify-items: center;
+}
+
+.admin-page-head {
+  padding-bottom: 14px;
+}
+
+.admin-panel {
+  border-radius: 12px;
+}
+
+@media (max-width: 980px) {
+  .catalog-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-sort {
+    width: 100%;
+  }
+
+  .catalog-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .catalog-trust {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .catalog-main {
+    padding: 16px;
+  }
+
+  .catalog-card {
+    padding: 14px;
+  }
+
+  .catalog-card-price .price-main {
+    font-size: 19px;
+  }
+
+  .detail-payment-methods {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-trust {
+    grid-template-columns: 1fr;
+  }
 }

@@ -9,6 +9,11 @@ const CURRENCIES = {
   KRW: { label: '韩元', flag: '🇰🇷', symbol: '₩', rate: 1360 }
 };
 
+const PRODUCT_PRICE_CURRENCY = 'USD';
+const PRODUCT_PRICE_LABEL = 'USD';
+const ACTIVE_PAYMENT_METHODS = ['balance', 'usdt_trc20', 'alipay'];
+const CORE_RECOMMENDED_PRODUCTS = new Set(['discord-nitro', 'spotify-premium']);
+
 const networks = [
   { code: 'TRON', displayName: 'TRON', tokenStandard: 'TRC20', icon: '🔻', recommended: true, enabled: true, warning: '仅支持 USDT TRC20，请勿使用其他链转账。' }
 ];
@@ -24,6 +29,12 @@ const ASSETS = {
 
 const SUPPORT_TELEGRAM_URL = 'https://t.me/ichuhaikefu';
 const SUPPORT_TELEGRAM_HANDLE = '@ichuhaikefu';
+const DEFAULT_SUPPORT_CHANNEL = {
+  title: '客服频道',
+  description: '保留订单号、支付截图或收货信息，客服频道可以更快帮你核对。',
+  label: SUPPORT_TELEGRAM_HANDLE,
+  url: SUPPORT_TELEGRAM_URL
+};
 
 const PRODUCT_ICONS = {
   discord: 'E01_discord_nitro.png',
@@ -57,6 +68,7 @@ const LINE_ICONS = {
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
   bell: '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  telegram: '<path d="M22 3 2 10.5l6 2.2L18 6l-7.5 8.3.3 5.2 3-3.2 4.5 3.3z"/>',
   mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
@@ -84,7 +96,7 @@ const GUARANTEE_ITEMS = [
 const HOME_FLOW_STEPS = [
   { icon: 'B02_shield_secure_payment.png', title: '1 选商品', desc: '选择套餐', source: 'trust' },
   { icon: 'A07_user_login.png', title: '2 登录账号', desc: '邮箱登录', source: 'nav' },
-  { icon: 'C08_payment_success.png', title: '3 去支付', desc: '余额 / 微信 / 支付宝 / USDT', source: 'payment' },
+  { icon: 'C08_payment_success.png', title: '3 去支付', desc: '余额 / USDT / 支付宝', source: 'payment' },
   { icon: 'B01_lightning_instant_delivery.png', title: '4 收权益', desc: '自动发货', source: 'trust' }
 ];
 
@@ -97,7 +109,7 @@ const HOME_FAQS = [
   {
     icon: 'card',
     question: '支持哪些支付方式？',
-    answer: '支持余额支付、微信/支付宝聚合支付，以及 TRON 上的 USDT TRC20 支付。'
+    answer: '支持余额支付、USDT TRC20 和支付宝。'
   },
   {
     icon: 'receipt',
@@ -261,9 +273,9 @@ const state = {
   selectedProductId: localStorage.getItem('selectedProductId') || 'discord-nitro',
   selectedOptions: JSON.parse(localStorage.getItem('selectedOptions') || '{}'),
   cart: JSON.parse(localStorage.getItem('gfCart') || '[]'),
-  fiatCurrency: localStorage.getItem('preferredCurrency') || 'USD',
+  fiatCurrency: CURRENCIES[localStorage.getItem('preferredCurrency')] ? localStorage.getItem('preferredCurrency') : 'USD',
   paymentNetwork: localStorage.getItem('paymentNetwork') || 'TRON',
-  paymentMethod: localStorage.getItem('paymentMethod') || 'balance',
+  paymentMethod: ACTIVE_PAYMENT_METHODS.includes(localStorage.getItem('paymentMethod')) ? localStorage.getItem('paymentMethod') : 'usdt_trc20',
   useBalance: JSON.parse(localStorage.getItem('useBalance') || 'true'),
   telegramUsername: localStorage.getItem('telegramUsername') || '',
   email: localStorage.getItem('email') || '',
@@ -281,7 +293,7 @@ const state = {
   accountSection: localStorage.getItem('accountSection') || 'orders',
   profile: JSON.parse(localStorage.getItem('gfProfile') || '{"nickname":""}'),
   wallet: JSON.parse(localStorage.getItem('gfWallet') || '{"balance":128.6,"ledger":[]}'),
-  rechargeDraft: { amount: '20', method: 'wechat' },
+  rechargeDraft: { amount: '20', method: 'alipay' },
   messages: JSON.parse(localStorage.getItem('gfMessages') || '[]'),
   adminToken: localStorage.getItem('adminToken') || '',
   adminUsername: localStorage.getItem('adminUsername') || 'bitbernie',
@@ -290,7 +302,7 @@ const state = {
   searchQuery: '',
   deliveryFilter: '全部',
   stockFilter: false,
-  sortBy: '默认',
+  sortBy: '默认排序',
   walletMode: localStorage.getItem('walletMode') || 'browser',
   lookupResult: null,
   accountOrderFilter: 'all',
@@ -301,28 +313,37 @@ const state = {
   adminFilters: JSON.parse(localStorage.getItem('adminFilters') || '{}'),
   adminImportPreview: null,
   adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [], ops: {} },
-  config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' }, payments: { provider: 'direct', nowpayments: { enabled: false, payCurrencies: {} } } },
+  config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' }, payments: { provider: 'direct', nowpayments: { enabled: false, payCurrencies: {} } }, support: DEFAULT_SUPPORT_CHANNEL },
   telegramPanelOpen: false,
+  accountMenuOpen: false,
   telegramDeeplink: null,       // { token, deeplink, deeplinkNative, expiresAt, startedAt, returnTo }
   telegramDeeplinkStatus: 'idle', // idle | issuing | waiting | error | completed
   telegramDeeplinkError: '',
   telegramReturnTo: localStorage.getItem('telegramReturnTo') || '#/account',
   noticeTab: 'basic',
-  homeFaqActive: 0
+  homeFaqActive: 0,
+  detailImageIndex: 0,
+  purchaseQuantity: Number(localStorage.getItem('purchaseQuantity') || 1)
 };
 
 const app = document.querySelector('#app');
 const toast = document.querySelector('#toast');
 
 function money(usdt, currency = state.fiatCurrency) {
-  const c = CURRENCIES[currency];
+  const c = CURRENCIES[currency] || CURRENCIES.CNY;
+  const code = CURRENCIES[currency] ? currency : 'CNY';
   const amount = Number(usdt) * c.rate;
-  const value = currency === 'JPY' || currency === 'KRW' ? Math.round(amount).toLocaleString() : amount.toFixed(1);
+  const value = code === 'JPY' || code === 'KRW' ? Math.round(amount).toLocaleString() : amount.toFixed(1);
   return `${c.symbol}${value}`;
 }
 
 function price(usdt) {
-  return `<span class="price-main">${Number(usdt).toFixed(2)} USDT</span><span class="price-fiat">≈ ${money(usdt)}</span>`;
+  return `<span class="price-main">${Number(usdt).toFixed(2)} ${PRODUCT_PRICE_LABEL}</span><span class="price-fiat">≈ ${money(usdt)}</span>`;
+}
+
+function priceFrom(usdt, hasMultiple = false) {
+  const suffix = hasMultiple ? ' 起' : '';
+  return `<span class="price-main">${Number(usdt).toFixed(2)} ${PRODUCT_PRICE_LABEL}${suffix}</span><span class="price-fiat">≈ ${money(usdt)}</span>`;
 }
 
 function product() {
@@ -447,7 +468,7 @@ function persist() {
   localStorage.setItem('selectedOptions', JSON.stringify(state.selectedOptions));
   localStorage.setItem('preferredCurrency', state.fiatCurrency);
   localStorage.setItem('paymentNetwork', state.paymentNetwork);
-  localStorage.setItem('paymentMethod', state.paymentMethod);
+  localStorage.setItem('paymentMethod', normalizePaymentMethod(state.paymentMethod));
   localStorage.setItem('useBalance', JSON.stringify(state.useBalance));
   localStorage.setItem('accountSection', state.accountSection);
   localStorage.setItem('gfProfile', JSON.stringify(state.profile));
@@ -465,6 +486,17 @@ function persist() {
   localStorage.setItem('adminFilters', JSON.stringify(state.adminFilters));
   localStorage.setItem('accountPrefs', JSON.stringify(state.accountPrefs));
   localStorage.setItem('walletMode', state.walletMode);
+  localStorage.setItem('purchaseQuantity', String(Math.max(1, Number(state.purchaseQuantity || 1))));
+}
+
+function normalizePaymentMethod(method = state.paymentMethod) {
+  return ACTIVE_PAYMENT_METHODS.includes(method) ? method : 'usdt_trc20';
+}
+
+function balancePaymentSubtext(amount = 0) {
+  if (!state.user) return '登录后可用';
+  const balance = Number(state.wallet.balance || 0);
+  return balance >= Number(amount || 0) ? '余额充足' : '余额不足';
 }
 
 function userEmail() {
@@ -600,7 +632,7 @@ function normalizeServerOrder(order) {
   const skuSnapshot = parseMaybeJson(order.skuSnapshot ?? order.sku_snapshot, {});
   const options = skuSnapshot.optionValues || {};
   const amountUsdt = Number(order.amountUsdt ?? order.amount_usdt ?? skuSnapshot.priceUsdt ?? 0);
-  const fiatCurrency = order.fiatCurrency || order.fiat_currency || 'USD';
+  const fiatCurrency = order.fiatCurrency || order.fiat_currency || 'CNY';
   const providerPayload = parseMaybeJson(order.providerPayload ?? order.provider_payload_json, {});
   const payAmount = Number(providerPayload.pay_amount ?? order.payAmount ?? amountUsdt);
   const payCurrency = String(providerPayload.pay_currency ?? order.paymentCurrency ?? order.payment_currency ?? 'USDT').toUpperCase();
@@ -676,9 +708,28 @@ async function loadConfig() {
       state.config = { ...state.config, ...(await response.json()) };
       state.config.telegram.botUsername = normalizeTelegramBotUsername(state.config.telegram.botUsername);
       state.config.telegram.loginMode = state.config.telegram.botUsername ? 'widget' : 'mock';
+      state.config.support = { ...DEFAULT_SUPPORT_CHANNEL, ...(state.config.support || {}) };
     }
   } catch {
-    state.config = { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' } };
+    state.config = { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' }, support: DEFAULT_SUPPORT_CHANNEL };
+  }
+}
+
+async function loadExchangeRates() {
+  try {
+    const response = await fetch('/api/exchange-rates');
+    if (!response.ok) return;
+
+    const data = await response.json();
+    for (const [code, rate] of Object.entries(data.rates || {})) {
+      if (!CURRENCIES[code]) continue;
+      const numericRate = Number(rate);
+      if (Number.isFinite(numericRate) && numericRate > 0) {
+        CURRENCIES[code].rate = numericRate;
+      }
+    }
+  } catch {
+    // Keep the bundled fallback rates when the API is unavailable.
   }
 }
 
@@ -992,17 +1043,21 @@ function icon(type) {
 function header() {
   const path = currentAppPath();
   const isDetail = path.startsWith('/product/') || path.startsWith('/products/');
-  const count = cartCount();
   const accountAction = state.user
-    ? `<a class="pill telegram-pill logged-in" href="/account">${navIcon('A07_user_login.png', '已登录')}${escapeHtml(userNickname())}</a>`
+    ? `<div class="account-popover-wrap">
+        <button class="pill account-trigger logged-in" data-action="toggleAccountMenu" type="button">
+          ${navIcon('A07_user_login.png', '已登录')}
+          <span><b>${escapeHtml(userNickname())}</b><small>余额 ${Number(state.wallet.balance || 0).toFixed(2)} USDT</small></span>
+          ${lineIcon('chevron', '展开个人中心', 'account-chevron')}
+        </button>
+        ${state.accountMenuOpen ? accountDropdown() : ''}
+      </div>`
     : `<a class="pill telegram-pill" href="/login">${navIcon('A07_user_login.png', '登录')}登录</a>`;
   const unread = unreadMessages();
   return `
     <header class="topbar ${isDetail ? 'detail-topbar' : ''}">
       ${logo()}
-      <nav class="header-nav">
-        <a href="/faq">帮助中心</a>
-      </nav>
+      <nav class="header-nav"></nav>
       <div class="top-actions">
         <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
           <button class="pill currency-pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency} ${navIcon('A10_shaixuan.png', '展开货币', 'currency-chevron')}</button>
@@ -1012,12 +1067,34 @@ function header() {
           <button class="pill icon-pill" data-action="toggleMessages" type="button" aria-label="消息中心">${lineIcon('bell', '消息中心', 'message-icon')}${unread ? `<span>${unread}</span>` : ''}</button>
           ${state.messageCenterOpen ? messageCenterPanel() : ''}
         </div>
-        <a class="pill cart" href="/cart">${navIcon('A06_shopping_cart.png', '购物车')} 购物车${count ? `<span class="cart-count">${count}</span>` : ''}</a>
         ${accountAction}
       </div>
     </header>
     ${state.telegramPanelOpen ? telegramLoginPanel() : ''}
   `;
+}
+
+function supportChannel() {
+  return {
+    ...DEFAULT_SUPPORT_CHANNEL,
+    ...(state.config.support || {})
+  };
+}
+
+function accountDropdown() {
+  return `<section class="account-dropdown">
+    <div class="account-dropdown-head">
+      ${navIcon('A07_user_login.png', '用户', 'account-dropdown-avatar')}
+      <span><b>${escapeHtml(userNickname())}</b><small>${escapeHtml(userEmail() || state.user?.username || '')}</small></span>
+    </div>
+    <a href="/account">${lineIcon('user', '个人中心', 'account-menu-icon')}个人中心</a>
+    <button data-action="accountMenuSection" data-section="wallet" type="button">${lineIcon('card', '钱包充值', 'account-menu-icon')}钱包充值</button>
+    <hr />
+    <button data-action="accountMenuSection" data-section="orders" type="button">${lineIcon('receipt', '我的订单', 'account-menu-icon')}我的订单</button>
+    <button data-action="accountMenuSection" data-section="profile" type="button">${lineIcon('shield-check', '账号设置', 'account-menu-icon')}账号设置</button>
+    <hr />
+    <button class="danger" data-action="logoutAccount" type="button">${lineIcon('refund', '退出登录', 'account-menu-icon')}退出登录</button>
+  </section>`;
 }
 
 function messageCenterPanel() {
@@ -1108,6 +1185,7 @@ function currencyMenu() {
 
 function shell(content, className = '') {
   document.documentElement.classList.remove('admin-hash-loading');
+  document.documentElement.classList.remove('app-booting');
   const hideHeader = className.includes('admin-page') || className.includes('login-page-shell');
   app.innerHTML = `${hideHeader ? '' : header()}<main class="${className}">${content}</main>`;
   enhanceSelects();
@@ -1174,10 +1252,8 @@ async function submitLoginPageLogin() {
   if (state.loginBusy) return;
   const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
   const password = document.querySelector('#loginPassword')?.value || '';
-  const agree = document.querySelector('.login-agree input')?.checked;
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
   if (!password) return notify('请输入密码');
-  if (!agree) return notify('请阅读并同意《用户协议》和《隐私政策》');
   state.loginBusy = true;
   try {
     const { response, data } = await postJson('/api/auth/login', { email, password });
@@ -1204,11 +1280,9 @@ async function submitLoginPageRegister() {
   const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
   const password = document.querySelector('#loginPassword')?.value || '';
   const password2 = document.querySelector('#loginPassword2')?.value || '';
-  const agree = document.querySelector('.login-agree input')?.checked;
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
   if (password.length < 6) return notify('密码至少 6 位');
   if (password !== password2) return notify('两次密码不一致');
-  if (!agree) return notify('请阅读并同意《用户协议》和《隐私政策》');
   state.loginBusy = true;
   try {
     const { response, data } = await postJson('/api/auth/register', { email, password });
@@ -1321,16 +1395,6 @@ function loginVerifySection() {
 
 function loginPage() {
   const isRegister = state.authMode === 'register';
-  const features = [
-    { icon: 'shield-check', title: '安全可靠', desc: '邮箱验证 + 加密存储，多重防护保障账户安全' },
-    { icon: 'lightning', title: '极速便捷', desc: '流程简单高效，快速完成注册与登录' },
-    { icon: 'headset', title: '专属服务', desc: '7×24 小时在线支持，为您提供专业帮助' }
-  ];
-  const steps = [
-    { icon: 'mail', title: '注册账号', desc: '填写邮箱地址' },
-    { icon: 'shield-check', title: '验证邮箱', desc: '查收邮件并完成验证' },
-    { icon: 'user', title: '登录使用', desc: '开启安全便捷体验' }
-  ];
   const passwordType = state.loginPasswordVisible ? 'text' : 'password';
   shell(`
     <div class="login-page">
@@ -1384,10 +1448,6 @@ function loginPage() {
                 <input id="loginPassword2" type="${passwordType}" autocomplete="new-password" placeholder="请再次输入密码" />
               </span>
             </label>` : '<button class="login-forgot" data-action="loginForgot" type="button">忘记密码?</button>'}
-            <label class="login-agree">
-              <input type="checkbox" data-action="toggleLoginAgree" ${state.loginAgree ? 'checked' : ''} />
-              <span>我已阅读并同意<a href="/faq">《用户协议》</a>和<a href="/faq">《隐私政策》</a></span>
-            </label>
             <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>${isRegister ? '创建账号' : '登录'}</button>
           </form>
           <div class="login-switch">
@@ -1399,7 +1459,6 @@ function loginPage() {
       </section>
       <div class="login-footer">
         <a class="login-back" href="/">← 返回 ichuhai 首页</a>
-        <p class="login-trust">${lineIcon('shield-check', '安全', 'login-trust-icon')} 安全 · 快速 · 可靠</p>
       </div>
     </div>
   `, 'login-page-shell');
@@ -1407,27 +1466,10 @@ function loginPage() {
 
 function home() {
   shell(`
-    <section class="hero">
-      <div class="hero-copy">
-        <h1>全球数字商品，<span>一站式秒发</span></h1>
-        <p>谷歌开发者号、苹果开发者号等热门数字商品，一键购买，安全便捷。</p>
-        <div class="hero-tags">
-          <span><span class="hero-tag-title">${featureIcon('B01_lightning_instant_delivery.png', '即时发货')} <b>即时发货</b></span><small>秒级交付</small></span>
-          <span><span class="hero-tag-title">${featureIcon('B02_shield_secure_payment.png', '安全支付')} <b>安全支付</b></span><small>加密保障</small></span>
-          <span><span class="hero-tag-title">${featureIcon('B03_headset_support.png', '7x24支持')} <b>7×24支持</b></span><small>全时在线</small></span>
-        </div>
-        <div class="hero-actions">
-          <a class="primary-button" href="#products">立即选购 →</a>
-          <a class="text-button" href="#why-us">为什么选择我们 →</a>
-        </div>
-      </div>
+    <section class="catalog-home">
+      ${productBrowser(true)}
     </section>
-    ${productBrowser()}
-    ${purchaseFlow()}
-    ${platformGuarantee()}
-    ${homeFaq()}
-    ${siteFooter()}
-  `, 'page');
+  `, 'page catalog-page');
 }
 
 function visibleProducts(full = false) {
@@ -1453,34 +1495,80 @@ function visibleProducts(full = false) {
   return full ? list : list.slice(0, 5);
 }
 
+const CATALOG_CATEGORIES = [
+  { label: '全部商品', cat: '全部', icon: 'all' },
+  { label: '社交平台', cat: '社交', icon: 'social' },
+  { label: '音乐音频', cat: '音乐', icon: 'music' },
+  { label: '视频会员', cat: '视频', icon: 'video' },
+  { label: '游戏娱乐', cat: '游戏', icon: 'game' },
+  { label: '软件工具', cat: '软件', icon: 'software' },
+  { label: '礼品卡券', cat: '礼品卡', icon: 'gift' },
+  { label: '更多分类', cat: '更多', icon: 'more' }
+];
+
+const CATALOG_SALE_TAGS = {
+  'discord-nitro': '全球通用',
+  'spotify-premium': '独享账号',
+  'youtube-premium': '独享账号',
+  'steam-wallet': '安全可靠',
+  'microsoft-365': '官方授权'
+};
+
+const CATALOG_TRUST_ITEMS = [
+  { icon: 'lightning', title: '自动发货', desc: '下单后自动发货' },
+  { icon: 'shield-check', title: '官方正品', desc: '100% 官方授权' },
+  { icon: 'lock', title: '安全可靠', desc: '多重加密保护' },
+  { icon: 'headset', title: '专业支持', desc: '7×24小时在线服务' }
+];
+
+function categoryCount(cat) {
+  return cat === '全部' ? products.length : products.filter((item) => item.category === cat).length;
+}
+
 function productBrowser(full = false) {
-  const categories = ['全部', '社交', '音乐', '视频', '游戏', '软件', '礼品卡', '更多'];
   const visible = visibleProducts(full);
-  const title = full ? '全部商品' : '热门商品';
-  const subtitle = full ? `共 ${visible.length} 个商品，支持分类、搜索与库存筛选` : '精选高频数字商品，默认展示可快速购买的套餐';
+  const categories = CATALOG_CATEGORIES.filter((c) => c.cat === '全部' || categoryCount(c.cat) > 0);
   return `
-    <section id="products" class="product-section product-browser ${full ? 'is-full' : ''}">
-      <div class="product-header">
-        <div class="product-title-block">
-          <h2>${title}</h2>
-          <p>${subtitle}</p>
+    <section id="products" class="product-section product-browser catalog-shell ${full ? 'is-full' : ''}">
+      <aside class="catalog-sidebar">
+        <div class="catalog-sidebar-head">
+          ${navIcon('A02_products.png', '商品分类', 'catalog-side-icon')}
+          <span><b>商品分类</b><small>Categories</small></span>
         </div>
-        <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称" /></label>
-      </div>
-      <div class="product-toolbar">
-        <div class="tabs" aria-label="商品分类">
-          ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c ? 'active' : ''}" data-action="filterCategory" data-category="${c}">${categoryIcon(c)}${c}</button>`).join('')}
+        <div class="catalog-category-list">
+          ${categories.map((c) => `<button class="category-tab ${state.categoryFilter === c.cat ? 'active' : ''}" data-action="filterCategory" data-category="${c.cat}">${lineIcon(c.icon, c.label, 'category-icon')}<span>${c.label}</span><em>${categoryCount(c.cat)}</em></button>`).join('')}
         </div>
-        ${full ? `<div class="filter-bar">
-          <label><span>发货</span><select data-action="filterDelivery"><option>全部</option><option ${state.deliveryFilter === '秒发' ? 'selected' : ''}>秒发</option><option ${state.deliveryFilter === '人工' ? 'selected' : ''}>人工</option><option ${state.deliveryFilter === '部分自动' ? 'selected' : ''}>部分自动</option></select></label>
-          <label><span>排序</span><select data-action="sortProducts"><option>默认</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
-          <label class="check-filter"><input type="checkbox" data-action="stockOnly" ${state.stockFilter ? 'checked' : ''}/> <span>仅看有货</span></label>
-        </div>` : ''}
+        <div class="catalog-help-card">
+          <div class="catalog-help-head">
+            ${lineIcon('headset', '需要帮助', 'catalog-help-icon')}
+            <span><b>需要帮助?</b><small>在线客服为您提供专业支持</small></span>
+          </div>
+          <a class="catalog-help-button" href="${escapeHtml(supportChannel().url)}" target="_blank" rel="noopener">联系客服</a>
+          <a class="catalog-help-button secondary" href="/faq">帮助中心</a>
+          <a class="catalog-help-channel" href="${escapeHtml(supportChannel().url)}" target="_blank" rel="noopener">
+            ${lineIcon('telegram', '客服频道', 'catalog-help-channel-icon')}
+            <span><b>客服频道</b><small>${escapeHtml(supportChannel().label)}</small></span>
+          </a>
+        </div>
+      </aside>
+      <div class="catalog-main">
+        <div class="product-header">
+          <div class="catalog-tools">
+            <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称或关键词" /></label>
+            <label class="catalog-sort"><span class="sort-current">${escapeHtml(state.sortBy || '默认排序')}</span><select data-action="sortProducts" aria-label="排序"><option>默认排序</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
+          </div>
+        </div>
+        <div class="catalog-list" role="list" aria-label="商品列表">
+          ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
+        </div>
+        <div class="catalog-trust">
+          ${CATALOG_TRUST_ITEMS.map((item) => `
+            <div class="catalog-trust-item">
+              <span class="catalog-trust-icon">${lineIcon(item.icon, item.title, 'catalog-trust-svg')}</span>
+              <span class="catalog-trust-copy"><b>${item.title}</b><small>${item.desc}</small></span>
+            </div>`).join('')}
+        </div>
       </div>
-      <div class="product-row">
-        ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
-      </div>
-      ${!full ? '<div class="view-all-wrap"><a class="view-all-link" href="/products">查看全部商品 →</a></div>' : ''}
     </section>
   `;
 }
@@ -1579,7 +1667,7 @@ function siteFooter() {
             <span>TRC20</span>
             <span>◎</span>
           </div>
-          <p>余额、微信、支付宝与 USDT TRC20</p>
+          <p>余额、USDT TRC20 与支付宝</p>
         </div>
       </div>
       <div class="footer-bottom">
@@ -1594,26 +1682,68 @@ function siteFooter() {
   `;
 }
 
+function activeSkus(item) {
+  return (item.skus || []).filter((sku) => (sku.stockStatus || sku.stock) !== 'sold_out');
+}
+
+function minSkuPrice(item) {
+  const skus = activeSkus(item);
+  const candidates = skus.length ? skus : (item.skus || []);
+  return Math.min(...candidates.map((sku) => Number(sku.priceUsdt || 0)).filter((value) => Number.isFinite(value)));
+}
+
+function formatOptionValue(key, value) {
+  if (key === 'region') return { Global: 'Global', US: '美区', EU: '欧区', JP: '日区' }[value] || value;
+  return value;
+}
+
+function skuSpecSummary(item) {
+  const skus = activeSkus(item);
+  if (!skus.length) return '';
+  const optionKeys = Array.from(new Set(skus.flatMap((sku) => Object.keys(sku.optionValues || {}))));
+  if (!optionKeys.length) return '';
+  const pieces = optionKeys.slice(0, 2).map((key) => {
+    const values = Array.from(new Set(skus.map((sku) => sku.optionValues?.[key]).filter(Boolean)));
+    if (!values.length) return '';
+    const displayValues = values.map((value) => formatOptionValue(key, value));
+    if (key === 'duration' && displayValues.every((value) => /^\d+个月$/.test(value))) {
+      return displayValues.map((value) => value.replace('个月', '')).join('/') + '个月';
+    }
+    return displayValues.slice(0, 4).join(' / ');
+  }).filter(Boolean);
+  return pieces.join(' · ');
+}
+
 function card(item) {
   const sku = findSku(item, defaultOptions(item)) || item.skus[0];
-  const spec = sku ? Object.values(sku.optionValues).join(' · ') : '规格待选';
+  const spec = skuSpecSummary(item);
   const deliveryClass = item.deliveryType === 'auto' ? 'auto' : item.deliveryType === 'mixed' ? 'mixed' : 'manual';
   const stock = sku.stockStatus || sku.stock;
+  const sold = Math.max(176, Math.round((item.name.length * 137 + Number(sku.priceUsdt || 1) * 89) % 3200));
+  const recommended = CORE_RECOMMENDED_PRODUCTS.has(item.slug);
+  const saleTag = CATALOG_SALE_TAGS[item.slug] || '官方授权';
+  const minimumPrice = Number.isFinite(minSkuPrice(item)) ? minSkuPrice(item) : Number(sku.priceUsdt || 0);
+  const hasMultiplePrices = (item.skus || []).length > 1;
   return `
-    <a class="product-card" href="/products/${item.slug}">
-      <span class="product-card-top">
-        ${icon(item.icon)}
-        <em class="delivery-chip ${deliveryClass}">${deliveryLabel(item.deliveryType)}</em>
+    <a class="product-card catalog-card" href="/products/${item.slug}" role="listitem">
+      <span class="catalog-card-media">${icon(item.icon)}</span>
+      <span class="catalog-card-info">
+        <span class="catalog-card-title">
+          <b>${escapeHtml(item.name)}</b>
+          ${recommended ? '<i class="catalog-badge">推荐</i>' : ''}
+        </span>
+        ${spec ? `<small class="catalog-card-spec">${escapeHtml(spec)}</small>` : ''}
+        <span class="catalog-tags">
+          <i class="delivery-chip ${deliveryClass}">${escapeHtml(deliveryLabel(item.deliveryType))}</i>
+          <i class="delivery-chip neutral">${escapeHtml(saleTag)}</i>
+        </span>
       </span>
-      <span class="product-copy">
-        <b>${item.name}</b>
-        <span class="product-spec">${spec}</span>
+      <span class="catalog-card-price">${priceFrom(minimumPrice, hasMultiplePrices)}</span>
+      <span class="catalog-card-stock">
+        <i class="stock-flag ${stock}">${stockLabel(stock)}</i>
+        <small>已售 ${sold.toLocaleString('zh-CN')}</small>
       </span>
-      <span class="product-price-line">
-        ${price(sku.priceUsdt)}
-      </span>
-      <span class="product-badges"><i class="stock ${stock}">${stockLabel(stock)}</i></span>
-      <span class="buy-button">${navIcon('A06_shopping_cart.png', '购买')} 立即购买</span>
+      <span class="buy-button ${recommended ? 'is-featured' : ''}">立即购买</span>
     </a>
   `;
 }
@@ -1665,7 +1795,7 @@ function optionPanel(item, purchaseMode = false) {
                   return `<button class="${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : '当前组合暂不可购买'}" ${possible ? '' : 'disabled'}>
                     ${optionLabel(option)}
                     ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
-                    ${group.displayType === 'cards' && matching ? `<small>${matching.priceUsdt.toFixed(2)} USDT<br/>≈ ${money(matching.priceUsdt)}</small>` : ''}
+                    ${group.displayType === 'cards' && matching ? `<small>${matching.priceUsdt.toFixed(2)} USD<br/>≈ ${money(matching.priceUsdt)}</small>` : ''}
                   </button>`;
                 }).join('')}
               </div>
@@ -1728,7 +1858,7 @@ function renderOptionButton(item, group, option, priorKeys) {
     return `<button class="${className}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" title="${possible ? '' : reason}" ${possible ? '' : 'disabled'}>
       ${matching?.discount ? `<em>${matching.discount}</em>` : ''}
       <strong>${option}</strong>
-      <span class="card-price">${matching ? `${matching.priceUsdt.toFixed(2)} USDT` : '-- USDT'}</span>
+      <span class="card-price">${matching ? `${matching.priceUsdt.toFixed(2)} USD` : '-- USD'}</span>
       <small>${matching ? `≈ ${money(matching.priceUsdt)}` : reason}</small>
       ${active ? '<i class="checkmark">✓</i>' : ''}
     </button>`;
@@ -1766,7 +1896,7 @@ function renderPurchaseStep(item, group, index) {
 function orderPreview(item, sku) {
   const opts = selectedOptions(item);
   const disabled = !sku || (sku.stockStatus || sku.stock) === 'sold_out';
-  const buttonText = disabled ? '请先完成商品选择' : state.user ? `去结算 ${sku.priceUsdt.toFixed(2)} USDT` : `登录后结算 ${sku.priceUsdt.toFixed(2)} USDT`;
+  const buttonText = disabled ? '请先完成商品选择' : state.user ? `去结算 ${sku.priceUsdt.toFixed(2)} USD` : `登录后结算 ${sku.priceUsdt.toFixed(2)} USD`;
   const rows = [
     ['商品', item.name],
     ['地区', opts.region || '不适用'],
@@ -1783,7 +1913,7 @@ function orderPreview(item, sku) {
     <div class="preview-lines">${rows.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>
     <div class="preview-total">
       <span>应付金额</span>
-      <strong>${sku ? `${sku.priceUsdt.toFixed(2)} USDT` : '-- USDT'}</strong>
+      <strong>${sku ? `${sku.priceUsdt.toFixed(2)} USD` : '-- USD'}</strong>
       <small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small>
     </div>
     <div class="preview-trust">
@@ -1849,6 +1979,68 @@ function flowStrip() {
   return `<section class="flow glass">${['01 选择商品', '02 选择规格', '03 填写信息', '04 完成支付 / 接收商品'].map((x) => `<span>${x}</span>`).join('<i>···</i>')}</section>`;
 }
 
+const REGION_LABELS = { Global: '全球版', US: '美区', EU: '欧区', JP: '日区', HK: '港区', KR: '韩区' };
+
+const DETAIL_TRUST_TAGS = ['自动发货', '官方正版', '安全可靠'];
+
+function detailOptionLabel(key, value) {
+  if (key === 'region') return REGION_LABELS[value] || value;
+  return value;
+}
+
+function detailGalleryFrames(item) {
+  return [
+    { tone: 'frame-light', label: '' },
+    { tone: 'frame-dark frame-dark-a', label: item.name },
+    { tone: 'frame-dark frame-dark-b', label: '官方正版' },
+    { tone: 'frame-dark frame-dark-c', label: item.name.split(' ')[0] }
+  ];
+}
+
+function detailGallery(item) {
+  const frames = detailGalleryFrames(item);
+  const index = Math.max(0, Math.min(frames.length - 1, Number(state.detailImageIndex || 0)));
+  const active = frames[index];
+  return `
+    <div class="product-gallery">
+      <div class="gallery-main ${active.tone}">
+        <button class="gallery-arrow gallery-prev" data-action="detailImagePrev" type="button" aria-label="上一张">${lineIcon('chevron', '上一张', 'gallery-arrow-icon')}</button>
+        <span class="gallery-art">${icon(item.icon)}</span>
+        ${active.label ? `<span class="gallery-caption">${escapeHtml(active.label)}</span>` : ''}
+        <button class="gallery-arrow gallery-next" data-action="detailImageNext" type="button" aria-label="下一张">${lineIcon('chevron', '下一张', 'gallery-arrow-icon')}</button>
+      </div>
+      <div class="gallery-thumbs">
+        ${frames.map((frame, idx) => `<button class="gallery-thumb ${frame.tone} ${idx === index ? 'active' : ''}" data-action="detailImage" data-index="${idx}" type="button" aria-label="预览图 ${idx + 1}">${icon(item.icon)}</button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function detailSpecGroups(item) {
+  const opts = selectedOptions(item);
+  return item.optionGroups.map((group, idx) => {
+    const priorKeys = item.optionGroups.slice(0, idx).map((entry) => entry.key);
+    const options = configuredOptions(item, group).filter((option) => optionMatchesPrior(item, group, option, opts, priorKeys).length);
+    if (!options.length) return '';
+    return `
+      <div class="detail-spec-group">
+        <span class="detail-spec-label">${escapeHtml(group.name)}</span>
+        <div class="detail-spec-options">
+          ${options.map((option) => {
+            const matches = optionMatchesPrior(item, group, option, { ...opts, [group.key]: option }, priorKeys);
+            const possible = matches.some((sku) => (sku.stockStatus || sku.stock) !== 'sold_out');
+            const active = opts[group.key] === option;
+            return `<button class="detail-spec-pill ${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" type="button" ${possible ? '' : 'disabled'}>
+              <b>${escapeHtml(detailOptionLabel(group.key, option))}</b>
+              ${possible ? '' : '<small>暂缺</small>'}
+              ${active ? `<i class="detail-spec-check">${lineIcon('shield-check', '已选', 'detail-spec-check-icon')}</i>` : ''}
+            </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function detail(slug = 'discord-nitro') {
   const item = products.find((p) => p.slug === slug) || product();
   const wasDifferentProduct = state.selectedProductId !== item.id;
@@ -1856,52 +2048,64 @@ function detail(slug = 'discord-nitro') {
   state.selectedProductId = item.id;
   if (wasDifferentProduct || isNewDetailVisit || !state.selectedOptions[item.id]) {
     state.selectedOptions[item.id] = defaultOptions(item);
+    state.purchaseQuantity = 1;
   }
+  state.paymentMethod = normalizePaymentMethod(state.paymentMethod);
+  if (!state.user && state.paymentMethod === 'balance') state.paymentMethod = 'usdt_trc20';
   state.lastDetailSlug = item.slug;
   const sku = findSku(item);
   const opts = selectedOptions(item);
-  const related = products.filter((p) => p.id !== item.id).slice(0, 3);
-  const payText = state.user ? `去结算 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT` : `登录后结算 ${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT`;
-  const tags = productFeatureTags(item);
+  const stock = sku?.stockStatus || sku?.stock || 'in_stock';
+  const disabled = !sku || stock === 'sold_out';
+  const sold = Math.max(176, Math.round((item.name.length * 137 + Number(sku?.priceUsdt || 1) * 89) % 3200));
+  const detailDescription = item.detailDescription || item.description || item.detail || item.notice?.usageGuide || productShort(item);
   persist();
   shell(`
-    <div class="breadcrumb">首页 / 商品 / ${item.name}</div>
-    <section class="product-hero-card">
-      <div class="product-main-info">
-        ${icon(item.icon)}
-        <div>
-          <div class="hero-title-row"><h1>${item.name}</h1><span>${featureIcon('B06_check_circle_success.png', '官方正版')} 官方正版</span></div>
-          <p>${escapeHtml(productShort(item))}</p>
-          ${tags.length ? `<div class="product-tags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+    <div class="breadcrumb"><a href="/">首页</a> / <a href="/products">全部商品</a> / <span>${escapeHtml(item.name)}</span></div>
+    <section class="product-detail-layout">
+      <div class="product-detail-visual">
+        ${detailGallery(item)}
+      </div>
+      <div class="product-purchase-panel">
+        <h1>${escapeHtml(item.name)}</h1>
+        <div class="product-tags detail-tags">
+          ${DETAIL_TRUST_TAGS.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}
         </div>
+        <div class="detail-price-block">
+          <div class="detail-price-main">
+            ${sku ? price(sku.priceUsdt) : '<strong>暂不可购买</strong>'}
+          </div>
+          <div class="detail-stock-info">
+            <i class="stock-flag ${stock}">${stockLabel(stock)}</i>
+            <small>已售 ${sold.toLocaleString('zh-CN')}</small>
+          </div>
+        </div>
+        ${detailSpecGroups(item)}
+        <div class="detail-spec-group">
+          <span class="detail-spec-label">数量</span>
+          <span class="quantity-stepper">
+            <button data-action="quantityMinus" type="button" aria-label="减少">−</button>
+            <input value="${Math.max(1, Number(state.purchaseQuantity || 1))}" inputmode="numeric" data-action="quantityInput" aria-label="购买数量" />
+            <button data-action="quantityPlus" type="button" aria-label="增加">+</button>
+          </span>
+        </div>
+        <div class="detail-spec-group">
+          <span class="detail-spec-label">支付方式</span>
+          <div class="detail-payment-methods">
+            ${[
+              ['balance', '余额支付', balancePaymentSubtext(sku?.priceUsdt || 0), !state.user],
+              ['usdt_trc20', 'USDT-TRC20', '手续费低', false],
+              ['alipay', '支付宝', '', false]
+            ].map(([key, label, sub, disabledPayment]) => `<button class="${state.paymentMethod === key ? 'active' : ''} ${disabledPayment ? 'is-disabled' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button" ${disabledPayment ? 'disabled' : ''}><b>${escapeHtml(label)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button>`).join('')}
+          </div>
+        </div>
+        <button class="detail-buy-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${disabled ? '当前商品不可购买' : '立即购买'}</button>
       </div>
-      <div class="product-hero-art" aria-hidden="true"><span>${icon(item.icon)}</span><i></i><b></b><em></em></div>
-      <div class="product-price">${sku ? price(sku.priceUsdt) : '<span>暂不可购买</span>'}</div>
     </section>
-    ${optionPanel(item, true)}
-    ${noticePanel(item)}
-    <section class="recommend-card">
-      <div class="section-header"><div><h2>相关推荐</h2><p>更多优质数字商品推荐</p></div><a href="/products">查看全部 ›</a></div>
-      <div class="recommend-list">
-        ${related.map((p) => {
-          const relatedSku = findSku(p, defaultOptions(p)) || p.skus[0];
-          const spec = relatedSku ? Object.values(relatedSku.optionValues).join(' · ') : '规格待选';
-          return `<button class="recommend-item" data-action="openProduct" data-slug="${p.slug}">${icon(p.icon)}<div><h3>${p.name}</h3><p>${spec}</p><strong>${relatedSku.priceUsdt.toFixed(2)} USDT</strong></div></button>`;
-        }).join('')}
-      </div>
+    <section class="product-detail-info">
+      <h2>商品说明</h2>
+      <p class="detail-info-text">${escapeHtml(detailDescription)}</p>
     </section>
-    <div class="sticky-checkout-bar">
-      <div class="sticky-product">${icon(item.icon)}<div><strong>${item.name}</strong><p>${Object.values(opts).join(' · ')}</p></div></div>
-      <div class="sticky-meta">
-        <div><span>套餐周期</span><strong>${opts.duration || opts.plan || opts.amount || '已选择'}</strong></div>
-        <div><span>应付金额</span><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
-      </div>
-      <div class="sticky-mobile-price"><strong>${sku ? sku.priceUsdt.toFixed(2) : '--'} USDT</strong><small>${sku ? `≈ ${money(sku.priceUsdt)}` : '当前组合不可购买'}</small></div>
-      <div class="sticky-actions">
-        <button class="sticky-cart-button" data-action="addToCart" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${navIcon('A06_shopping_cart.png', '购物车')} 加入购物车</button>
-        <button class="sticky-pay-button" data-action="paySelected" ${!sku || (sku.stockStatus || sku.stock) === 'sold_out' ? 'disabled' : ''}>${featureIcon('B04_lock_encryption.png', '安全结算')} ${payText}</button>
-      </div>
-    </div>
   `, 'page detail-page');
   requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 }
@@ -1949,13 +2153,12 @@ function checkout() {
           <h3>支付信息</h3>
           <div class="payment-method-row">
             ${[
-              ['balance', '余额支付', `${Number(state.wallet.balance || 0).toFixed(2)} USDT 可用`],
-              ['wechat', '微信支付', '适合微信用户'],
-              ['alipay', '支付宝', '适合支付宝用户'],
-              ['usdt_trc20', 'USDT', '数字货币支付']
-            ].map(([key, label, desc]) => `<button class="${state.paymentMethod === key ? 'active' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button"><b>${label}</b><span>${desc}</span></button>`).join('')}
+              ['balance', '余额支付', balancePaymentSubtext(sku.priceUsdt), !state.user],
+              ['usdt_trc20', 'USDT-TRC20', '数字货币支付', false],
+              ['alipay', '支付宝', '适合支付宝用户', false]
+            ].map(([key, label, desc, disabledPayment]) => `<button class="${state.paymentMethod === key ? 'active' : ''} ${disabledPayment ? 'is-disabled' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button" ${disabledPayment ? 'disabled' : ''}><b>${label}</b><span>${desc}</span></button>`).join('')}
           </div>
-          ${state.paymentMethod !== 'balance' ? `<label class="agree balance-offset"><input type="checkbox" data-action="toggleUseBalance" ${state.useBalance ? 'checked' : ''}/> 使用余额抵扣，剩余部分通过${state.paymentMethod === 'wechat' ? '微信' : state.paymentMethod === 'alipay' ? '支付宝' : 'USDT'}支付</label>` : ''}
+          ${state.paymentMethod !== 'balance' ? `<label class="agree balance-offset"><input type="checkbox" data-action="toggleUseBalance" ${state.useBalance ? 'checked' : ''}/> 使用余额抵扣，剩余部分通过${state.paymentMethod === 'alipay' ? '支付宝' : 'USDT'}支付</label>` : ''}
           ${state.paymentMethod === 'usdt_trc20' ? `
             <div class="network-row">${networks.map((n) => `<button class="${n.code === state.paymentNetwork ? 'active' : ''}" data-action="chooseNetwork" data-code="${n.code}">${n.displayName} ${n.tokenStandard}</button>`).join('')}</div>
             <div class="network-confirm">
@@ -1997,10 +2200,8 @@ function cartPage() {
         <div>
           <p class="eyebrow">Shopping cart</p>
           <h1>购物车</h1>
-          <p>先保存想买的商品，确认规格、库存和金额后再进入支付流程。</p>
         </div>
         <div class="cart-head-actions">
-          <a class="secondary link-button" href="/products">继续选购</a>
           ${items.length ? '<button class="secondary" data-action="clearCart" type="button">清空购物车</button>' : ''}
         </div>
       </div>
@@ -2031,7 +2232,7 @@ function cartPage() {
           <aside class="cart-summary glass">
             <h2>购物车摘要</h2>
             <div class="line"><span>商品数量</span><b>${items.length}</b></div>
-            <div class="line"><span>预估 USDT</span><b>${total.toFixed(2)} USDT</b></div>
+            <div class="line"><span>预估金额</span><b>${total.toFixed(2)} USD</b></div>
             <div class="line total"><span>参考金额</span><b>${money(total)}</b></div>
             <p>当前订单系统按单个商品结算；如果需要购买多件，请逐项进入结算。</p>
           </aside>
@@ -2040,7 +2241,6 @@ function cartPage() {
         <section class="empty-cart glass">
           ${navIcon('A06_shopping_cart.png', '空购物车', 'empty-cart-icon')}
           <h2>购物车还是空的</h2>
-          <p>在商品详情页选择规格后点击“加入购物车”，稍后再统一确认。</p>
           <a class="primary link-button" href="/products">去选购商品</a>
         </section>
       `}
@@ -2053,8 +2253,8 @@ function summaryRows(item, sku) {
     ['商品', item.name],
     ['规格', Object.values(selectedOptions(item)).join(' / ')],
     ['订单归属', state.user ? `当前账号 @${state.user.username}` : '登录后自动绑定'],
-    ['支付方式', state.paymentMethod === 'wechat' ? '微信支付' : state.paymentMethod === 'alipay' ? '支付宝' : state.paymentMethod === 'balance' ? '余额支付' : 'USDT'],
-    ['应付金额', `${sku.priceUsdt.toFixed(2)} USDT ≈ ${money(sku.priceUsdt)}`]
+    ['支付方式', state.paymentMethod === 'alipay' ? '支付宝' : state.paymentMethod === 'balance' ? '余额支付' : 'USDT-TRC20'],
+    ['应付金额', `${sku.priceUsdt.toFixed(2)} USD ≈ ${money(sku.priceUsdt)}`]
   ];
   return `<div class="summary-rows">${rows.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>`;
 }
@@ -2069,7 +2269,7 @@ function createLocalOrder(item, sku) {
   const remainder = checkoutRemainder(amount);
   const paidByBalance = state.paymentMethod === 'balance' && remainder <= 0;
   if (state.paymentMethod === 'balance' && remainder > 0) {
-    notify('余额不足，请选择微信、支付宝或 USDT 组合支付');
+    notify('余额不足，请选择支付宝或 USDT 组合支付');
     return null;
   }
   if (balanceUsed > 0) {
@@ -2111,7 +2311,7 @@ function createLocalOrder(item, sku) {
 async function createOrder() {
   syncInputs();
   if (!state.user) {
-    state.loginReturnTo = '/checkout';
+    state.loginReturnTo = currentAppPath().startsWith('/products/') ? currentAppPath() : '/products';
     notify('请先使用邮箱登录后再支付');
     return navigate('/login');
   }
@@ -2729,7 +2929,7 @@ function accountOverviewCards(userName) {
     ['个人信息', `<div class="overview-profile"><span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料'],
     ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button type="button">充值</button><button type="button">提现</button></div>', ''],
     ['邮箱账号', `<b>${escapeHtml(userEmail() || 'user@example.com')}</b><em class="bound">已绑定</em><small>暂不支持更换</small>`, ''],
-    ['默认货币', '<b>USD</b>', '更改货币'],
+    ['默认货币', `<b>${(CURRENCIES[state.user?.defaultCurrency] ? state.user.defaultCurrency : state.fiatCurrency)}</b>`, '更改货币'],
     ['最近登录', '<b>2025-05-28 18:24</b><small>London, United Kingdom</small>', '查看登录记录'],
     ['通知设置', '<b>邮箱通知、订单更新、活动提醒等</b><em class="bound">已开启</em><label class="overview-switch"><input checked type="checkbox" /><span></span></label>', '']
   ];
@@ -2882,12 +3082,12 @@ function accountWalletPanel() {
     <div class="wallet-balance">
       <span>当前余额</span>
       <strong>${Number(state.wallet.balance || 0).toFixed(2)} USDT</strong>
-      <p>支持微信、支付宝和 USDT 充值，到账后会计入余额。</p>
+      <p>支持支付宝和 USDT 充值，到账后会计入余额。</p>
     </div>
     <form class="wallet-recharge">
       <h3>余额充值</h3>
       <label>充值金额<input id="rechargeAmount" type="number" min="1" step="0.01" value="${escapeHtml(state.rechargeDraft.amount)}" /></label>
-      <label>充值方式<select id="rechargeMethod"><option value="wechat">微信支付</option><option value="alipay">支付宝支付</option><option value="usdt_trc20">USDT TRC20</option></select></label>
+      <label>充值方式<select id="rechargeMethod"><option value="alipay">支付宝支付</option><option value="usdt_trc20">USDT TRC20</option></select></label>
       <button class="primary" data-action="createRecharge" type="button">创建充值单</button>
       <small>充值创建后请按页面提示完成支付，到账后余额会自动更新。</small>
     </form>
@@ -2967,7 +3167,7 @@ function accountNotificationsPanel() {
 function accountHelpPanel() {
   const faqs = [
     ['购买说明', '选择商品和规格后进入结算，订单会绑定当前邮箱账号。'],
-    ['充值说明', '余额单位为 USDT，微信/支付宝通过第三方聚合支付折算入账。'],
+    ['充值说明', '余额单位为 USDT，支付宝通过第三方聚合支付折算入账。'],
     ['USDT TRC20 支付说明', '仅支持 TRC20，转账金额和网络必须与订单一致，到账后进入确认。'],
     ['发货说明', '自动发货会展示卡密、账号密码、兑换码、链接或文字说明；人工商品由后台处理。'],
     ['售后规则', '用户提交工单后，后台人工处理补发、退款、驳回或继续沟通。']
@@ -2994,7 +3194,7 @@ function ticketCardsForOrder(order) {
 }
 
 function productsPage() {
-  shell(`<section class="page-title"><h1>商品列表</h1><p>浏览全部数字商品，按分类、交付方式和库存状态快速筛选。</p></section>${productBrowser(true)}`, 'page');
+  shell(`<section class="catalog-home">${productBrowser(true)}</section>`, 'page catalog-page');
 }
 
 function account() {
@@ -3171,6 +3371,11 @@ function adminMenu() {
 
 function adminOps() {
   return state.adminData.ops || {};
+}
+
+function adminContentSetting(key, fallback = {}) {
+  const entry = (adminOps().content || []).find((item) => item.key === key);
+  return { ...fallback, ...(entry?.valueJson || entry?.value || {}) };
 }
 
 function adminFilterScope(tab = state.adminTab, sub = state.adminSubTabs[tab] || '') {
@@ -3472,7 +3677,7 @@ function adminContent(tab) {
       const visibleSkuRows = filterAdminSkuRows(skuRows, filters);
       body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: '库存状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], '<button class="primary small" type="button">批量改价</button><button class="secondary" type="button">批量上下架</button>', scope)}<div class="admin-panel">${adminTable([
         { label: 'SKU', width: '1.4fr' }, { label: '商品' }, { label: '规格组合' }, { label: '价格' }, { label: '库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '状态' }, { label: '操作' }
-      ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USDT`, Number(sku.stockQuantity ?? productStockCount(product)), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), '<button type="button">编辑</button>']), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
+      ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USD`, Number(sku.stockQuantity ?? productStockCount(product)), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), '<button type="button">编辑</button>']), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
     } else if (sub === 'edit') {
       const product = productList[0] || {};
       const productTags = productFeatureTags(product).join('，');
@@ -3503,7 +3708,7 @@ function adminContent(tab) {
         { label: '商品', width: '1.5fr' }, { label: '分类' }, { label: '类型' }, { label: 'SKU 数' }, { label: '库存' }, { label: '最低价' }, { label: '状态' }, { label: '前台展示' }, { label: '更新时间' }, { label: '操作', width: '1.4fr' }
       ], visibleProducts.map((p) => {
         const minPrice = Math.min(...(p.skus || [{ priceUsdt: 0 }]).map((sku) => Number(sku.priceUsdt || 0)));
-        return [`<b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.id)}</small>`, escapeHtml(p.category || p.categoryId || '-'), escapeHtml(p.productType || 'subscription'), (p.skus || []).length, productStockCount(p), `${minPrice.toFixed(2)} USDT`, adminStatus(p.status === 'hidden' ? '已下架' : '已上架', p.status === 'hidden' ? 'neutral' : 'success'), adminStatus(p.status === 'hidden' ? '隐藏' : '展示', p.status === 'hidden' ? 'neutral' : 'success'), timeFrom(p.updatedAt || p.createdAt), `<button data-action="adminSubTab" data-tab="products" data-subtab="edit" type="button">编辑</button><button data-action="adminToggleProduct" data-id="${p.id}" type="button">${p.status === 'hidden' ? '上架' : '下架'}</button>`];
+        return [`<b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.id)}</small>`, escapeHtml(p.category || p.categoryId || '-'), escapeHtml(p.productType || 'subscription'), (p.skus || []).length, productStockCount(p), `${minPrice.toFixed(2)} USD`, adminStatus(p.status === 'hidden' ? '已下架' : '已上架', p.status === 'hidden' ? 'neutral' : 'success'), adminStatus(p.status === 'hidden' ? '隐藏' : '展示', p.status === 'hidden' ? 'neutral' : 'success'), timeFrom(p.updatedAt || p.createdAt), `<button data-action="adminSubTab" data-tab="products" data-subtab="edit" type="button">编辑</button><button data-action="adminToggleProduct" data-id="${p.id}" type="button">${p.status === 'hidden' ? '上架' : '下架'}</button>`];
       }), { title: '没有匹配商品', desc: '调整分类、状态、发货方式或关键词后重试。' })}${adminPager(visibleProducts.length)}</div>`;
     }
     return adminPage('商品中心', '管理所有上架商品、SKU、价格与前台展示状态。', body, { tabKey: 'products', tabs, actions: '<button class="primary small" type="button">新增商品</button>' });
@@ -3567,7 +3772,24 @@ function adminContent(tab) {
   if (tab === 'notifications') return adminPage('通知中心', '管理 Telegram、邮件、站内通知模板与发送记录。', `<div class="admin-panel">${adminActionForm('template.save', [['type','模板类型','text','stock_warning'], ['title','标题'], ['content','模板内容','textarea','支持 {{orderNo}} {{skuName}} 等变量'], ['enabled','启用','checkbox']], '保存通知模板')}${adminTable([{ label: '模板类型' }, { label: '标题' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.notificationTemplates || []).map((n) => [escapeHtml(n.type), escapeHtml(n.title), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无通知模板', desc: '库存预警、订单支付、发货成功和售后回复都应配置通知模板。' })}</div><div class="admin-panel">${adminTable([{ label: '类型' }, { label: '渠道' }, { label: '提供方' }, { label: '状态' }, { label: '创建时间' }], state.adminData.notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), escapeHtml(n.provider), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '暂无通知记录', desc: '通知发送成功、失败和重试记录会显示在这里。' })}</div>`);
   if (tab === 'audit') return adminPage('审计日志', '记录高风险操作、配置修改和人工处理行为。', `${adminToolbar([{ label: '搜索日志', placeholder: '动作 / 对象 / 操作人' }, { label: '操作类型', type: 'select', value: '全部类型' }, { label: '时间范围', placeholder: '最近 30 天' }])}<div class="admin-panel">${adminTable([{ label: '动作' }, { label: '操作人' }, { label: '对象' }, { label: '对象 ID' }, { label: '时间' }], state.adminData.auditLogs.map((log) => [escapeHtml(log.action), `${escapeHtml(log.actorRole)}:${escapeHtml(log.actorId)}`, escapeHtml(log.target), escapeHtml(log.targetId), timeFrom(log.createdAt)]), { title: '暂无审计日志', desc: '修改价格、库存明文查看、收款地址、手动确认支付等操作必须留下审计。' })}</div>`);
   if (tab === 'users') return adminPage('用户中心', '聚合用户订单、售后、支付记录、风险备注和黑名单。', `<div class="admin-panel">${adminActionForm('blacklist.create', [['kind','类型','text','telegram_id / wallet / ip / device'], ['value','拉黑值'], ['reason','原因'], ['effect','效果','text','block_order'], ['status','状态','text','active']], '加入黑名单')}${adminTable([{ label: '类型' }, { label: '值' }, { label: '原因' }, { label: '效果' }, { label: '状态' }], (ops.blacklists || []).map((b) => [escapeHtml(b.kind), escapeHtml(b.value), escapeHtml(b.reason), escapeHtml(b.effect || '-'), adminStatus(b.status, adminToneFromStatus(b.status))]), { title: '暂无黑名单', desc: '命中风险规则的用户、钱包、IP 或设备会显示在这里。' })}</div>`);
-  if (tab === 'content') return adminPage('内容中心', '管理首页配置、FAQ 和购买须知模板。', `<div class="admin-panel">${adminActionForm('content.save', [['key','配置 Key','text','home'], ['value','JSON 内容','textarea','{"heroTitle":"标题","benefits":["即时发货"]}']], '保存内容')}</div><div class="admin-panel">${adminActionForm('faq.create', [['question','问题'], ['answer','答案','textarea'], ['category','分类','text','支付类'], ['sortOrder','排序','number']], '新增 FAQ')}${adminTable([{ label: '问题' }, { label: '分类' }, { label: '状态' }, { label: '答案', width: '2fr' }], (ops.faqs || []).map((f) => [escapeHtml(f.question), escapeHtml(f.category), adminStatus(f.visible ? '显示' : '隐藏', f.visible ? 'success' : 'neutral'), escapeHtml(f.answer)]), { title: '暂无 FAQ', desc: '支付、发货、售后等常见问题可在这里维护。' })}</div><div class="admin-panel">${adminTable([{ label: '模板' }, { label: '商品类型' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.noteTemplates || []).map((n) => [escapeHtml(n.name), escapeHtml(n.productType), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无购买须知模板', desc: '不同商品类型的购买须知和售后规则可独立维护。' })}</div>`);
+  if (tab === 'content') {
+    const support = adminContentSetting('support_channel', DEFAULT_SUPPORT_CHANNEL);
+    return adminPage('内容中心', '管理帮助中心、客服频道和商品详情说明模板。', `
+      <div class="admin-panel">
+        <div class="admin-section-title"><h2>客服频道配置</h2><span>前台帮助中心侧栏、首页轻分类卡片会读取这里的链接。</span></div>
+        <form class="admin-form" data-action="adminOps" data-ops="content.save">
+          <input name="key" type="hidden" value="support_channel" />
+          <label>标题<input name="value.title" value="${escapeHtml(support.title || DEFAULT_SUPPORT_CHANNEL.title)}" placeholder="客服频道" /></label>
+          <label>显示名称<input name="value.label" value="${escapeHtml(support.label || DEFAULT_SUPPORT_CHANNEL.label)}" placeholder="@ichuhaikefu" /></label>
+          <label>频道链接<input name="value.url" value="${escapeHtml(support.url || DEFAULT_SUPPORT_CHANNEL.url)}" placeholder="https://t.me/xxxx" /></label>
+          <label class="admin-field-wide">说明<textarea name="value.description" placeholder="客服频道说明">${escapeHtml(support.description || DEFAULT_SUPPORT_CHANNEL.description)}</textarea></label>
+          <div class="admin-form-actions"><button class="primary small" type="submit">保存客服频道</button></div>
+        </form>
+      </div>
+      <div class="admin-panel">${adminActionForm('faq.create', [['question','问题'], ['answer','答案','textarea'], ['category','分类','text','支付类'], ['sortOrder','排序','number']], '新增 FAQ')}${adminTable([{ label: '问题' }, { label: '分类' }, { label: '状态' }, { label: '答案', width: '2fr' }], (ops.faqs || []).map((f) => [escapeHtml(f.question), escapeHtml(f.category), adminStatus(f.visible ? '显示' : '隐藏', f.visible ? 'success' : 'neutral'), escapeHtml(f.answer)]), { title: '暂无 FAQ', desc: '支付、发货、售后等常见问题可在这里维护，并展示到帮助中心。' })}</div>
+      <div class="admin-panel">${adminTable([{ label: '模板' }, { label: '商品类型' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.noteTemplates || []).map((n) => [escapeHtml(n.name), escapeHtml(n.productType), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无商品详情说明模板', desc: '不同商品类型的说明、售后规则和注意事项可独立维护。' })}</div>
+    `);
+  }
   if (tab === 'marketing') return adminPage('营销中心', '管理优惠码、商品标签、活动和前台推荐资源位。', `<div class="admin-panel">${adminActionForm('coupon.create', [['name','名称'], ['code','优惠码'], ['discountType','类型','text','amount / percent'], ['discountValue','优惠值'], ['minAmount','最低消费'], ['usageLimit','使用次数','number']], '创建优惠码')}${adminTable([{ label: '优惠码' }, { label: '名称' }, { label: '类型' }, { label: '优惠值' }, { label: '状态' }], (ops.coupons || []).map((c) => [escapeHtml(c.code), escapeHtml(c.name), escapeHtml(c.discountType), escapeHtml(c.discountValue), adminStatus(c.status, adminToneFromStatus(c.status))]), { title: '暂无优惠码', desc: '创建优惠码后可用于活动、客服补偿和复购转化。' })}</div>`);
   if (tab === 'system') return adminPage('系统设置', '管理管理员、角色权限、危险操作确认和系统开关。', `<div class="admin-panel">${adminTable([{ label: '账号' }, { label: '邮箱' }, { label: '角色' }, { label: '状态' }], (ops.adminUsers || []).map((u) => [escapeHtml(u.username), escapeHtml(u.email || '-'), escapeHtml(u.role), adminStatus(u.status, adminToneFromStatus(u.status))]), { title: '暂无管理员账号', desc: '生产环境至少需要一个拥有二次确认能力的管理员账号。' })}</div><div class="admin-panel">${adminTable([{ label: '角色' }, { label: '权限', width: '3fr' }, { label: '更新时间' }], (ops.roles || []).map((r) => [escapeHtml(r.role), escapeHtml(Array.isArray(r.permissionsJson) ? r.permissionsJson.join(', ') : r.permissionsJson), timeFrom(r.updatedAt)]), { title: '暂无角色权限', desc: '建议区分运营、客服、财务、超级管理员权限。' })}</div><div class="admin-risk-callout"><b>高风险操作保护</b><span>修改价格、导入或查看库存、修改收款地址、手动确认支付、人工发货、补发、退款与权限变更均需审计日志。</span></div>`);
   return adminContent('dashboard');
@@ -3575,13 +3797,17 @@ function adminContent(tab) {
 
 function faq() {
   const groups = [
+    ['公告中心', [
+      ['近期公告在哪里看？', '站点公告会集中展示在帮助中心，涉及支付、库存、维护和客服频道调整时会在这里同步。'],
+      ['商品库存变化会通知吗？', '热门商品补货、售罄或维护时，会通过站内消息和客服频道同步说明。']
+    ]],
     ['下单类', [
       ['我需要提供哪些信息？', '至少需要邮箱账号。部分商品还需要账号 ID、区服或备注。'],
       ['邮箱或订单信息填错怎么办？', '未发货前可在订单详情提交售后工单申请修改；已发货后需要人工审核是否可补发。'],
       ['可以修改订单信息吗？', '订单未支付或未发货前可以申请修改，支付后请保留订单号并联系人工客服。']
     ]],
     ['支付类', [
-      ['支持哪些支付方式？', '支持微信、支付宝和 USDT。选择 USDT 时，请按支付页展示的金额付款。'],
+      ['支持哪些支付方式？', '支持余额支付、USDT TRC20 和支付宝。选择 USDT 时，请按支付页展示的金额付款。'],
       ['付款后没识别怎么办？', '长时间未更新时，请联系在线客服协助核对。'],
       ['少付、多付、超时付款怎么办？', '订单会进入异常处理，少付需补差价，多付可申请退差额或余额，超时付款需人工匹配。'],
       ['USDT 支付需要注意什么？', '请在付款前确认金额和钱包网络。发生问题后请联系人工客服处理。']
@@ -3603,12 +3829,14 @@ function faq() {
   ];
   const categorySlug = (title) => ({
     下单类: 'order',
+    公告中心: 'announcement',
     支付类: 'payment',
     发货类: 'delivery',
     售后类: 'support',
     账号类: 'account'
   }[title] || title);
   const questionCount = groups.reduce((count, [, items]) => count + items.length, 0);
+  const channel = supportChannel();
   const groupMarkup = groups.map(([title, items], groupIndex) => {
     const slug = categorySlug(title);
     return `
@@ -3645,9 +3873,9 @@ function faq() {
             ${groups.map(([title, items]) => `<a href="#faq-${categorySlug(title)}"><b>${title}</b><em>${items.length}</em></a>`).join('')}
           </div>
           <div class="faq-support-card">
-            <span>找不到答案？</span>
-            <p>保留订单号、支付截图或收货信息，在线客服 ${SUPPORT_TELEGRAM_HANDLE} 可以更快帮你核对。</p>
-            <a class="primary small" href="/account">查询订单</a>
+            <span>${escapeHtml(channel.title)}</span>
+            <p>${escapeHtml(channel.description)}</p>
+            <a class="primary small" href="${escapeHtml(channel.url)}" target="_blank" rel="noopener">${escapeHtml(channel.label)}</a>
           </div>
         </aside>
         <div class="faq-content">
@@ -3712,7 +3940,12 @@ async function submitAdminOps(form) {
   const payload = { action: form.dataset.ops };
   const data = new FormData(form);
   for (const field of form.querySelectorAll('[name]')) {
-    payload[field.name] = parseAdminFormValue(field.name, data.get(field.name) || '', field.type);
+    const parsedValue = parseAdminFormValue(field.name, data.get(field.name) || '', field.type);
+    if (field.name.startsWith('value.')) {
+      payload.value = { ...(payload.value || {}), [field.name.slice(6)]: parsedValue };
+    } else {
+      payload[field.name] = parsedValue;
+    }
   }
   const response = await adminFetch('/api/admin/ops', {
     method: 'POST',
@@ -3817,7 +4050,7 @@ async function route() {
   const routes = [
     ['/', () => home()],
     ['/products', () => productsPage()],
-    ['/cart', () => cartPage()],
+    ['/cart', () => productsPage()],
     ['/checkout', () => checkout()],
     ['/orders/lookup', () => account()],
     ['/account', () => account()],
@@ -3851,6 +4084,11 @@ document.addEventListener('input', (event) => {
   }
   if (event.target.matches('[data-action="sortProducts"]')) {
     state.sortBy = event.target.value;
+    return route();
+  }
+  if (event.target.matches('[data-action="quantityInput"]')) {
+    state.purchaseQuantity = Math.max(1, Number(event.target.value || 1));
+    persist();
     return route();
   }
 });
@@ -3887,6 +4125,13 @@ document.addEventListener('click', async (event) => {
   if (action === 'setCurrency') { state.fiatCurrency = el.dataset.code; state.currencyOpen = false; persist(); return route(); }
   if (action === 'toggleMessages') { state.messageCenterOpen = !state.messageCenterOpen; persist(); return route(); }
   if (action === 'markMessagesRead') { state.messages = state.messages.map((message) => ({ ...message, read: true })); persist(); return route(); }
+  if (action === 'toggleAccountMenu') { state.accountMenuOpen = !state.accountMenuOpen; persist(); return route(); }
+  if (action === 'accountMenuSection') {
+    state.accountSection = el.dataset.section || 'orders';
+    state.accountMenuOpen = false;
+    persist();
+    return navigate('/account');
+  }
   if (action === 'switchAuthMode') {
     const emailInput = document.querySelector('#loginEmail');
     if (emailInput) state.email = emailInput.value.trim();
@@ -3931,7 +4176,7 @@ document.addEventListener('click', async (event) => {
     const method = document.querySelector('#rechargeMethod')?.value || 'wechat';
     if (!amount || amount <= 0) return notify('请输入有效充值金额');
     state.rechargeDraft = { amount: String(amount), method };
-    walletLedger('充值订单', amount, `${method === 'wechat' ? '微信' : method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
+    walletLedger('充值订单', amount, `${method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
     addMessage('充值单已创建', `${amount.toFixed(2)} USDT 充值待确认。`, 'wallet');
     notify('充值单已创建，等待支付确认');
     return route();
@@ -3962,7 +4207,17 @@ document.addEventListener('click', async (event) => {
     if (newPassword.length < 6) return notify('新密码至少 6 位');
     return notify('修改密码功能即将上线，敬请期待。');
   }
-  if (action === 'setPaymentMethod') { state.paymentMethod = el.dataset.method || 'balance'; persist(); return route(); }
+  if (action === 'setPaymentMethod') {
+    const method = normalizePaymentMethod(el.dataset.method || 'usdt_trc20');
+    if (method === 'balance' && !state.user) {
+      state.loginReturnTo = currentAppPath();
+      notify('请先登录后使用余额支付');
+      return navigate('/login');
+    }
+    state.paymentMethod = method;
+    persist();
+    return route();
+  }
   if (action === 'toggleUseBalance') { state.useBalance = event.target.checked; persist(); return route(); }
   if (action === 'refreshAccountOrders') return loadAccountOrders({ force: true });
   if (action === 'accountOrderFilter') { state.accountOrderFilter = el.dataset.filter || 'all'; return route(); }
@@ -4017,7 +4272,12 @@ document.addEventListener('click', async (event) => {
   if (action === 'removeCartItem') return removeCartItem(el.dataset.key);
   if (action === 'clearCart') return clearCart();
   if (action === 'checkoutCartItem') return checkoutCartItem(el.dataset.key);
-  if (action === 'paySelected') { syncInputs(); navigate('/checkout'); }
+  if (action === 'paySelected') return createOrder();
+  if (action === 'quantityMinus') { state.purchaseQuantity = Math.max(1, Number(state.purchaseQuantity || 1) - 1); persist(); return route(); }
+  if (action === 'quantityPlus') { state.purchaseQuantity = Math.max(1, Number(state.purchaseQuantity || 1) + 1); persist(); return route(); }
+  if (action === 'detailImage') { state.detailImageIndex = Math.max(0, Math.min(3, Number(el.dataset.index || 0))); return route(); }
+  if (action === 'detailImagePrev') { state.detailImageIndex = (Number(state.detailImageIndex || 0) + 3) % 4; return route(); }
+  if (action === 'detailImageNext') { state.detailImageIndex = (Number(state.detailImageIndex || 0) + 1) % 4; return route(); }
   if (action === 'createOrder') return createOrder();
   if (action === 'markPaid') return markPaid(el.dataset.id);
   if (action === 'submitTicket') {
@@ -4272,7 +4532,7 @@ document.addEventListener('change', (event) => {
 
 window.addEventListener('hashchange', route);
 window.addEventListener('popstate', route);
-await Promise.all([loadConfig(), loadCatalog()]);
+await Promise.all([loadConfig(), loadCatalog(), loadExchangeRates()]);
 const handledTelegramRedirect = await handleTelegramRedirectAuth();
 if (!handledTelegramRedirect) {
   restoreTelegramPendingLogin();
