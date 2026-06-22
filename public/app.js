@@ -59,10 +59,20 @@ const LINE_ICONS = {
   software: '<rect width="18" height="12" x="3" y="4" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/>',
   gift: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 1 1 2.5-2.5V8"/><path d="M14 8V5.5A2.5 2.5 0 1 1 16.5 8"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
+  package: '<path d="m7.5 4.3 9 5.2"/><path d="m7.5 19.7 9-5.2"/><path d="M3.3 7.1 12 2l8.7 5.1v9.8L12 22l-8.7-5.1z"/><path d="M12 12v10"/><path d="m3.3 7.1 8.7 5 8.7-5"/>',
+  cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.1 2.1h2l2.7 12.4a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 7H5.1"/>',
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   card: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/><path d="M6 15h3"/>',
+  wallet: '<path d="M18 7V6a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h14a2 2 0 0 1 2 2v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7"/><path d="M16 14h.01"/>',
   receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>',
   lightning: '<path d="m13 2-10 12h9l-1 8 10-12h-9z"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  qr: '<rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M16 16h.01"/><path d="M21 16h.01"/><path d="M16 21h.01"/><path d="M21 21h.01"/><path d="M18.5 18.5h.01"/>',
+  warning: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  'check-circle': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
   refund: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/>',
   headset: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2Z"/><path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2Z"/><path d="M13 21h3a3 3 0 0 0 3-3"/>',
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
@@ -73,6 +83,42 @@ const LINE_ICONS = {
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   'eye-off': '<path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
+};
+
+const NAV_ICON_KEYS = {
+  'A02_products.png': 'package',
+  'A04_orders_lookup.png': 'receipt',
+  'A06_shopping_cart.png': 'cart',
+  'A07_user_login.png': 'user',
+  'A09_search.png': 'search',
+  'A10_shaixuan.png': 'chevron',
+  'A11_huilvxuanzhong.png': 'check'
+};
+
+const FEATURE_ICON_KEYS = {
+  'B01_lightning_instant_delivery.png': 'lightning',
+  'B02_shield_secure_payment.png': 'shield-check',
+  'B03_headset_support.png': 'headset',
+  'B04_lock_encryption.png': 'lock',
+  'B05_clock_time.png': 'clock',
+  'B06_check_circle_success.png': 'check-circle',
+  'B07_warning_triangle.png': 'warning',
+  'B08_warranty_guarantee.png': 'shield-check',
+  'B09_auto_delivery.png': 'package',
+  'B10_manual_processing.png': 'user'
+};
+
+const PAYMENT_ICON_KEYS = {
+  'C01_usdt.png': 'wallet',
+  'C02_tron_trc20.png': 'shield-check',
+  'C03_wallet.png': 'wallet',
+  'C04_qr_code.png': 'qr',
+  'C05_copy.png': 'copy',
+  'C06_address.png': 'receipt',
+  'C07_blockchain_confirmations.png': 'check-circle',
+  'C08_payment_success.png': 'check-circle',
+  'C09_payment_failed.png': 'warning',
+  'C10_countdown_timer.png': 'clock'
 };
 
 const CATEGORY_ICON_KEYS = {
@@ -138,15 +184,18 @@ function assetImg(src, alt, className) {
 }
 
 function navIcon(file, alt, className = 'nav-icon') {
-  return assetImg(`${ASSETS.nav}${file}`, alt, className);
+  const key = NAV_ICON_KEYS[file];
+  return key ? lineIcon(key, alt, className) : assetImg(`${ASSETS.nav}${file}`, alt, className);
 }
 
 function featureIcon(file, alt) {
-  return assetImg(`${ASSETS.trust}${file}`, alt, 'feature-icon');
+  const key = FEATURE_ICON_KEYS[file];
+  return key ? lineIcon(key, alt, 'feature-icon') : assetImg(`${ASSETS.trust}${file}`, alt, 'feature-icon');
 }
 
 function paymentIcon(file, alt, className = 'payment-icon') {
-  return assetImg(`${ASSETS.payment}${file}`, alt, className);
+  const key = PAYMENT_ICON_KEYS[file];
+  return key ? lineIcon(key, alt, className) : assetImg(`${ASSETS.payment}${file}`, alt, className);
 }
 
 function lineIcon(name, alt, className) {
@@ -1558,7 +1607,7 @@ function loginPage() {
                   ${lineIcon('shield-check', '数学验证码', 'login-field-icon')}
                   <input id="loginCaptcha" inputmode="numeric" autocomplete="off" placeholder="请输入答案" />
                 </span>
-                <button class="login-captcha-card" data-action="refreshLoginCaptcha" type="button" aria-label="刷新验证码"><b>${escapeHtml(captcha.question)}</b><small>刷新</small></button>
+                <button class="login-captcha-card" data-action="refreshLoginCaptcha" type="button" aria-label="刷新验证码"><b>${escapeHtml(captcha.question)}</b></button>
               </span>
             </label>
             ${isRegister ? `
@@ -1674,7 +1723,7 @@ function productBrowser(full = false) {
         <div class="product-header">
           <div class="catalog-tools">
             <label class="search">${navIcon('A09_search.png', '搜索')} <input data-action="searchProducts" value="${state.searchQuery}" placeholder="搜索商品名称或关键词" /></label>
-            <label class="catalog-sort"><span class="sort-current">${escapeHtml(state.sortBy || '默认排序')}</span><select data-action="sortProducts" aria-label="排序"><option>默认排序</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
+            <label class="catalog-sort"><span class="sort-current">${escapeHtml(state.sortBy || '默认排序')}</span>${lineIcon('chevron', '展开排序', 'sort-chevron')}<select data-action="sortProducts" aria-label="排序"><option>默认排序</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
           </div>
         </div>
         <div class="catalog-list" role="list" aria-label="商品列表">
