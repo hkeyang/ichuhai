@@ -11794,6 +11794,729 @@ textarea {
   }
 }
 
+/* 2026-06-22 design system density pass */
+:root {
+  --control-height: 46px;
+  --control-height-sm: 38px;
+  --radius-page: 18px;
+  --radius-card: 14px;
+  --radius-control: 12px;
+  --icon-ui-sm: 18px;
+  --icon-ui-md: 20px;
+  --icon-ui-lg: 22px;
+  --focus-border: #6b7cff;
+  --focus-glow: 0 0 0 3px rgba(79, 124, 255, .12);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.search:focus-within,
+.catalog-sort:focus-within,
+.login-input:focus-within,
+.quantity-stepper:focus-within,
+.select-shell:focus-within select,
+.admin-global-search:focus-within input,
+.admin-toolbar input:focus,
+.admin-toolbar select:focus,
+.admin-form input:focus,
+.admin-form textarea:focus {
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-glow);
+}
+
+.nav-icon,
+.message-icon,
+.account-menu-icon,
+.select-chevron,
+.login-field-icon,
+.catalog-help-icon,
+.catalog-help-channel-icon,
+.catalog-trust-svg,
+.detail-spec-check-icon {
+  width: var(--icon-ui-sm);
+  height: var(--icon-ui-sm);
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+.category-icon,
+.account-chevron {
+  width: var(--icon-ui-md);
+  height: var(--icon-ui-md);
+  stroke-width: 1.8;
+}
+
+.topbar {
+  width: min(1364px, calc(100% - 84px));
+  height: 56px;
+  margin-top: 12px;
+  padding: 0 22px;
+  border-radius: var(--radius-page);
+}
+
+.brand .logo-horizontal {
+  width: 148px;
+}
+
+.top-actions .pill,
+.account-trigger {
+  min-height: 34px;
+  border-radius: var(--radius-control);
+  padding: 0 12px;
+}
+
+.message-center .icon-pill {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.catalog-page,
+.detail-page {
+  width: min(1364px, calc(100% - 84px));
+  margin-top: 12px;
+}
+
+.catalog-shell {
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.catalog-sidebar,
+.catalog-main,
+.product-detail-visual,
+.product-purchase-panel,
+.product-detail-info {
+  border-radius: var(--radius-page);
+}
+
+.catalog-sidebar {
+  gap: 9px;
+  padding: 14px;
+}
+
+.catalog-sidebar-head {
+  gap: 9px;
+}
+
+.catalog-side-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.catalog-category-list {
+  gap: 7px;
+}
+
+.catalog-category-list .category-tab {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.catalog-category-list .category-tab .category-icon {
+  width: 18px !important;
+  height: 18px !important;
+  flex-basis: 18px !important;
+}
+
+.catalog-category-list .category-tab em {
+  min-width: 24px !important;
+  padding: 2px 7px !important;
+  font-size: 11px;
+}
+
+.catalog-help-card {
+  gap: 7px;
+  padding: 10px;
+  border-radius: 14px;
+}
+
+.catalog-help-head small,
+.catalog-help-channel {
+  display: none;
+}
+
+.catalog-help-button {
+  height: 30px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.catalog-main {
+  padding: 14px 16px;
+}
+
+.product-header {
+  margin-bottom: 10px;
+}
+
+.catalog-tools {
+  grid-template-columns: minmax(0, 1fr) 172px;
+  gap: 12px;
+}
+
+.catalog-tools .search,
+.catalog-sort {
+  height: 42px;
+  border-radius: 14px;
+  border-color: #dde6f5;
+}
+
+.catalog-tools .search {
+  padding: 0 16px;
+}
+
+.catalog-sort {
+  width: 172px;
+}
+
+.catalog-list {
+  gap: 6px;
+}
+
+.catalog-card {
+  min-height: 66px;
+  grid-template-columns: 44px minmax(0, 1fr) 124px 94px 110px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.catalog-card-media .product-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.catalog-card-info {
+  gap: 3px;
+}
+
+.catalog-card-title b {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.catalog-badge {
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.catalog-card-spec {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.catalog-tags {
+  gap: 5px;
+}
+
+.delivery-chip {
+  min-height: 18px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.catalog-card-price .price-main {
+  font-size: 16px;
+}
+
+.catalog-card-price .price-fiat,
+.catalog-card-stock small {
+  font-size: 11px;
+}
+
+.catalog-card-stock {
+  gap: 2px;
+}
+
+.catalog-card-stock .stock-flag {
+  font-size: 12px;
+}
+
+.catalog-card .buy-button {
+  min-height: 32px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.catalog-trust {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.catalog-trust-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.catalog-trust-copy b {
+  font-size: 12px;
+}
+
+.catalog-trust-copy small {
+  display: none;
+}
+
+.product-detail-layout {
+  grid-template-columns: minmax(400px, .92fr) minmax(440px, 1fr);
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.breadcrumb {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.product-detail-visual {
+  gap: 10px;
+  padding: 18px;
+}
+
+.gallery-main {
+  min-height: 340px;
+  border-radius: 16px;
+}
+
+.gallery-art .product-icon {
+  width: 190px;
+  height: 190px;
+  border-radius: 42px;
+}
+
+.gallery-arrow {
+  width: 38px;
+  height: 38px;
+}
+
+.gallery-thumbs {
+  gap: 10px;
+}
+
+.gallery-thumb {
+  height: 60px;
+  border-radius: 12px;
+}
+
+.gallery-thumb .product-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.product-purchase-panel {
+  gap: 12px;
+  padding: 20px 22px;
+}
+
+.product-purchase-panel h1 {
+  font-size: 24px;
+  line-height: 30px;
+}
+
+.detail-tags,
+.detail-page .product-tags {
+  gap: 6px;
+  margin-top: 0;
+}
+
+.detail-tags span,
+.detail-page .product-tags span {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.detail-price-block {
+  padding-bottom: 12px;
+}
+
+.detail-price-main .price-main {
+  font-size: 30px;
+}
+
+.detail-price-main .price-fiat,
+.detail-stock-info small {
+  font-size: 12px;
+}
+
+.detail-spec-group {
+  gap: 6px;
+}
+
+.detail-spec-label {
+  font-size: 14px;
+}
+
+.detail-spec-options {
+  gap: 8px;
+}
+
+.detail-spec-pill {
+  min-width: 86px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 11px;
+}
+
+.detail-spec-pill b {
+  font-size: 13px;
+}
+
+.quantity-stepper {
+  height: 40px;
+  grid-template-columns: 42px 58px 42px;
+  border-radius: 11px;
+}
+
+.detail-payment-methods {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-payment-methods button,
+.payment-method-row button {
+  min-height: 44px;
+  border-radius: 11px;
+}
+
+.detail-payment-methods button b,
+.payment-method-row button b {
+  font-size: 13px;
+}
+
+.detail-payment-methods button small {
+  font-size: 11px;
+}
+
+.detail-buy-button {
+  min-height: 46px;
+  border-radius: 14px;
+  font-size: 16px;
+}
+
+.product-detail-info {
+  margin-top: 18px;
+  padding: 18px 22px;
+}
+
+.product-detail-info h2 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.detail-info-text {
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.login-page-shell {
+  padding: 22px 20px;
+  overflow: hidden;
+}
+
+.login-page {
+  width: min(1120px, 100%);
+}
+
+.login-card-reference {
+  width: min(1120px, 100%);
+  min-height: min(680px, calc(100vh - 44px));
+  grid-template-columns: minmax(420px, 1fr) 500px;
+}
+
+.login-brand-reference {
+  gap: 30px;
+  padding: 52px 44px 38px;
+}
+
+.login-brand-reference .login-logo img {
+  width: 154px;
+}
+
+.login-brand-copy {
+  gap: 10px;
+}
+
+.login-brand-copy h1 {
+  font-size: 26px;
+}
+
+.login-brand-copy p {
+  font-size: 15px;
+}
+
+.login-shop-art {
+  width: 360px;
+  height: 270px;
+  margin-top: 4px;
+}
+
+.login-shop-art::after {
+  inset: 18px 58px 62px;
+}
+
+.login-bag {
+  left: 112px;
+  top: 78px;
+  width: 142px;
+  height: 142px;
+}
+
+.login-bag::before {
+  left: 38px;
+  top: -34px;
+  width: 66px;
+  height: 66px;
+  border-width: 7px;
+}
+
+.login-bag i {
+  top: 48px;
+  width: 44px;
+  height: 44px;
+}
+
+.login-float,
+.login-float .product-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+}
+
+.login-float-discord { left: 52px; top: 48px; }
+.login-float-spotify { right: 58px; top: 48px; }
+.login-float-youtube { right: 38px; top: 150px; }
+.login-float-steam { left: 40px; top: 168px; }
+.login-float-office { right: 80px; bottom: 32px; }
+
+.login-card-reference .login-form {
+  min-height: min(680px, calc(100vh - 44px));
+  gap: 18px;
+  padding: 42px 54px 34px;
+}
+
+.login-card-reference .login-form-title {
+  margin-bottom: 6px;
+}
+
+.login-card-reference .login-form-title h1 {
+  font-size: 28px;
+}
+
+.login-card-reference .login-form-title p {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.login-card-reference .login-tabs {
+  gap: 42px;
+  margin-bottom: 4px;
+}
+
+.login-tab {
+  padding-bottom: 12px;
+  font-size: 18px;
+}
+
+.login-card-reference .login-fields,
+.login-fields {
+  gap: 14px;
+}
+
+.login-field {
+  gap: 7px;
+}
+
+.login-input {
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.login-input input {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.login-field-icon {
+  margin-left: 14px;
+}
+
+.login-eye {
+  width: 32px;
+  height: 32px;
+}
+
+.login-captcha-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 10px;
+}
+
+.login-captcha-card {
+  min-height: 46px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  border: 1px solid #dfe7f5;
+  border-radius: 12px;
+  background: #f7f9ff;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.login-captcha-card b {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.login-captcha-card small {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.login-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.login-remember,
+.login-agree.compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-remember input,
+.login-agree.compact input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.login-forgot {
+  justify-self: auto;
+  margin: 0;
+}
+
+.login-submit {
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.login-switch {
+  padding-top: 8px;
+  font-size: 14px;
+}
+
+.login-footer {
+  bottom: -30px;
+}
+
+@media (max-width: 1180px) {
+  .catalog-card {
+    grid-template-columns: 48px minmax(0, 1fr) 116px 90px 106px;
+  }
+
+  .catalog-trust {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .topbar,
+  .catalog-page,
+  .detail-page {
+    width: calc(100% - 24px);
+  }
+
+  .catalog-shell,
+  .product-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-sort {
+    width: 100%;
+  }
+
+  .login-card-reference {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .login-card-reference .login-form {
+    min-height: 0;
+    padding: 34px 28px;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar,
+  .catalog-page,
+  .detail-page {
+    width: calc(100% - 16px);
+  }
+
+  .catalog-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "media info"
+      "price stock"
+      "buy buy";
+    row-gap: 8px;
+    padding: 12px;
+  }
+
+  .catalog-card-media .product-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .catalog-card-price { grid-area: price; }
+  .catalog-card-stock { grid-area: stock; justify-self: end; }
+  .catalog-card .buy-button { grid-area: buy; }
+
+  .login-page-shell {
+    min-height: 100svh;
+    overflow: auto;
+  }
+
+  .login-card-reference .login-form {
+    padding: 28px 20px;
+  }
+
+  .login-captcha-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .catalog-card .catalog-card-spec {
   width: auto !important;
   height: auto !important;
@@ -12214,5 +12937,420 @@ textarea {
 
   .catalog-trust {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Final density overrides: keep catalog first viewport at 7-8 products. */
+.topbar {
+  height: 56px !important;
+  margin-top: 12px !important;
+}
+
+.catalog-page {
+  margin-top: 12px !important;
+}
+
+.catalog-sidebar {
+  padding: 14px !important;
+  gap: 9px !important;
+}
+
+.catalog-main {
+  padding: 14px 16px !important;
+}
+
+.product-header {
+  margin-bottom: 10px !important;
+}
+
+.catalog-tools {
+  align-items: stretch !important;
+  grid-template-columns: minmax(0, 1fr) 172px !important;
+  gap: 12px !important;
+}
+
+.catalog-tools .search,
+.catalog-sort {
+  height: 42px !important;
+  min-height: 42px !important;
+  align-self: stretch !important;
+  margin: 0 !important;
+  border-radius: 14px !important;
+  box-sizing: border-box;
+}
+
+.catalog-sort {
+  width: 172px !important;
+}
+
+.catalog-list {
+  gap: 6px !important;
+}
+
+.catalog-card {
+  min-height: 66px !important;
+  grid-template-columns: 44px minmax(0, 1fr) 124px 94px 110px !important;
+  gap: 10px !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+}
+
+.catalog-card-media .product-icon {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 10px !important;
+}
+
+.catalog-card-info {
+  gap: 3px !important;
+}
+
+.catalog-card-title b {
+  font-size: 14px !important;
+  line-height: 18px !important;
+}
+
+.catalog-card-spec {
+  font-size: 11px !important;
+  line-height: 14px !important;
+}
+
+.catalog-badge,
+.delivery-chip {
+  min-height: 18px !important;
+  height: 18px !important;
+  font-size: 11px !important;
+}
+
+.catalog-card-price .price-main {
+  font-size: 16px !important;
+}
+
+.catalog-card-price .price-fiat,
+.catalog-card-stock small {
+  font-size: 11px !important;
+}
+
+.catalog-card-stock .stock-flag {
+  font-size: 12px !important;
+}
+
+.catalog-card .buy-button {
+  min-height: 32px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+}
+
+.catalog-help-card {
+  padding: 10px !important;
+}
+
+.catalog-help-button {
+  height: 30px !important;
+}
+
+.catalog-trust {
+  margin-top: 8px !important;
+  padding: 8px 10px !important;
+}
+
+@media (max-width: 980px) {
+  .catalog-tools {
+    grid-template-columns: 1fr !important;
+  }
+
+  .catalog-sort {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .catalog-card {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-areas:
+      "media info"
+      "price buy"
+      "stock stock" !important;
+    align-items: center !important;
+    min-height: 0 !important;
+    row-gap: 8px !important;
+  }
+
+  .catalog-card-media {
+    grid-area: media !important;
+  }
+
+  .catalog-card-info {
+    grid-area: info !important;
+  }
+
+  .catalog-card-price {
+    grid-area: price !important;
+  }
+
+  .catalog-card-stock {
+    grid-area: stock !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .catalog-card .buy-button {
+    grid-area: buy !important;
+  }
+}
+
+/* Final auth-page compact overrides. */
+.login-page-shell {
+  padding: 12px 20px !important;
+  overflow: hidden !important;
+}
+
+.login-page {
+  width: min(1120px, 100%) !important;
+  padding: 0 !important;
+}
+
+.login-card-reference {
+  min-height: min(744px, calc(100vh - 24px)) !important;
+}
+
+.login-brand-reference {
+  padding: 46px 42px 30px !important;
+  gap: 24px !important;
+}
+
+.login-brand-reference .login-logo img {
+  width: 148px !important;
+}
+
+.login-brand-copy {
+  gap: 8px !important;
+}
+
+.login-brand-copy h1 {
+  font-size: 24px !important;
+}
+
+.login-brand-copy p {
+  font-size: 14px !important;
+}
+
+.login-shop-art {
+  width: 330px !important;
+  height: 238px !important;
+  margin-top: 0 !important;
+}
+
+.login-bag {
+  left: 102px !important;
+  top: 68px !important;
+  width: 126px !important;
+  height: 126px !important;
+}
+
+.login-bag::before {
+  left: 34px !important;
+  top: -30px !important;
+  width: 58px !important;
+  height: 58px !important;
+}
+
+.login-bag i {
+  top: 42px !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+.login-float,
+.login-float .product-icon {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+.login-card-reference .login-form {
+  min-height: min(744px, calc(100vh - 24px)) !important;
+  gap: 10px !important;
+  padding: 30px 54px 24px !important;
+}
+
+.login-card-reference .login-form-title {
+  margin-bottom: 2px !important;
+}
+
+.login-card-reference .login-form-title h1 {
+  font-size: 24px !important;
+  line-height: 1.16 !important;
+}
+
+.login-card-reference .login-form-title p {
+  margin-top: 4px !important;
+  font-size: 13px !important;
+}
+
+.login-card-reference .login-tabs {
+  margin-bottom: 2px !important;
+}
+
+.login-tab {
+  padding: 3px 4px 10px !important;
+  font-size: 16px !important;
+}
+
+.login-card-reference .login-fields,
+.login-fields {
+  gap: 10px !important;
+}
+
+.login-field {
+  gap: 5px !important;
+}
+
+.login-field-label {
+  font-size: 13px !important;
+}
+
+.login-input,
+.login-captcha-card {
+  min-height: 40px !important;
+}
+
+.login-input input {
+  min-height: 38px !important;
+}
+
+.login-options-row,
+.login-agree.compact {
+  min-height: 22px !important;
+}
+
+.login-submit {
+  min-height: 44px !important;
+}
+
+.login-switch {
+  padding-top: 4px !important;
+}
+
+.login-footer {
+  display: none !important;
+}
+
+/* Final detail-page compact purchase layout. */
+.detail-page {
+  margin-top: 10px !important;
+  padding-bottom: 64px !important;
+}
+
+.detail-page .breadcrumb {
+  margin: 0 0 10px !important;
+  font-size: 13px !important;
+}
+
+.product-detail-layout {
+  align-items: start !important;
+  grid-template-columns: minmax(390px, .9fr) minmax(430px, 1fr) !important;
+  gap: 18px !important;
+  margin-top: 10px !important;
+}
+
+.product-detail-visual {
+  align-self: start !important;
+  padding: 16px !important;
+  gap: 10px !important;
+}
+
+.product-gallery {
+  gap: 10px !important;
+}
+
+.gallery-main {
+  min-height: 320px !important;
+  height: 320px !important;
+}
+
+.gallery-art .product-icon {
+  width: 176px !important;
+  height: 176px !important;
+  border-radius: 38px !important;
+}
+
+.gallery-thumb {
+  height: 56px !important;
+}
+
+.product-purchase-panel {
+  align-self: start !important;
+  gap: 10px !important;
+  padding: 16px 20px !important;
+}
+
+.product-purchase-panel h1 {
+  font-size: 24px !important;
+  line-height: 29px !important;
+}
+
+.detail-price-block {
+  padding-bottom: 10px !important;
+}
+
+.detail-price-main .price-main {
+  font-size: 28px !important;
+}
+
+.detail-spec-group {
+  display: grid !important;
+  grid-template-columns: 76px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 8px 12px !important;
+}
+
+.detail-spec-label {
+  font-size: 13px !important;
+}
+
+.detail-spec-options {
+  gap: 8px !important;
+}
+
+.detail-spec-pill {
+  min-height: 36px !important;
+  min-width: 82px !important;
+  padding: 4px 11px !important;
+}
+
+.detail-spec-pill b {
+  font-size: 13px !important;
+}
+
+.quantity-stepper {
+  height: 36px !important;
+  grid-template-columns: 38px 52px 38px !important;
+}
+
+.detail-payment-methods {
+  gap: 8px !important;
+}
+
+.detail-payment-methods button {
+  min-height: 40px !important;
+  padding: 0 10px !important;
+}
+
+.detail-buy-button {
+  min-height: 44px !important;
+}
+
+.product-detail-info {
+  margin-top: 14px !important;
+}
+
+@media (max-width: 980px) {
+  .product-detail-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .detail-spec-group {
+    grid-template-columns: 1fr !important;
   }
 }

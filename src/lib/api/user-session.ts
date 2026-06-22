@@ -4,7 +4,9 @@
 
 import { timingSafeEqual } from "./admin-session";
 
-const USER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_USER_TTL_DAYS = 7;
+const REMEMBER_USER_TTL_DAYS = 30;
 
 function sessionSecret(env: CloudflareEnv): string {
   // 优先用独立的用户会话密钥，否则复用 admin 会话密钥，避免新增必填配置。
@@ -31,16 +33,25 @@ async function signPayload(payload: string, secret: string): Promise<string> {
 }
 
 /** 为用户签发带签名和过期时间的会话 token。 */
-export async function createUserSessionToken(userId: string, env: CloudflareEnv): Promise<string> {
+export async function createUserSessionToken(
+  userId: string,
+  env: CloudflareEnv,
+  options: { remember?: boolean } = {}
+): Promise<string> {
+  const ttlDays = options.remember ? REMEMBER_USER_TTL_DAYS : DEFAULT_USER_TTL_DAYS;
   const payload = btoa(
     JSON.stringify({
       sub: userId,
       nonce: crypto.randomUUID(),
-      exp: Date.now() + USER_TTL_MS,
+      exp: Date.now() + ttlDays * DAY_MS,
     })
   );
   const signature = await signPayload(payload, sessionSecret(env));
   return `${payload}.${signature}`;
+}
+
+export function userSessionTtlDays(remember = false): number {
+  return remember ? REMEMBER_USER_TTL_DAYS : DEFAULT_USER_TTL_DAYS;
 }
 
 /** 校验签名 token，返回 userId；失败返回 null。 */

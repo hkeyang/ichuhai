@@ -150,7 +150,7 @@ function paymentIcon(file, alt, className = 'payment-icon') {
 }
 
 function lineIcon(name, alt, className) {
-  return `<svg class="${className}" viewBox="0 0 24 24" aria-label="${alt}" role="img" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${LINE_ICONS[name] || LINE_ICONS.more}</svg>`;
+  return `<svg class="${className}" viewBox="0 0 24 24" aria-label="${alt}" role="img" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${LINE_ICONS[name] || LINE_ICONS.more}</svg>`;
 }
 
 function categoryIcon(label) {
@@ -266,6 +266,59 @@ const products = [
       { id: 'ms-family', optionValues: { plan: '家庭版' }, priceUsdt: 8.8, stock: 'in_stock', deliveryType: 'auto' }
     ],
     notice: { deliverySummary: '自动发货', warrantySummary: '30天', refundSummary: '激活后不支持退款', usageGuide: '按邮件中的步骤完成激活。', warrantyDetail: '激活失败可联系售后处理。', attention: '请勿频繁切换绑定邮箱。', faq: ['是否支持 Mac？', '包含 OneDrive 吗？'] }
+  },
+  {
+    id: 'telegram-premium',
+    slug: 'telegram-premium',
+    name: 'Telegram Premium',
+    category: '社交',
+    status: 'active',
+    icon: 'telegram',
+    short: 'Telegram 高级会员权益，支持更大上传、专属表情和高速下载。',
+    featureTags: ['高速下载', '专属表情', '大文件上传'],
+    deliveryType: 'auto',
+    optionGroups: [{ key: 'duration', name: '套餐周期', displayType: 'cards', options: ['1个月', '3个月', '12个月'] }],
+    skus: [
+      { id: 'tg-1', optionValues: { duration: '1个月' }, priceUsdt: 3.2, stock: 'in_stock', deliveryType: 'auto' },
+      { id: 'tg-3', optionValues: { duration: '3个月' }, priceUsdt: 9, stock: 'in_stock', deliveryType: 'auto' },
+      { id: 'tg-12', optionValues: { duration: '12个月' }, priceUsdt: 32, stock: 'low_stock', deliveryType: 'auto' }
+    ],
+    notice: { deliverySummary: '自动发货', warrantySummary: '30天', refundSummary: '开通后不支持退款', usageGuide: '请填写可接收开通信息的 Telegram 账号。', warrantyDetail: '权益以平台实际开通时间为准。', attention: '账号地区和风控状态可能影响开通。', faq: ['多久到账？', '需要提供手机号吗？'] }
+  },
+  {
+    id: 'netflix',
+    slug: 'netflix',
+    name: 'Netflix',
+    category: '视频',
+    status: 'active',
+    icon: 'netflix',
+    short: 'Netflix 会员订阅服务，适合影视剧集和多设备观看。',
+    featureTags: ['高清观看', '多设备', '订阅权益'],
+    deliveryType: 'manual',
+    optionGroups: [{ key: 'duration', name: '套餐周期', displayType: 'cards', options: ['1个月', '3个月'] }],
+    skus: [
+      { id: 'nf-1', optionValues: { duration: '1个月' }, priceUsdt: 4.8, stock: 'in_stock', deliveryType: 'manual' },
+      { id: 'nf-3', optionValues: { duration: '3个月' }, priceUsdt: 13.5, stock: 'in_stock', deliveryType: 'manual' }
+    ],
+    notice: { deliverySummary: '人工处理', warrantySummary: '30天', refundSummary: '开通后不支持退款', usageGuide: '下单后客服会按订单信息完成开通。', warrantyDetail: '保期内异常可协助排查。', attention: '请遵守账号使用规则，避免频繁切换地区。', faq: ['是否支持独享？', '能否更换设备？'] }
+  },
+  {
+    id: 'apple-gift-card',
+    slug: 'apple-gift-card',
+    name: 'Apple Gift Card',
+    category: '礼品卡',
+    status: 'active',
+    icon: 'apple',
+    short: 'Apple 礼品卡兑换码，适合 App Store 与数字内容消费。',
+    featureTags: ['兑换码', '区服提示', '快速交付'],
+    deliveryType: 'auto',
+    optionGroups: [{ key: 'amount', name: '面额', displayType: 'cards', options: ['10 USD', '25 USD', '50 USD'] }],
+    skus: [
+      { id: 'agc-10', optionValues: { amount: '10 USD' }, priceUsdt: 10, stock: 'in_stock', deliveryType: 'auto' },
+      { id: 'agc-25', optionValues: { amount: '25 USD' }, priceUsdt: 25, stock: 'in_stock', deliveryType: 'auto' },
+      { id: 'agc-50', optionValues: { amount: '50 USD' }, priceUsdt: 50, stock: 'low_stock', deliveryType: 'auto' }
+    ],
+    notice: { deliverySummary: '自动发货', warrantySummary: '7天', refundSummary: '卡密发出后不支持退款', usageGuide: '兑换前请确认 Apple ID 地区与卡密地区一致。', warrantyDetail: '未兑换卡密 7 天内可协助排查。', attention: '地区错误可能无法兑换。', faq: ['支持哪些地区？', '兑换失败怎么办？'] }
   }
 ];
 
@@ -283,6 +336,8 @@ const state = {
   authMode: 'login',
   loginPasswordVisible: false,
   loginAgree: true,
+  loginRemember: false,
+  loginCaptcha: null,
   loginReturnTo: '/account',
   loginStep: 'form',          // form | verify
   loginVerifyEmail: '',       // 待验证邮箱
@@ -540,7 +595,7 @@ function applyTelegramLogin(result) {
     defaultCurrency: result.user.defaultCurrency
   };
   state.telegramUsername = `@${telegramUsername}`;
-  if (result.token) localStorage.setItem('gfAuthToken', result.token);
+  if (result.token) saveAuthToken(result.token, 30);
   persist();
 }
 
@@ -555,10 +610,16 @@ function clearTelegramReturnTo() {
 }
 
 function authToken() {
-  return localStorage.getItem('gfAuthToken') || '';
+  const token = localStorage.getItem('gfAuthToken') || '';
+  const expiresAt = Number(localStorage.getItem('gfAuthExpiresAt') || 0);
+  if (token && expiresAt && expiresAt <= Date.now()) {
+    logoutAccount(false);
+    return '';
+  }
+  return token;
 }
 
-function logoutAccount() {
+function logoutAccount(showMessage = true) {
   state.user = null;
   state.telegramUsername = '';
   state.email = '';
@@ -569,13 +630,20 @@ function logoutAccount() {
   state.accountOrders = { loadedFor: '', loading: false, error: '', items: [] };
   localStorage.removeItem('gfUser');
   localStorage.removeItem('gfAuthToken');
+  localStorage.removeItem('gfAuthExpiresAt');
   localStorage.removeItem('telegramUsername');
   clearTelegramPendingLogin();
   clearTelegramReturnTo();
   stopTelegramPolling();
   persist();
-  notify('已退出登录');
-  navigate('/account');
+  if (showMessage) notify('已退出登录');
+  if (showMessage) navigate('/account');
+}
+
+function saveAuthToken(token, days = 7) {
+  const ttlDays = Number(days) || 7;
+  localStorage.setItem('gfAuthToken', token);
+  localStorage.setItem('gfAuthExpiresAt', String(Date.now() + ttlDays * 24 * 60 * 60 * 1000));
 }
 
 function finishTelegramLogin(result, message = 'Telegram 登录成功') {
@@ -1220,9 +1288,36 @@ function applyServerLogin(result) {
   };
   state.email = user.email || '';
   state.profile.nickname = state.profile.nickname || state.user.nickname;
-  if (result.token) localStorage.setItem('gfAuthToken', result.token);
+  if (result.token) saveAuthToken(result.token, result.expiresInDays || (state.loginRemember ? 30 : 7));
   addMessage('账号登录', `${user.email || '账号'} 已登录，订单和余额会绑定到该账户。`, 'account');
   persist();
+}
+
+function makeMathCaptcha() {
+  const a = Math.floor(Math.random() * 8) + 2;
+  const b = Math.floor(Math.random() * 8) + 2;
+  return { question: `${a} + ${b} = ?`, answer: String(a + b) };
+}
+
+function ensureLoginCaptcha() {
+  if (!state.loginCaptcha) state.loginCaptcha = makeMathCaptcha();
+  return state.loginCaptcha;
+}
+
+function refreshLoginCaptcha() {
+  state.loginCaptcha = makeMathCaptcha();
+}
+
+function validateLoginCaptcha() {
+  const value = (document.querySelector('#loginCaptcha')?.value || '').trim();
+  const answer = String(ensureLoginCaptcha().answer);
+  if (value !== answer) {
+    refreshLoginCaptcha();
+    route();
+    notify('验证码答案不正确，请重新计算');
+    return false;
+  }
+  return true;
 }
 
 function finishLoginRedirect(message) {
@@ -1252,11 +1347,14 @@ async function submitLoginPageLogin() {
   if (state.loginBusy) return;
   const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
   const password = document.querySelector('#loginPassword')?.value || '';
+  const remember = !!document.querySelector('#loginRemember')?.checked;
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
   if (!password) return notify('请输入密码');
+  if (!validateLoginCaptcha()) return;
+  state.loginRemember = remember;
   state.loginBusy = true;
   try {
-    const { response, data } = await postJson('/api/auth/login', { email, password });
+    const { response, data } = await postJson('/api/auth/login', { email, password, remember });
     if (response.status === 403 && data.next === 'verify') {
       // 邮箱未验证：转到验证码步骤并自动发码
       state.loginBusy = false;
@@ -1268,6 +1366,7 @@ async function submitLoginPageLogin() {
       return notify(data.error || '登录失败');
     }
     applyServerLogin(data);
+    refreshLoginCaptcha();
     finishLoginRedirect('登录成功');
   } catch {
     state.loginBusy = false;
@@ -1283,11 +1382,14 @@ async function submitLoginPageRegister() {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
   if (password.length < 6) return notify('密码至少 6 位');
   if (password !== password2) return notify('两次密码不一致');
+  if (!state.loginAgree) return notify('请先同意服务规则');
+  if (!validateLoginCaptcha()) return;
   state.loginBusy = true;
   try {
     const { response, data } = await postJson('/api/auth/register', { email, password });
     state.loginBusy = false;
     if (!response.ok) return notify(data.error || '注册失败');
+    refreshLoginCaptcha();
     notify('验证码已发送到邮箱');
     startVerifyStep(email, { sendNow: false });
   } catch {
@@ -1396,6 +1498,7 @@ function loginVerifySection() {
 function loginPage() {
   const isRegister = state.authMode === 'register';
   const passwordType = state.loginPasswordVisible ? 'text' : 'password';
+  const captcha = ensureLoginCaptcha();
   shell(`
     <div class="login-page">
       <section class="login-card login-card-reference">
@@ -1447,7 +1550,23 @@ function loginPage() {
                 ${lineIcon('lock', '确认密码', 'login-field-icon')}
                 <input id="loginPassword2" type="${passwordType}" autocomplete="new-password" placeholder="请再次输入密码" />
               </span>
-            </label>` : '<button class="login-forgot" data-action="loginForgot" type="button">忘记密码?</button>'}
+            </label>` : ''}
+            <label class="login-field">
+              <span class="login-field-label">数学验证码</span>
+              <span class="login-captcha-row">
+                <span class="login-input">
+                  ${lineIcon('shield-check', '数学验证码', 'login-field-icon')}
+                  <input id="loginCaptcha" inputmode="numeric" autocomplete="off" placeholder="请输入答案" />
+                </span>
+                <button class="login-captcha-card" data-action="refreshLoginCaptcha" type="button" aria-label="刷新验证码"><b>${escapeHtml(captcha.question)}</b><small>刷新</small></button>
+              </span>
+            </label>
+            ${isRegister ? `
+            <label class="login-agree compact"><input type="checkbox" data-action="toggleLoginAgree" ${state.loginAgree ? 'checked' : ''}/> 我已阅读并同意 <a href="/faq">服务规则</a></label>` : `
+            <div class="login-options-row">
+              <label class="login-remember"><input id="loginRemember" type="checkbox" data-action="toggleLoginRemember" ${state.loginRemember ? 'checked' : ''}/> 保持登录</label>
+              <button class="login-forgot" data-action="loginForgot" type="button">忘记密码?</button>
+            </div>`}
             <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>${isRegister ? '创建账号' : '登录'}</button>
           </form>
           <div class="login-switch">
@@ -4136,6 +4255,7 @@ document.addEventListener('click', async (event) => {
     const emailInput = document.querySelector('#loginEmail');
     if (emailInput) state.email = emailInput.value.trim();
     state.authMode = el.dataset.mode || 'login';
+    refreshLoginCaptcha();
     return route();
   }
   if (action === 'toggleLoginPassword') {
@@ -4150,6 +4270,8 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (action === 'toggleLoginAgree') { state.loginAgree = !!event.target.checked; return; }
+  if (action === 'toggleLoginRemember') { state.loginRemember = !!event.target.checked; return; }
+  if (action === 'refreshLoginCaptcha') { refreshLoginCaptcha(); return route(); }
   if (action === 'loginForgot') { return notify('忘记密码将通过邮箱验证码重置，接口接入后启用。'); }
   if (action === 'loginResendCode') { return resendVerifyCode(); }
   if (action === 'loginBackToForm') {

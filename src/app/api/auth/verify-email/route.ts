@@ -4,7 +4,7 @@ import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { parseBody } from "@/lib/api/body-parser";
 import { verifyCode } from "@/lib/api/email-verification";
-import { createUserSessionToken } from "@/lib/api/user-session";
+import { createUserSessionToken, userSessionTtlDays } from "@/lib/api/user-session";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     return jsonResponse(
       {
         token,
+        expiresInDays: userSessionTtlDays(false),
         user: {
           id: user.id,
           email: user.email,

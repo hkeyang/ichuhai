@@ -4,7 +4,7 @@ import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { parseBody } from "@/lib/api/body-parser";
 import { verifyPassword } from "@/lib/api/password";
-import { createUserSessionToken } from "@/lib/api/user-session";
+import { createUserSessionToken, userSessionTtlDays } from "@/lib/api/user-session";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,9 +18,10 @@ export async function POST(request: Request) {
   const cloudflareEnv = env as CloudflareEnv;
 
   try {
-    const body = await parseBody<{ email?: string; password?: string }>(request);
+    const body = await parseBody<{ email?: string; password?: string; remember?: boolean }>(request);
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");
+    const remember = body.remember === true;
 
     if (!EMAIL_RE.test(email)) throw new HttpError(400, "请输入有效邮箱");
     if (!password) throw new HttpError(400, "请输入密码");
@@ -62,11 +63,12 @@ export async function POST(request: Request) {
       .bind(user.id)
       .run();
 
-    const token = await createUserSessionToken(user.id, cloudflareEnv);
+    const token = await createUserSessionToken(user.id, cloudflareEnv, { remember });
 
     return jsonResponse(
       {
         token,
+        expiresInDays: userSessionTtlDays(remember),
         user: {
           id: user.id,
           email: user.email,
