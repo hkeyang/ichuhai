@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/api/password";
 import { issueVerificationCode } from "@/lib/api/email-verification";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     const password = String(body.password ?? "");
 
     if (!EMAIL_RE.test(email)) throw new HttpError(400, "请输入有效邮箱");
-    if (password.length < 6) throw new HttpError(400, "密码至少 6 位");
+    if (!PASSWORD_RE.test(password)) throw new HttpError(400, "密码需要至少字母和数字的 6 位组合");
 
     const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);

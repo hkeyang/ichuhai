@@ -42,6 +42,7 @@ const ADMIN_SESSION_TTL_MS = Number(process.env.ADMIN_SESSION_TTL_MS || 12 * 60 
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
@@ -101,7 +102,7 @@ function staticSecurityHeaders(target) {
       "default-src 'self'",
       "script-src 'self' https://telegram.org",
       "connect-src 'self'",
-      "img-src 'self' data:",
+      "img-src 'self' data: https://api.qrserver.com",
       "style-src 'self'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
@@ -872,7 +873,7 @@ async function api(req, res, url) {
 
 function staticFile(req, res, url) {
   const clean = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
-  const publicFile = ['/assets/', '/favicon.ico', '/apple-touch-icon.png', '/android-chrome-192x192.png', '/android-chrome-512x512.png']
+  const publicFile = ['/assets/', '/vendor/', '/favicon.ico', '/apple-touch-icon.png', '/android-chrome-192x192.png', '/android-chrome-512x512.png']
     .some((prefix) => clean === prefix || clean.startsWith(prefix))
     ? join(ROOT, 'public', clean)
     : null;

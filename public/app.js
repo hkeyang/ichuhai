@@ -1,3 +1,5 @@
+import qrcode from '/vendor/qrcode.mjs';
+
 const CURRENCIES = {
   USD: { label: '美元', flag: '🇺🇸', symbol: '$', rate: 1 },
   CNY: { label: '人民币', flag: '🇨🇳', symbol: '¥', rate: 7.22 },
@@ -29,6 +31,7 @@ const ASSETS = {
 
 const SUPPORT_TELEGRAM_URL = 'https://t.me/ichuhaikefu';
 const SUPPORT_TELEGRAM_HANDLE = '@ichuhaikefu';
+const PASSWORD_RULE_RE = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
 const DEFAULT_SUPPORT_CHANNEL = {
   title: '客服频道',
   description: '保留订单号、支付截图或收货信息，客服频道可以更快帮你核对。',
@@ -602,7 +605,7 @@ function normalizePaymentMethod(method = state.paymentMethod) {
 function balancePaymentSubtext(amount = 0) {
   if (!state.user) return '登录后可用';
   const balance = Number(state.wallet.balance || 0);
-  return balance >= Number(amount || 0) ? '余额充足' : '余额不足';
+  return balance >= Number(amount || 0) ? '' : '余额不足';
 }
 
 function userEmail() {
@@ -780,7 +783,7 @@ function normalizeServerOrder(order) {
     deliveryType: skuSnapshot.deliveryType || order.deliveryType || order.delivery_type || 'manual',
     delivery: order.delivery || null,
     createdAt: order.createdAt || order.created_at,
-    expiresAt: new Date(order.expiresAt || order.expires_at).getTime(),
+    expiresAt: paymentExpiryMs(order.expiresAt || order.expires_at, order.createdAt || order.created_at),
     paidAt: order.paidAt || order.paid_at,
     deliveredAt: order.deliveredAt || order.delivered_at,
     updatedAt: order.updatedAt || order.updated_at,
@@ -1178,7 +1181,7 @@ function header() {
       ${logo()}
       <nav class="header-nav"></nav>
       <div class="top-actions">
-        <div class="currency ${isDetail ? 'detail-hide-action' : ''}">
+        <div class="currency">
           <button class="pill currency-pill" data-action="toggleCurrency">${CURRENCIES[state.fiatCurrency].flag} ${state.fiatCurrency} ${navIcon('A10_shaixuan.png', '展开货币', 'currency-chevron')}</button>
           ${state.currencyOpen ? currencyMenu() : ''}
         </div>
@@ -1344,6 +1347,24 @@ function applyServerLogin(result) {
   persist();
 }
 
+function maskEmail(email = '') {
+  const [name = '', domain = ''] = String(email).split('@');
+  if (!name || !domain) return escapeHtml(email);
+  const prefix = name.slice(0, Math.min(4, name.length));
+  return escapeHtml(`${prefix}***@${domain}`);
+}
+
+function splitCodeInput({ id, value = '', maxLength = 6, placeholder = '', iconName = 'shield-check', ariaLabel = '验证码' }) {
+  const safeValue = escapeHtml(String(value || '').slice(0, maxLength));
+  return `<span class="login-code-input" data-code-shell data-target="${id}">
+    ${lineIcon(iconName, ariaLabel, 'login-field-icon')}
+    <input id="${id}" class="code-real-input" inputmode="numeric" maxlength="${maxLength}" autocomplete="${id === 'loginCode' ? 'one-time-code' : 'off'}" placeholder="${escapeHtml(placeholder)}" value="${safeValue}" aria-label="${escapeHtml(ariaLabel)}" />
+    <span class="code-slots" aria-hidden="true">
+      ${Array.from({ length: maxLength }, (_, index) => `<i class="code-slot">${safeValue[index] ? escapeHtml(safeValue[index]) : ''}</i>`).join('')}
+    </span>
+  </span>`;
+}
+
 function makeMathCaptcha() {
   const a = Math.floor(Math.random() * 8) + 2;
   const b = Math.floor(Math.random() * 8) + 2;
@@ -1431,9 +1452,8 @@ async function submitLoginPageRegister() {
   const password = document.querySelector('#loginPassword')?.value || '';
   const password2 = document.querySelector('#loginPassword2')?.value || '';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
-  if (password.length < 6) return notify('密码至少 6 位');
+  if (!PASSWORD_RULE_RE.test(password)) return notify('密码需要至少字母和数字的 6 位组合');
   if (password !== password2) return notify('两次密码不一致');
-  if (!state.loginAgree) return notify('请先同意服务规则');
   if (!validateLoginCaptcha()) return;
   state.loginBusy = true;
   try {
@@ -1457,6 +1477,30 @@ function startVerifyStep(email, { sendNow } = {}) {
   route();
   startVerifyCountdown();
   if (sendNow) resendVerifyCode();
+}
+
+function paymentExpiryMs(expiresAt, createdAt) {
+  const explicit = new Date(expiresAt).getTime();
+  if (Number.isFinite(explicit)) return explicit;
+  const created = new Date(createdAt).getTime();
+  return Number.isFinite(created) ? created + 15 * 60 * 1000 : Date.now() + 15 * 60 * 1000;
+}
+
+function paymentNetworkLabel() {
+  return 'USDT-TRC20';
+}
+
+function qrSvgMarkup(data) {
+  const qr = qrcode(0, 'M');
+  qr.addData(String(data || ''));
+  qr.make();
+  return qr.createSvgTag({ cellSize: 6, margin: 2, alt: '收款地址二维码', title: '收款地址二维码' });
+}
+
+function paymentInstructionSteps() {
+  return ['确认金额/网络', '扫码或复制地址', '转账', '等待自动确认']
+    .map((label, index) => `<span><b>${index + 1}</b>${label}</span>`)
+    .join('');
 }
 
 // ── 验证码重发倒计时 ──────────────────────────────────────────
@@ -1522,20 +1566,17 @@ async function resendVerifyCode() {
 }
 
 function loginVerifySection() {
-  const email = escapeHtml(state.loginVerifyEmail || '');
+  const maskedEmail = maskEmail(state.loginVerifyEmail || '');
   const resendLeft = Math.max(0, Math.ceil((state.loginResendAt - Date.now()) / 1000));
   return `
     <div class="login-verify">
       <span class="login-verify-icon">${lineIcon('mail', '邮箱验证', 'login-icon')}</span>
       <h2 class="login-verify-title">验证您的邮箱</h2>
-      <p class="login-verify-desc">验证码已发送至 <b>${email}</b>，请在 5 分钟内输入 6 位验证码。</p>
+      <p class="login-verify-desc">验证码已发送至 <b>${maskedEmail}</b></p>
       <form class="login-fields" data-action="loginVerifySubmit">
         <label class="login-field">
-          <span class="login-field-label">验证码</span>
-          <span class="login-input">
-            ${lineIcon('shield-check', '验证码', 'login-field-icon')}
-            <input id="loginCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="请输入 6 位验证码" />
-          </span>
+          <span class="login-field-label">请在 5 分钟内输入 6 位验证码</span>
+          ${splitCodeInput({ id: 'loginCode', value: state.loginVerifyCode, maxLength: 6, placeholder: '请输入 6 位验证码', ariaLabel: '邮箱验证码' })}
         </label>
         <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>验证并登录</button>
       </form>
@@ -1600,20 +1641,18 @@ function loginPage() {
               <span class="login-input">
                 ${lineIcon('lock', '确认密码', 'login-field-icon')}
                 <input id="loginPassword2" type="${passwordType}" autocomplete="new-password" placeholder="请再次输入密码" />
+                <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
               </span>
+              <small class="login-password-hint">密码需要至少字母和数字的 6 位组合</small>
             </label>` : ''}
             <label class="login-field">
-              <span class="login-field-label">数学验证码</span>
+              <span class="login-field-label">验证码</span>
               <span class="login-captcha-row">
-                <span class="login-input">
-                  ${lineIcon('shield-check', '数学验证码', 'login-field-icon')}
-                  <input id="loginCaptcha" inputmode="numeric" autocomplete="off" placeholder="请输入答案" />
-                </span>
+                ${splitCodeInput({ id: 'loginCaptcha', value: '', maxLength: 6, placeholder: '请输入答案', ariaLabel: '验证码' })}
                 <button class="login-captcha-card" data-action="refreshLoginCaptcha" type="button" aria-label="刷新验证码"><b>${escapeHtml(captcha.question)}</b></button>
               </span>
             </label>
-            ${isRegister ? `
-            <label class="login-agree compact"><input type="checkbox" data-action="toggleLoginAgree" ${state.loginAgree ? 'checked' : ''}/> 我已阅读并同意 <a href="/faq">服务规则</a></label>` : `
+            ${isRegister ? '' : `
             <div class="login-options-row">
               <label class="login-remember"><input id="loginRemember" type="checkbox" data-action="toggleLoginRemember" ${state.loginRemember ? 'checked' : ''}/> 保持登录</label>
               <button class="login-forgot" data-action="loginForgot" type="button">忘记密码?</button>
@@ -1730,13 +1769,6 @@ function productBrowser(full = false) {
         </div>
         <div class="catalog-list" role="list" aria-label="商品列表">
           ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
-        </div>
-        <div class="catalog-trust">
-          ${CATALOG_TRUST_ITEMS.map((item) => `
-            <div class="catalog-trust-item">
-              <span class="catalog-trust-icon">${lineIcon(item.icon, item.title, 'catalog-trust-svg')}</span>
-              <span class="catalog-trust-copy"><b>${item.title}</b><small>${item.desc}</small></span>
-            </div>`).join('')}
         </div>
       </div>
     </section>
@@ -1921,7 +1953,7 @@ function card(item) {
         <i class="stock-flag ${stock}">${stockLabel(stock)}</i>
         <small>已售 ${sold.toLocaleString('zh-CN')}</small>
       </span>
-      <span class="buy-button ${recommended ? 'is-featured' : ''}">立即购买</span>
+      <span class="buy-button">立即购买</span>
     </a>
   `;
 }
@@ -2179,13 +2211,15 @@ function detailGallery(item) {
   const frames = detailGalleryFrames(item);
   const index = Math.max(0, Math.min(frames.length - 1, Number(state.detailImageIndex || 0)));
   const active = frames[index];
+  const uploadedImages = item.images || item.galleryImages || [];
+  const showArrows = uploadedImages.length > 1;
   return `
     <div class="product-gallery">
       <div class="gallery-main ${active.tone}">
-        <button class="gallery-arrow gallery-prev" data-action="detailImagePrev" type="button" aria-label="上一张">${lineIcon('chevron', '上一张', 'gallery-arrow-icon')}</button>
+        ${showArrows ? `<button class="gallery-arrow gallery-prev" data-action="detailImagePrev" type="button" aria-label="上一张">${lineIcon('chevron', '上一张', 'gallery-arrow-icon')}</button>` : ''}
         <span class="gallery-art">${icon(item.icon)}</span>
         ${active.label ? `<span class="gallery-caption">${escapeHtml(active.label)}</span>` : ''}
-        <button class="gallery-arrow gallery-next" data-action="detailImageNext" type="button" aria-label="下一张">${lineIcon('chevron', '下一张', 'gallery-arrow-icon')}</button>
+        ${showArrows ? `<button class="gallery-arrow gallery-next" data-action="detailImageNext" type="button" aria-label="下一张">${lineIcon('chevron', '下一张', 'gallery-arrow-icon')}</button>` : ''}
       </div>
       <div class="gallery-thumbs">
         ${frames.map((frame, idx) => `<button class="gallery-thumb ${frame.tone} ${idx === index ? 'active' : ''}" data-action="detailImage" data-index="${idx}" type="button" aria-label="预览图 ${idx + 1}">${icon(item.icon)}</button>`).join('')}
@@ -2211,7 +2245,6 @@ function detailSpecGroups(item) {
             return `<button class="detail-spec-pill ${active ? 'active' : ''} ${possible ? '' : 'disabled'}" data-action="setOption" data-product="${item.id}" data-key="${group.key}" data-value="${option}" type="button" ${possible ? '' : 'disabled'}>
               <b>${escapeHtml(detailOptionLabel(group.key, option))}</b>
               ${possible ? '' : '<small>暂缺</small>'}
-              ${active ? `<i class="detail-spec-check">${lineIcon('shield-check', '已选', 'detail-spec-check-icon')}</i>` : ''}
             </button>`;
           }).join('')}
         </div>
@@ -2237,6 +2270,7 @@ function detail(slug = 'discord-nitro') {
   const disabled = !sku || stock === 'sold_out';
   const sold = Math.max(176, Math.round((item.name.length * 137 + Number(sku?.priceUsdt || 1) * 89) % 3200));
   const detailDescription = item.detailDescription || item.description || item.detail || item.notice?.usageGuide || productShort(item);
+  const currentSelection = Object.values(opts || {}).filter(Boolean).join(' / ');
   persist();
   shell(`
     <div class="breadcrumb"><a href="/">首页</a> / <a href="/products">全部商品</a> / <span>${escapeHtml(item.name)}</span></div>
@@ -2252,6 +2286,7 @@ function detail(slug = 'discord-nitro') {
         <div class="detail-price-block">
           <div class="detail-price-main">
             ${sku ? price(sku.priceUsdt) : '<strong>暂不可购买</strong>'}
+            ${sku ? `<small class="detail-current-selection">当前选择：${escapeHtml(currentSelection || '默认规格')}</small>` : ''}
           </div>
           <div class="detail-stock-info">
             <i class="stock-flag ${stock}">${stockLabel(stock)}</i>
@@ -2277,7 +2312,7 @@ function detail(slug = 'discord-nitro') {
             ].map(([key, label, sub, disabledPayment]) => `<button class="${state.paymentMethod === key ? 'active' : ''} ${disabledPayment ? 'is-disabled' : ''}" data-action="setPaymentMethod" data-method="${key}" type="button" ${disabledPayment ? 'disabled' : ''}><b>${escapeHtml(label)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button>`).join('')}
           </div>
         </div>
-        <button class="detail-buy-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${disabled ? '当前商品不可购买' : '立即购买'}</button>
+        <button class="detail-buy-button" data-action="paySelected" ${disabled ? 'disabled' : ''}>${disabled ? '当前商品不可购买' : '立即支付'}</button>
       </div>
     </section>
     <section class="product-detail-info">
@@ -2477,6 +2512,7 @@ function createLocalOrder(item, sku) {
     deliveryType: sku.deliveryType,
     status: paidByBalance ? 'completed' : 'pending_payment',
     createdAt: new Date().toISOString(),
+    expiresAt: Date.now() + 15 * 60 * 1000,
     updatedAt: new Date().toISOString(),
     paidAt: paidByBalance ? new Date().toISOString() : null,
     deliveredAt: paidByBalance ? new Date().toISOString() : null
@@ -2692,48 +2728,46 @@ async function pay(id) {
   if (!order) return checkout();
   const paymentAmountValue = Number(order.payAmount || order.amountUsdt).toFixed(3);
   const paymentAmountText = `${paymentAmountValue} USDT`;
-  const walletModes = [
-    { key: 'browser', label: '浏览器钱包', note: '推荐', icon: paymentIcon('C03_wallet.png', '浏览器钱包', 'wallet-icon') },
-    { key: 'mobile', label: '移动钱包', note: 'APP 扫码打开', icon: paymentIcon('C04_qr_code.png', '移动钱包扫码', 'wallet-icon') },
-    { key: 'walletconnect', label: 'WalletConnect', note: '连接钱包', icon: paymentIcon('C06_address.png', 'WalletConnect', 'wallet-icon') },
-    { key: 'tronlink', label: 'TronLink', note: '浏览器插件', icon: paymentIcon('C02_tron_trc20.png', 'TronLink', 'wallet-icon') }
-  ];
+  const expiresAt = paymentExpiryMs(order.expiresAt, order.createdAt);
+  const qrData = order.paymentAddress || paymentSummaryText(order);
   shell(`
     <section class="pay-head">
-      <div><h1>完成支付</h1><p>订单已创建，请在倒计时内按页面金额完成付款。</p></div>
-      ${statusTracker(['订单已创建', '等待付款', '确认付款', '正在发货', '已完成'], order.status)}
+      <div><h1>等待支付</h1><p>请按页面显示的金额和网络转账，系统会自动进行链上校验。</p></div>
     </section>
-    <section class="pay-grid">
-      <div>
-        <section class="glass panel pay-info">
-          <h3>订单信息</h3>
-          ${[['订单号', order.orderNo + ' ⧉'], ['商品', order.productName + '  ' + Object.values(order.options).join(' / ')], ['支付金额', `${paymentAmountText} ≈ ${order.fiatAmount}`], ['支付方式', 'USDT'], ['钱包网络', 'TRC20'], ['剩余支付时间', '<strong class="timer" data-expires="' + order.expiresAt + '">14:32</strong> <button class="danger">请尽快完成支付</button>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
-        </section>
-        <section class="glass panel wallets">
-          <h3>打开钱包并转账 <small>系统将尝试自动唤起您选择的钱包</small></h3>
-          <div class="wallet-row">${walletModes.map((wallet) => `<button class="${state.walletMode === wallet.key ? 'active' : ''}" data-action="setWalletMode" data-wallet="${wallet.key}"><span>${wallet.icon}</span><b>${wallet.label}</b><small>${wallet.note}</small></button>`).join('')}</div>
-          <button class="primary small" data-action="openWallet">${paymentIcon('C03_wallet.png', '钱包')} 重新打开钱包</button>
-        </section>
-        <section class="glass panel tips"><h3>重要提示</h3><p>${featureIcon('B04_lock_encryption.png', '加密')} 请按页面显示金额付款。</p><p>${featureIcon('B07_warning_triangle.png', '警告')} 请确认钱包网络为 TRC20。</p><p>${paymentIcon('C10_countdown_timer.png', '倒计时')} 请在倒计时内完成支付，超时后请重新下单。</p></section>
-      </div>
-      <div>
-        <section class="glass panel qr-panel">
-          <h3>请使用 ${networkText(order.paymentNetwork)} 向以下地址转账</h3>
-          <div class="qr-wrap"><div class="fake-qr"><span>${paymentIcon('C04_qr_code.png', '二维码')}</span></div><button data-action="copyPaymentInfo">${paymentIcon('C04_qr_code.png', '二维码')} 保存二维码</button></div>
-          <div class="copy-box"><label>${paymentIcon('C06_address.png', '收款地址')} 收款地址 <small>安全验证通过</small><input value="${order.paymentAddress}" readonly /></label><button data-copy="${order.paymentAddress}">${paymentIcon('C05_copy.png', '复制')} 复制地址</button></div>
-          <div class="copy-box"><label>${paymentIcon('C01_usdt.png', 'USDT')} 精确支付金额<input value="${paymentAmountText} ≈ ${order.fiatAmount}" readonly /></label><button data-copy="${paymentAmountValue}">${paymentIcon('C05_copy.png', '复制')} 复制金额</button></div>
-          <div class="copy-box"><label>${paymentIcon('C02_tron_trc20.png', '支付网络')} 支付网络<input value="USDT TRC20" readonly /></label><button data-copy="USDT TRC20">${paymentIcon('C05_copy.png', '复制')} 复制网络</button></div>
-          <p>${featureIcon('B07_warning_triangle.png', '注意')} 请确保金额与网络正确，否则可能导致资产丢失且无法找回。</p>
-        </section>
-        <section class="glass panel pay-cta">
-          <p>付款完成后，订单状态会自动更新。若长时间未更新，请联系在线客服协助核对。</p>
-          <button class="primary" data-action="markPaid" data-id="${order.id}">${paymentIcon('C08_payment_success.png', '支付成功')} 我已完成支付</button>
-        </section>
-        <section class="glass panel support"><b>遇到问题？联系在线客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
-      </div>
+    <section class="pay-grid pay-waiting-layout">
+      <section class="glass panel pay-info">
+        <h3>订单信息</h3>
+        ${[['订单号', order.orderNo + ' ⧉'], ['商品', `${order.productName}  ${Object.values(order.options || {}).join(' / ')}`], ['剩余支付时间', '<strong class="timer" data-expires="' + expiresAt + '">15:00</strong>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+      </section>
+      <section class="glass panel qr-panel">
+        <div class="qr-panel-title">
+          <h3>请使用 ${paymentNetworkLabel()} 向以下地址转账</h3>
+          <p>确认金额/网络 → 扫码或复制地址 → 转账 → 等待自动确认</p>
+        </div>
+        <div class="qr-wrap"><div class="real-qr" aria-label="收款地址二维码">${qrSvgMarkup(qrData)}</div></div>
+        <div class="pay-fields">
+          <div class="pay-copy-line pay-address-line">
+            <label>${paymentIcon('C06_address.png', '收款地址')} 收款地址</label>
+            <button class="copy-icon-button" data-copy="${escapeHtml(order.paymentAddress || '')}" type="button" aria-label="复制地址">${lineIcon('copy', '复制地址', 'copy-line-icon')}</button>
+            <strong data-copy-dbl="${escapeHtml(order.paymentAddress || '')}" title="双击复制">${escapeHtml(order.paymentAddress || '')}</strong>
+          </div>
+          <div class="pay-copy-line">
+            <label>${paymentIcon('C01_usdt.png', 'USDT')} 精确支付金额</label>
+            <strong data-copy-dbl="${paymentAmountValue}" title="双击复制">${paymentAmountText} <small>≈ ${escapeHtml(order.fiatAmount || '')}</small></strong>
+          </div>
+          <div class="pay-copy-line">
+            <label>${paymentIcon('C02_tron_trc20.png', '支付网络')} 支付网络</label>
+            <strong data-copy-dbl="${paymentNetworkLabel()}" title="双击复制">${paymentNetworkLabel()}</strong>
+          </div>
+        </div>
+        <div class="pay-flow-line">${paymentInstructionSteps()}</div>
+        <p class="pay-auto-note">${lineIcon('clock', '自动确认', 'pay-note-icon')} 付款完成后无需点击按钮，系统链上校验成功后会自动跳转到订单详情。</p>
+      </section>
+      <section class="glass panel support"><b>遇到问题？联系在线客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
     </section>
   `, 'page');
   startTimer();
+  startPaymentStatusPolling(order.id);
 }
 
 function statusTracker(items, status) {
@@ -2745,7 +2779,8 @@ function startTimer() {
   const el = document.querySelector('.timer');
   if (!el) return;
   const update = () => {
-    const left = Math.max(0, Number(el.dataset.expires) - Date.now());
+    const expires = Number(el.dataset.expires);
+    const left = Math.max(0, (Number.isFinite(expires) ? expires : Date.now() + 15 * 60 * 1000) - Date.now());
     const m = String(Math.floor(left / 60000)).padStart(2, '0');
     const s = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
     el.textContent = `${m}:${s}`;
@@ -2753,6 +2788,41 @@ function startTimer() {
   update();
   clearInterval(window.gfTimer);
   window.gfTimer = setInterval(update, 1000);
+}
+
+function stopPaymentStatusPolling() {
+  if (window.gfPaymentPoller) {
+    clearInterval(window.gfPaymentPoller);
+    window.gfPaymentPoller = null;
+  }
+}
+
+async function checkPaymentStatus(orderId, { silent = false } = {}) {
+  if (!orderId) return;
+  try {
+    const response = await fetch(`/api/orders/${orderId}/status`);
+    if (!response.ok) return;
+    const status = await response.json();
+    const paidStatuses = new Set(['payment_confirming', 'paid', 'delivering', 'completed']);
+    if (paidStatuses.has(status.status)) {
+      stopPaymentStatusPolling();
+      notify('付款已确认，正在进入订单详情');
+      navigate(`/order/${orderId}`);
+    } else if (status.status === 'expired' && !silent) {
+      notify('订单已超时，请重新下单');
+    }
+  } catch {
+    if (!silent) notify('订单状态检查失败，请稍后重试');
+  }
+}
+
+function startPaymentStatusPolling(orderId) {
+  stopPaymentStatusPolling();
+  checkPaymentStatus(orderId, { silent: true });
+  window.gfPaymentPoller = setInterval(() => {
+    if (currentAppPath() !== `/pay/${orderId}`) return stopPaymentStatusPolling();
+    checkPaymentStatus(orderId, { silent: true });
+  }, 5000);
 }
 
 async function markPaid(id) {
@@ -4271,6 +4341,17 @@ async function route() {
 }
 
 document.addEventListener('input', (event) => {
+  const codeInput = event.target.closest('.code-real-input');
+  if (codeInput) {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, Number(codeInput.maxLength || 6));
+    if (codeInput.id === 'loginCode') state.loginVerifyCode = codeInput.value;
+    const slots = codeInput.closest('[data-code-shell]')?.querySelectorAll('.code-slot') || [];
+    slots.forEach((slot, index) => {
+      slot.textContent = codeInput.value[index] || '';
+      slot.classList.toggle('filled', index < codeInput.value.length);
+      slot.classList.toggle('active', index === codeInput.value.length);
+    });
+  }
   if (event.target.matches('[data-field]')) syncInputs();
   if (event.target.matches('[data-action="adminFilter"]')) {
     setAdminFilter(event.target.dataset.filterScope || adminFilterScope(), event.target.name, event.target.value);
@@ -4321,7 +4402,7 @@ document.addEventListener('click', (event) => {
 document.addEventListener('click', async (event) => {
   const copy = event.target.closest('[data-copy]');
   if (copy) {
-    navigator.clipboard?.writeText(copy.dataset.copy);
+    await navigator.clipboard?.writeText(copy.dataset.copy);
     return notify('已复制');
   }
   const el = event.target.closest('[data-action]');
@@ -4348,12 +4429,11 @@ document.addEventListener('click', async (event) => {
   if (action === 'toggleLoginPassword') {
     state.loginPasswordVisible = !state.loginPasswordVisible;
     const inputs = document.querySelectorAll('#loginPassword, #loginPassword2');
-    const eye = el.closest('.login-input')?.querySelector('.login-eye');
     inputs.forEach((input) => { input.type = state.loginPasswordVisible ? 'text' : 'password'; });
-    if (eye) {
+    document.querySelectorAll('.login-eye').forEach((eye) => {
       eye.setAttribute('aria-label', state.loginPasswordVisible ? '隐藏密码' : '显示密码');
       eye.innerHTML = lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon');
-    }
+    });
     return;
   }
   if (action === 'toggleLoginAgree') { state.loginAgree = !!event.target.checked; return; }
@@ -4644,6 +4724,13 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'home') { navigate('/'); }
   if (action === 'revealSecret') { document.querySelector('.secret').classList.add('revealed'); notify('完整交付内容已解锁'); }
+});
+
+document.addEventListener('dblclick', async (event) => {
+  const target = event.target.closest('[data-copy-dbl]');
+  if (!target) return;
+  await navigator.clipboard?.writeText(target.dataset.copyDbl || '');
+  notify('已复制');
 });
 
 document.addEventListener('submit', async (event) => {
