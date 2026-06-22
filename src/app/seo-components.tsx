@@ -1,4 +1,3 @@
-import Script from "next/script";
 import {
   defaultSku,
   deliveryLabel,
@@ -21,7 +20,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=ui-alignment-20260622" type="module" strategy="afterInteractive" />;
+  return <script src="/app.js?v=ui-alignment-20260622" type="module" />;
 }
 
 export function ToastRegion() {

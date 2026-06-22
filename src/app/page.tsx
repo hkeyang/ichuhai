@@ -1,7 +1,6 @@
 import { itemListJsonLd, organizationJsonLd, websiteJsonLd } from '@/lib/seo/json-ld';
 import { siteConfig } from '@/lib/seo/products';
-import { JsonLd, SeoHomeContent, ToastRegion } from './seo-components';
-import Script from 'next/script';
+import { InteractiveAppScript, JsonLd, SeoHomeContent, ToastRegion } from './seo-components';
 
 export const metadata = {
   title: {
@@ -31,7 +30,7 @@ export default function HomePage() {
         <SeoHomeContent />
       </div>
       <ToastRegion />
-      <Script src="/app.js?v=ui-alignment-20260622" type="module" strategy="afterInteractive" />
+      <InteractiveAppScript />
     </>
   );
 }
