@@ -8,6 +8,7 @@ import {
   stockLabel,
   type SeoProduct,
 } from "@/lib/seo/products";
+import Script from "next/script";
 
 export function JsonLd({ data, id }: { data: unknown; id: string }) {
   return (
@@ -20,7 +21,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <script src="/app.js?v=ui-alignment-20260622" type="module" />;
+  return <Script src="/app.js?v=admin-clean-20260623" type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {

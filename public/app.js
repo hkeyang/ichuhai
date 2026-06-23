@@ -202,7 +202,8 @@ function paymentIcon(file, alt, className = 'payment-icon') {
 }
 
 function lineIcon(name, alt, className) {
-  return `<svg class="${className}" viewBox="0 0 24 24" aria-label="${alt}" role="img" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${LINE_ICONS[name] || LINE_ICONS.more}</svg>`;
+  const aria = alt ? `aria-label="${escapeHtml(alt)}" role="img"` : 'aria-hidden="true"';
+  return `<svg class="${className}" viewBox="0 0 24 24" ${aria} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${LINE_ICONS[name] || LINE_ICONS.more}</svg>`;
 }
 
 function categoryIcon(label) {
@@ -702,7 +703,7 @@ function logoutAccount(showMessage = true) {
   stopTelegramPolling();
   persist();
   if (showMessage) notify('已退出登录');
-  if (showMessage) navigate('/account');
+  if (showMessage) navigate('/');
 }
 
 function saveAuthToken(token, days = 7) {
@@ -1721,7 +1722,7 @@ function loginPage() {
                 <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
               </span>
             </label>
-            ${isRegister ? `<small class="login-password-hint">密码需要至少字母和数字的 6 位组合；创建账号后将进入邮箱验证码确认。</small>` : ''}
+            ${isRegister ? `<small class="login-password-hint">密码需包含字母和数字，至少 6 位。</small>` : ''}
             <label class="login-field">
               <span class="login-field-label">验证码</span>
               <span class="login-captcha-row">
@@ -3272,18 +3273,18 @@ function accountStatCards() {
 
 function accountOverviewCards(userName) {
   const cards = [
-    ['个人信息', `<div class="overview-profile"><span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料'],
-    ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button type="button">充值</button><button type="button">提现</button></div>', ''],
+    ['个人信息', `<div class="overview-profile"><span><b>${escapeHtml(userName)}</b><small>ID：${escapeHtml(state.user?.id || '12345678')}</small></span></div>`, '编辑资料', 'profile'],
+    ['账户余额', '<strong>128.60 <span>USDT</span></strong><div class="overview-actions"><button data-action="selectAccountSection" data-section="wallet" type="button">充值</button><button data-action="accountDemoAction" data-message="提现功能需要完成财务审核后开放" type="button">提现</button></div>', '', ''],
     ['邮箱账号', `<b>${escapeHtml(userEmail() || 'user@example.com')}</b><em class="bound">已绑定</em><small>暂不支持更换</small>`, ''],
-    ['默认货币', `<b>${(CURRENCIES[state.user?.defaultCurrency] ? state.user.defaultCurrency : state.fiatCurrency)}</b>`, '更改货币'],
-    ['最近登录', '<b>2025-05-28 18:24</b><small>London, United Kingdom</small>', '查看登录记录'],
+    ['默认货币', `<b>${(CURRENCIES[state.user?.defaultCurrency] ? state.user.defaultCurrency : state.fiatCurrency)}</b>`, '更改货币', 'profile'],
+    ['最近登录', '<b>2025-05-28 18:24</b><small>London, United Kingdom</small>', '查看登录记录', 'security'],
     ['通知设置', '<b>邮箱通知、订单更新、活动提醒等</b><em class="bound">已开启</em><label class="overview-switch"><input checked type="checkbox" /><span></span></label>', '']
   ];
-  return cards.map(([title, body, action]) => `
+  return cards.map(([title, body, action, section]) => `
     <article class="overview-card">
       <h3>${title}</h3>
       <div class="overview-body">${body}</div>
-      ${action ? `<button type="button">${action}</button>` : ''}
+      ${action ? `<button data-action="selectAccountSection" data-section="${escapeHtml(section || 'profile')}" type="button">${action}</button>` : ''}
     </article>
   `).join('');
 }
@@ -3298,7 +3299,7 @@ function accountOrderRows() {
         <strong>${Number(order.amountUsdt).toFixed(2)}<small>USDT</small></strong>
         <em class="${order.delivery === '人工处理' ? 'manual' : ''}">${escapeHtml(order.delivery)}</em>
         <i class="${order.statusTone}">• ${escapeHtml(order.status)}</i>
-        <button class="detail-button" type="button">${index === 0 ? '收起详情' : '查看详情'}</button>
+        <button class="detail-button" data-action="accountDemoAction" data-message="${index === 0 ? '当前演示订单保持展开，真实订单页会支持收起' : '演示订单详情在首条订单中展示，真实订单可逐条展开'}" type="button">${index === 0 ? '收起详情' : '查看详情'}</button>
       </div>
       ${index === 0 ? accountExpandedOrder(order) : ''}
     </div>
@@ -3339,7 +3340,7 @@ function accountExpandedOrder(order) {
             <button data-copy="${escapeHtml(copy)}" type="button">复制</button>
           </label>
         `).join('')}
-        <div class="delivery-actions"><button class="primary small" type="button">查看凭证</button><button class="secondary small" type="button">下载凭证</button><a class="secondary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></div>
+        <div class="delivery-actions"><button class="primary small" data-action="accountDemoAction" data-message="凭证会在真实订单交付后生成" type="button">查看凭证</button><button class="secondary small" data-action="accountDemoAction" data-message="凭证下载会在真实订单交付后开放" type="button">下载凭证</button><a class="secondary small link-button" href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></div>
       </div>
     </section>
   `;
@@ -3376,7 +3377,7 @@ function accountOrdersPanel() {
   return `
     <section class="member-stats">${accountStatCards()}</section>
     <nav class="order-tabs">
-      ${['全部订单','待支付','自动发货','人工处理','已完成','售后记录'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}
+      ${['全部订单','待支付','自动发货','人工处理','已完成','售后记录'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" data-action="accountDemoAction" data-message="订单筛选已接入演示反馈，真实订单接口会按 ${label} 筛选" type="button">${label}</button>`).join('')}
     </nav>
     <section class="order-filter-bar">
       <label>${navIcon('A09_search.png', '搜索', 'filter-icon')}<input placeholder="搜索订单号或商品名称" /></label>
@@ -3384,7 +3385,7 @@ function accountOrdersPanel() {
       <input placeholder="结束日期" />
       <select><option>全部状态</option><option>待支付</option><option>处理中</option><option>已完成</option></select>
       <select><option>最新下单</option><option>金额从高到低</option></select>
-      <button type="button">导出订单</button>
+      <button data-action="accountDemoAction" data-message="订单导出需要登录后在真实订单接口中生成文件" type="button">导出订单</button>
     </section>
     <section class="member-order-list">
       <div class="member-order-head"><span>商品</span><span>订单号</span><span>购买时间</span><span>金额</span><span>支付方式</span><span>状态</span><span>操作</span></div>
@@ -3392,7 +3393,7 @@ function accountOrdersPanel() {
     </section>
     <section class="member-pagination">
       <span>共 128 条订单</span>
-      <div><button type="button">‹</button><button class="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><em>...</em><button type="button">13</button><button type="button">›</button></div>
+      <div><button data-action="accountDemoAction" data-message="已经是第一页" type="button">‹</button><button class="active" type="button" disabled>1</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">2</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">3</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">4</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">5</button><em>...</em><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">13</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">›</button></div>
       <select><option>10 条/页</option></select>
     </section>
   `;
@@ -3676,10 +3677,11 @@ async function renderAdmin() {
   await loadAdminData();
   const tab = state.adminTab;
   // 按当前 tab 加载服务端分页/聚合数据
-  if (tab === 'dashboard') await loadAdminDashboard();
+  if (tab === 'dashboard') { await loadAdminDashboard(); await loadAdminPage('orders'); }
   else if (tab === 'orders') await loadAdminPage('orders');
   else if (tab === 'inventory') { await loadAdminPage('inventory'); if (currentAdminSubTab('inventory', 'list') === 'warning') await loadAdminDashboard(); }
   else if (tab === 'payments') await loadAdminPage('transactions');
+  else if (tab === 'delivery') await loadAdminPage('orders');
   else if (tab === 'users') await loadAdminPage('users');
   const activeMeta = adminMenu().find((item) => item.key === tab) || adminMenu()[0];
   const globalFilters = adminFiltersFor('global');
@@ -3687,14 +3689,13 @@ async function renderAdmin() {
     <section class="admin-shell">
       <aside class="admin-nav">
         <a class="admin-brand" href="/admin"><img src="${ASSETS.logo}ichuhai-logo-horizontal-color.png" alt="ichuhai" /><span>运营后台</span></a>
-        <nav>${adminMenu().map((item) => `<button class="${tab === item.key ? 'active' : ''}" data-action="adminTab" data-tab="${item.key}" type="button"><span>${lineIcon(item.icon, item.label, 'admin-nav-svg')}</span>${item.label}</button>`).join('')}</nav>
+        <nav>${adminMenu().map((item) => `<button class="${tab === item.key ? 'active' : ''}" data-action="adminTab" data-tab="${item.key}" type="button"><span>${lineIcon(item.icon, '', 'admin-nav-svg')}</span>${item.label}</button>`).join('')}</nav>
       </aside>
       <section class="admin-main">
         <header class="admin-topbar">
           <div><span>ichuhai 运营后台 / ${activeMeta.label}</span><strong>${activeMeta.label}</strong></div>
-          <label class="admin-global-search"><input data-action="adminFilter" data-filter-scope="global" name="q" value="${escapeHtml(globalFilters.q || '')}" placeholder="全局搜索订单号 / 商品 / 用户" /></label>
-          <button class="admin-icon-button" data-action="adminTab" data-tab="notifications" type="button">通知</button>
-          <button class="admin-account" type="button">管理员 ${escapeHtml(state.adminUsername || 'admin')}</button>
+          <label class="admin-global-search"><input data-action="adminFilter" data-filter-scope="global" name="q" value="${escapeHtml(globalFilters.q || '')}" placeholder="搜索订单号 / TXID / 用户" /></label>
+          <button class="admin-account" data-action="adminTab" data-tab="system" type="button">${escapeHtml(state.adminUsername || '管理员')}</button>
           <button class="admin-logout" data-action="adminLogout" type="button">退出登录</button>
         </header>
         ${state.adminData.error ? `<div class="admin-risk-callout danger"><b>部分后台数据加载失败</b><span>${escapeHtml(state.adminData.error)}</span></div>` : ''}
@@ -3707,19 +3708,14 @@ async function renderAdmin() {
 
 function adminMenu() {
   return [
-    { key: 'dashboard', label: '运营看板', icon: 'all' },
-    { key: 'products', label: '商品中心', icon: 'package' },
-    { key: 'inventory', label: '库存中心', icon: 'gift' },
-    { key: 'orders', label: '订单中心', icon: 'receipt' },
-    { key: 'payments', label: '支付中心', icon: 'wallet' },
-    { key: 'delivery', label: '发货中心', icon: 'lightning' },
-    { key: 'support', label: '售后中心', icon: 'headset' },
-    { key: 'users', label: '用户中心', icon: 'user' },
-    { key: 'content', label: '内容中心', icon: 'mail' },
-    { key: 'marketing', label: '营销中心', icon: 'card' },
-    { key: 'notifications', label: '通知中心', icon: 'bell' },
-    { key: 'system', label: '系统设置', icon: 'shield-check' },
-    { key: 'audit', label: '审计日志', icon: 'check-circle' }
+    { key: 'dashboard', label: '概览', icon: 'all' },
+    { key: 'orders', label: '订单', icon: 'receipt' },
+    { key: 'products', label: '商品', icon: 'package' },
+    { key: 'inventory', label: '库存', icon: 'gift' },
+    { key: 'users', label: '客户', icon: 'user' },
+    { key: 'support', label: '工单', icon: 'headset' },
+    { key: 'system', label: '系统', icon: 'shield-check' },
+    { key: 'audit', label: '审计', icon: 'check-circle' }
   ];
 }
 
@@ -3840,7 +3836,7 @@ function adminEmpty(title, desc, action = '') {
 }
 
 function adminPager(total) {
-  return `<div class="admin-pager"><span>共 ${total} 条记录</span><button type="button">上一页</button><button class="active" type="button">1</button><button type="button">下一页</button></div>`;
+  return `<div class="admin-pager"><span>共 ${total} 条记录</span></div>`;
 }
 
 function skuName(sku) {
@@ -3997,13 +3993,13 @@ function adminModalMarkup() {
     ? `<label class="admin-field-wide">请输入「${escapeHtml(m.confirm.requireText)}」以确认<input name="__confirmText" placeholder="${escapeHtml(m.confirm.requireText)}" autocomplete="off" /></label>`
     : '';
   return `
-    <div class="admin-modal-backdrop" data-action="adminModalClose">
-      <form class="admin-modal ${m.danger ? 'danger' : ''}" data-action="adminModalSubmit" onclick="event.stopPropagation()">
+    <div class="admin-modal-backdrop">
+      <form class="admin-modal ${m.danger ? 'danger' : ''}" data-admin-modal-form>
         <div class="admin-modal-head"><h2>${escapeHtml(m.title || '确认操作')}</h2>${m.desc ? `<p>${escapeHtml(m.desc)}</p>` : ''}</div>
         <div class="admin-modal-body">${fields}${confirmText}</div>
         <div class="admin-modal-actions">
           <button class="secondary" type="button" data-action="adminModalClose">取消</button>
-          <button class="${m.danger ? 'danger' : 'primary'} small" type="submit">${escapeHtml(m.submitLabel || '确认')}</button>
+          <button class="${m.danger ? 'danger' : 'primary'} small" data-action="adminModalSubmit" type="submit">${escapeHtml(m.submitLabel || '确认')}</button>
         </div>
       </form>
     </div>`;
@@ -4202,7 +4198,7 @@ function adminPagerServer(kind) {
   return `<div class="admin-pager">
     <span>共 ${slice.total || 0} 条记录 · 第 ${page}/${totalPages} 页</span>
     <button type="button" data-action="adminPage" data-kind="${kind}" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
-    <button class="active" type="button">${page}</button>
+    <button class="active" type="button" disabled>${page}</button>
     <button type="button" data-action="adminPage" data-kind="${kind}" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
   </div>`;
 }
@@ -4212,10 +4208,10 @@ function adminOrderDetailPanel() {
   const d = state.adminDetail;
   if (d.kind !== 'order' || !d.id) return '';
   if (d.loading && !d.data) {
-    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>加载中…</b><span>正在拉取订单详情。</span></div></div></div>`;
+    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>加载中…</b><span>正在拉取订单详情。</span></div></div></div>`;
   }
   if (d.error && !d.data) {
-    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>详情加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
+    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>详情加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
   }
   if (!d.data) return '';
   const o = normalizeServerOrder(d.data.order) || {};
@@ -4226,8 +4222,8 @@ function adminOrderDetailPanel() {
   const audits = d.data.auditLogs || [];
   const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
   const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
-  return `<div class="admin-drawer-backdrop" data-action="adminDetailClose">
-    <div class="admin-drawer" onclick="event.stopPropagation()">
+  return `<div class="admin-drawer-backdrop">
+    <div class="admin-drawer">
       <div class="admin-drawer-head"><div><h2>${escapeHtml(o.orderNo)}</h2><span>${escapeHtml(String(o.id))}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
       <div class="admin-drawer-body">
         ${section('状态', kv([
@@ -4268,10 +4264,10 @@ function adminUserDetailPanel() {
   const d = state.adminDetail;
   if (d.kind !== 'user' || !d.id) return '';
   if (d.loading && !d.data) {
-    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>加载中…</b><span>正在拉取用户档案。</span></div></div></div>`;
+    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>加载中…</b><span>正在拉取用户档案。</span></div></div></div>`;
   }
   if (d.error && !d.data) {
-    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>用户档案加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
+    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>用户档案加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
   }
   if (!d.data) return '';
   const p = d.data.profile || {};
@@ -4281,8 +4277,8 @@ function adminUserDetailPanel() {
   const hits = d.data.blacklistHits || [];
   const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
   const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
-  return `<div class="admin-drawer-backdrop" data-action="adminDetailClose">
-    <div class="admin-drawer" onclick="event.stopPropagation()">
+  return `<div class="admin-drawer-backdrop">
+    <div class="admin-drawer">
       <div class="admin-drawer-head"><div><h2>${escapeHtml(p.email)}</h2><span>${escapeHtml(p.telegramUsername || '')}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
       <div class="admin-drawer-body">
         ${section('基础身份', kv([
@@ -4363,70 +4359,85 @@ function adminContent(tab) {
     }
     const m = d.metrics || {};
     const queues = d.queues || {};
-    // 指标卡：点击带筛选跳转到对应中心
     const metricCards = [
-      ['今日订单', m.todayOrders ?? 0, 'orders', ''],
-      ['今日成交额', `${formatUsdt(m.todayRevenueUsdt)} USDT`, 'orders', 'paid'],
-      ['待支付', m.pendingPayment ?? 0, 'orders', 'pending_payment'],
-      ['待发货', m.paidPendingDelivery ?? 0, 'orders', 'undelivered'],
-      ['发货失败', m.deliveryFailed ?? 0, 'orders', 'delivery_failed'],
-      ['人工发货', m.manualDeliveryRequired ?? 0, 'orders', 'undelivered'],
-      ['支付异常', m.paymentExceptions ?? 0, 'payments:exceptions', ''],
-      ['售后待处理', m.supportPending ?? 0, 'support', ''],
-      ['通知失败', m.notificationFailed ?? 0, 'notifications', ''],
-      ['库存预警', m.lowStockSkuCount ?? 0, 'inventory:warning', '']
+      ['今日订单', m.todayOrders ?? 0, 'orders', 'all', '今日创建的订单数'],
+      ['今日收入', `${formatUsdt(m.todayRevenueUsdt)} USDT`, 'orders', 'paid', '已支付订单金额'],
+      ['待处理订单', (m.pendingPayment ?? 0) + (m.paidPendingDelivery ?? 0) + (m.deliveryFailed ?? 0), 'orders', 'undelivered', '待支付、待发货、失败'],
+      ['待回复工单', m.supportPending ?? 0, 'support', '', 'open / in_progress']
     ];
-    return adminPage('运营看板', '集中处理订单、发货、库存、支付与售后异常。今日数据按服务器时间当天统计。', `
+    const tasks = [
+      ...(queues.deliveryTasks || []).slice(0, 4).map((o) => ({
+        title: o.orderNo,
+        desc: `${o.productName || '订单'} · ${o.telegramUsername || o.email || '-'}`,
+        status: deliveryStatusLabel(o.deliveryStatus),
+        tone: deliveryTone(o.deliveryStatus),
+        action: `<button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">发货</button>`
+      })),
+      ...(queues.paymentExceptions || []).slice(0, 3).map((t) => ({
+        title: String(t.txHash || '').slice(0, 16) + '…',
+        desc: `${formatUsdt(t.amount)} USDT · ${exceptionTypeLabel(t.exceptionType || t.matchStatus)}`,
+        status: '支付异常',
+        tone: 'warning',
+        action: `<button data-action="adminDashboardJump" data-target="payments:exceptions" type="button">处理</button>`
+      })),
+      ...(queues.supportTickets || []).slice(0, 3).map((t) => ({
+        title: t.ticketNo || t.id,
+        desc: `${t.orderNo || '-'} · ${t.type || '售后'}`,
+        status: '待回复',
+        tone: 'warning',
+        action: `<button data-action="adminTab" data-tab="support" type="button">回复</button>`
+      }))
+    ].slice(0, 8);
+    const healthRows = [
+      ['支付异常', m.paymentExceptions ?? 0, 'payments:exceptions', (m.paymentExceptions ?? 0) ? 'warning' : 'success'],
+      ['库存预警', m.lowStockSkuCount ?? 0, 'inventory:warning', (m.lowStockSkuCount ?? 0) ? 'warning' : 'success'],
+      ['通知失败', m.notificationFailed ?? 0, 'notifications', (m.notificationFailed ?? 0) ? 'danger' : 'success'],
+      ['发货失败', m.deliveryFailed ?? 0, 'orders', (m.deliveryFailed ?? 0) ? 'danger' : 'success']
+    ];
+    return adminPage('概览', '今天需要处理的订单、工单、库存和系统异常。', `
       <div class="metric-grid admin-metrics">${metricCards.map(([label, value, target, orderTab]) =>
-        `<button type="button" data-action="adminDashboardJump" data-target="${target}" data-order-tab="${orderTab}"><span>${label}</span><b>${value}</b></button>`
+        `<button type="button" data-action="adminDashboardJump" data-target="${target}" data-order-tab="${orderTab}"><span>${label}</span><b>${value}</b><small>${metricCards.find((item) => item[0] === label)?.[4] || ''}</small></button>`
       ).join('')}</div>
       <section class="admin-section-grid">
         <div class="admin-panel">
-          <div class="admin-section-title"><h2>支付异常</h2><span>需要人工核验的链上交易</span></div>
+          <div class="admin-section-title"><h2>待处理任务</h2><span>按影响用户交付优先排序</span></div>
           ${adminTable([
-            { label: 'Hash', width: '1.6fr' }, { label: '金额' }, { label: '异常' }, { label: '操作' }
-          ], (queues.paymentExceptions || []).slice(0, 6).map((t) => [
-            `<b>${escapeHtml(String(t.txHash || '').slice(0, 16))}…</b>`,
-            `${formatUsdt(t.amount)} USDT`,
-            adminStatus(exceptionTypeLabel(t.exceptionType || t.matchStatus), 'warning'),
-            `<button data-action="adminDashboardJump" data-target="payments:exceptions" type="button">去处理</button>`
-          ]), { title: '暂无支付异常', desc: '少付、多付、金额冲突、重复 Hash、未匹配交易会显示在这里。' })}
+            { label: '对象', width: 'minmax(220px, 1.4fr)' }, { label: '说明', width: 'minmax(220px, 1.3fr)' }, { label: '状态', width: 'minmax(110px, .7fr)' }, { label: '操作', width: 'minmax(110px, .6fr)' }
+          ], tasks.map((task) => [
+            `<b>${escapeHtml(task.title)}</b>`,
+            escapeHtml(task.desc),
+            adminStatus(task.status, task.tone),
+            task.action
+          ]), { title: '暂无待处理任务', desc: '支付、发货、工单暂时没有需要人工介入的事项。' })}
         </div>
         <div class="admin-panel">
-          <div class="admin-section-title"><h2>待发货 / 发货任务</h2><span>已支付待发货与人工介入任务</span></div>
+          <div class="admin-section-title"><h2>系统健康</h2><span>异常项会进入对应处理页面</span></div>
           ${adminTable([
-            { label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '发货状态' }, { label: '操作' }
-          ], (queues.deliveryTasks || []).slice(0, 6).map((o) => [
-            `<b>${escapeHtml(o.orderNo)}</b>`,
-            escapeHtml(o.telegramUsername || o.email || '-'),
-            adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)),
-            `<button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">人工发货</button>`
+            { label: '项目', width: 'minmax(120px, 1fr)' }, { label: '数量', width: 'minmax(90px, .6fr)' }, { label: '状态', width: 'minmax(100px, .8fr)' }, { label: '操作', width: 'minmax(90px, .6fr)' }
+          ], healthRows.map(([label, value, target, tone]) => [
+            escapeHtml(label),
+            `<b>${value}</b>`,
+            adminStatus(Number(value) ? '需要关注' : '正常', tone),
+            `<button data-action="adminDashboardJump" data-target="${target}" type="button">查看</button>`
           ]), { title: '暂无待发货任务', desc: '已支付待发货、人工介入、发货失败的订单会显示在这里。' })}
         </div>
-        <div class="admin-panel">
-          <div class="admin-section-title"><h2>库存预警</h2><span>按 SKU 真实可用库存追踪补货</span></div>
-          ${adminTable([
-            { label: '商品 / SKU', width: '1.7fr' }, { label: '可用库存' }, { label: '预警值' }, { label: '建议补货' }, { label: '操作' }
-          ], (queues.lowStockSkus || []).slice(0, 8).map((s) => [
-            `<b>${escapeHtml(s.productName || s.productId || '-')}</b><small>${escapeHtml(s.skuName || Object.values(s.optionValues || {}).join(' / ') || s.skuId)}</small>`,
-            `<b class="${s.available <= 0 ? 'admin-text-danger' : ''}">${s.available}</b>`,
-            s.warningStock,
-            s.suggestedRestock,
-            `<button data-action="adminDashboardJump" data-target="inventory:warning" type="button">去补货</button>`
-          ]), { title: '暂无库存预警', desc: '低于预警值的自动发货 SKU 会显示在这里。' })}
-        </div>
-        <div class="admin-panel">
-          <div class="admin-section-title"><h2>售后待处理</h2><span>open / in_progress 工单</span></div>
-          ${adminTable([
-            { label: '工单号' }, { label: '订单号' }, { label: '类型' }, { label: '操作' }
-          ], (queues.supportTickets || []).slice(0, 6).map((t) => [
-            `<b>${escapeHtml(t.ticketNo || t.id)}</b>`,
-            escapeHtml(t.orderNo || '-'),
-            escapeHtml(t.type || '售后'),
-            `<button data-action="adminTab" data-tab="support" type="button">去处理</button>`
-          ]), { title: '暂无售后工单', desc: '用户提交售后后会显示在这里。' })}
-        </div>
       </section>
+      <div class="admin-panel">
+        <div class="admin-section-title"><h2>最近订单</h2><span>用于快速确认今日运营状态</span></div>
+        ${adminTable([
+          { label: '订单号', width: 'minmax(170px, 1.2fr)' }, { label: '商品', width: 'minmax(180px, 1.3fr)' }, { label: '金额', width: 'minmax(110px, .7fr)' }, { label: '支付', width: 'minmax(110px, .7fr)' }, { label: '发货', width: 'minmax(110px, .7fr)' }, { label: '用户', width: 'minmax(150px, 1fr)' }, { label: '时间', width: 'minmax(120px, .8fr)' }, { label: '操作', width: 'minmax(92px, .6fr)' }
+        ], orderList.slice(0, 8).map((o) => [
+          `<b>${escapeHtml(o.orderNo)}</b>`,
+          escapeHtml(o.productName || '-'),
+          `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`,
+          adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus)),
+          adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)),
+          escapeHtml(o.telegramUsername || o.email || '-'),
+          timeFrom(o.createdAt),
+          `<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">详情</button>`
+        ]), { title: '暂无最近订单', desc: '有用户下单后会显示在这里。' })}
+      </div>
+      ${adminOrderDetailPanel()}
     `, { eyebrow: '今日工作台' });
   }
   if (tab === 'products') {
@@ -4438,11 +4449,11 @@ function adminContent(tab) {
     if (sub === 'categories') {
       body = `<div class="admin-panel">${adminActionForm('category.create', [['name','分类名称'], ['key','分类 Key'], ['icon','图标','text','tag'], ['sortOrder','排序','number']], '新增分类')}${adminTable([
         { label: '分类名称' }, { label: '分类 Key' }, { label: '图标' }, { label: '是否显示' }, { label: '商品数量' }, { label: '操作' }
-      ], (ops.categories || []).map((c) => [escapeHtml(c.name), escapeHtml(c.key), escapeHtml(c.icon), adminStatus(c.visible ? '显示' : '隐藏', c.visible ? 'success' : 'neutral'), productList.filter((p) => (p.category || p.categoryId) === c.name || (p.category || p.categoryId) === c.id).length, '<button type="button">编辑</button>']), { title: '暂无分类', desc: '新增分类后可在商品列表筛选并控制前台展示。' })}</div>`;
+      ], (ops.categories || []).map((c) => [escapeHtml(c.name), escapeHtml(c.key), escapeHtml(c.icon), adminStatus(c.visible ? '显示' : '隐藏', c.visible ? 'success' : 'neutral'), productList.filter((p) => (p.category || p.categoryId) === c.name || (p.category || p.categoryId) === c.id).length, '<span class="admin-muted">通过新增表单维护</span>']), { title: '暂无分类', desc: '新增分类后可在商品列表筛选并控制前台展示。' })}</div>`;
     } else if (sub === 'tags') {
       body = `<div class="admin-panel">${adminActionForm('tag.create', [['name','标签名'], ['color','颜色','text','#22c55e'], ['icon','图标','text','zap']], '新增标签')}${adminTable([
         { label: '标签' }, { label: '颜色' }, { label: '图标' }, { label: '状态' }, { label: '操作' }
-      ], (ops.tags || []).map((t) => [escapeHtml(t.name), escapeHtml(t.color), escapeHtml(t.icon), adminStatus(t.enabled ? '启用' : '停用', t.enabled ? 'success' : 'neutral'), '<button type="button">编辑</button>']), { title: '暂无标签', desc: '商品标签可用于首页推荐、热销、限时活动等运营场景。' })}</div>`;
+      ], (ops.tags || []).map((t) => [escapeHtml(t.name), escapeHtml(t.color), escapeHtml(t.icon), adminStatus(t.enabled ? '启用' : '停用', t.enabled ? 'success' : 'neutral'), '<span class="admin-muted">通过新增表单维护</span>']), { title: '暂无标签', desc: '商品标签可用于首页推荐、热销、限时活动等运营场景。' })}</div>`;
     } else if (sub === 'skus') {
       const visibleSkuRows = filterAdminSkuRows(skuRows, filters);
       body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: '库存状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], `<button class="primary small" data-action="adminSkuCreate" type="button">新建 SKU</button><button class="secondary" data-action="adminSkuBatchPrice" type="button">批量改价</button><button class="secondary" data-action="adminSkuBatchStatus" type="button">批量上下架</button>`, scope)}<div class="admin-panel">${adminTable([
@@ -4540,25 +4551,30 @@ function adminContent(tab) {
     const slice = state.adminPages.orders;
     const orderTab = state.adminOrderTab || 'all';
     const orderTabs = [
-      ['all', '全部订单'], ['pending_payment', '待支付'], ['confirming', '链上确认中'], ['paid', '已支付'],
-      ['undelivered', '待发货'], ['delivered', '已发货'], ['delivery_failed', '发货失败'],
-      ['after_sale', '售后中'], ['refunded', '已退款']
+      ['all', '全部'],
+      ['pending_payment', '待支付'],
+      ['undelivered', '待发货'],
+      ['delivered', '已完成'],
+      ['delivery_failed', '异常'],
+      ['refunded', '退款']
     ];
     const errorBanner = slice.error ? `<div class="admin-risk-callout danger"><b>订单加载失败</b><span>${escapeHtml(slice.error)}</span></div>` : '';
     const rows = orderList.map((o) => [
       `<b>${escapeHtml(o.orderNo)}</b><small>${escapeHtml(String(o.id).slice(0, 8))}</small>`,
-      `${escapeHtml(o.telegramUsername || '-')}<small>${escapeHtml(o.email || '')}</small>`,
       `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`,
-      o.quantity || 1,
       `<b>${formatUsdt(o.payAmount || o.amountUsdt)}</b> USDT<small>原价 ${Number(o.amountUsdt || 0).toFixed(2)}</small>`,
-      'USDT TRC20',
       adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus)),
       adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)),
-      adminStatus(afterSaleStatusLabel(o.afterSaleStatus), o.afterSaleStatus === 'none' ? 'neutral' : 'warning'),
+      `${escapeHtml(o.telegramUsername || '-')}<small>${escapeHtml(o.email || '')}</small>`,
       timeFrom(o.createdAt),
-      `<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">详情</button><button data-action="adminConfirmPayment" data-id="${escapeHtml(o.id)}" type="button">确认支付</button><button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">人工发货</button>`
+      `<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">详情</button><button data-action="adminConfirmPayment" data-id="${escapeHtml(o.id)}" type="button">确认支付</button><button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">发货</button>`
     ]);
-    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。金额展示三位尾差（如 1.801 USDT）。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram / txHash' }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'dateFrom', label: '开始日期', type: 'date' }, { name: 'dateTo', label: '结束日期', type: 'date' }], '', scope)}<div class="admin-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}</button>`).join('')}</div>${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取订单列表。</span></div>' : adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户', width: '1.2fr' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '应付金额' }, { label: '支付网络' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.8fr' }], rows, { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`);
+    const orderWorkTabs = `<div class="admin-tabs static admin-link-tabs">
+      <button class="active" type="button" disabled>订单列表</button>
+      <button data-action="adminTab" data-tab="payments" type="button">支付处理</button>
+      <button data-action="adminTab" data-tab="delivery" type="button">发货履约</button>
+    </div>`;
+    return adminPage('订单', '追踪订单从创建、支付、发货到售后的完整链路。更多支付、风控和通知信息在详情抽屉查看。', `${orderWorkTabs}${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram / txHash' }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'dateFrom', label: '开始日期', type: 'date' }, { name: 'dateTo', label: '结束日期', type: 'date' }], '', scope)}<div class="admin-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}</button>`).join('')}</div>${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取订单列表。</span></div>' : adminTable([{ label: '订单号', width: 'minmax(170px, 1.1fr)' }, { label: '商品', width: 'minmax(210px, 1.35fr)' }, { label: '金额', width: 'minmax(130px, .8fr)' }, { label: '支付', width: 'minmax(110px, .7fr)' }, { label: '发货', width: 'minmax(110px, .7fr)' }, { label: '用户', width: 'minmax(170px, 1fr)' }, { label: '时间', width: 'minmax(132px, .8fr)' }, { label: '操作', width: 'minmax(210px, 1.25fr)' }], rows, { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`);
   }
   if (tab === 'payments') {
     const sub = currentAdminSubTab(tab, 'networks');
@@ -4580,7 +4596,7 @@ function adminContent(tab) {
     }
     return adminPage('支付中心', '管理支付网络、收款地址、到账交易和支付异常。', body, { tabKey: 'payments', tabs });
   }
-  if (tab === 'delivery') return adminPage('发货中心', '自动发货、人工队列、失败重试与履约日志工作台。', `${adminToolbar([{ label: '搜索订单', placeholder: '订单号 / 商品 / 用户' }, { label: '状态', type: 'select', value: '全部状态' }, { label: '发货方式', type: 'select', value: '全部方式' }])}<div class="admin-panel">${adminTable([{ label: '订单号' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '用户' }, { label: '发货方式' }, { label: '状态' }, { label: '失败原因' }, { label: '重试次数' }, { label: '创建时间' }, { label: '操作', width: '1.5fr' }], orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => [escapeHtml(o.orderNo), escapeHtml(o.productName), escapeHtml(o.telegramUsername || o.email || '-'), deliveryLabel(o.deliveryType), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), escapeHtml(o.failureReason || '-'), o.retryCount || 0, timeFrom(o.createdAt), `<button data-action="adminDeliver" data-id="${o.id}" type="button">立即发货</button><button type="button">转人工</button>`]), { title: '暂无待发货订单', desc: '已支付、发货中、发货失败的订单会进入履约队列。' })}</div><div class="admin-panel">${adminTable([{ label: '商品' }, { label: '发货能力' }, { label: 'SKU 数' }, { label: '库存来源' }, { label: '操作' }], productList.map((p) => [escapeHtml(p.name), deliveryLabel(p.deliveryType), (p.skus || []).length, '卡密库存 / 账号库存 / 人工队列', '<button data-action="adminSubTab" data-tab="inventory" data-subtab="list" type="button">配置库存来源</button><button data-action="adminTab" data-tab="audit" type="button">查看日志</button>']), { title: '暂无发货能力配置', desc: '商品创建后需要绑定库存来源和发货规则。' })}</div>`);
+  if (tab === 'delivery') return adminPage('发货中心', '自动发货、人工队列、失败重试与履约日志工作台。', `${adminToolbar([{ label: '搜索订单', placeholder: '订单号 / 商品 / 用户' }, { label: '状态', type: 'select', value: '全部状态' }, { label: '发货方式', type: 'select', value: '全部方式' }])}<div class="admin-panel">${adminTable([{ label: '订单号' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '用户' }, { label: '发货方式' }, { label: '状态' }, { label: '失败原因' }, { label: '重试次数' }, { label: '创建时间' }, { label: '操作', width: '1.5fr' }], orderList.filter((o) => ['paid', 'delivering', 'failed'].includes(o.status)).map((o) => [escapeHtml(o.orderNo), escapeHtml(o.productName), escapeHtml(o.telegramUsername || o.email || '-'), deliveryLabel(o.deliveryType), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), escapeHtml(o.failureReason || '-'), o.retryCount || 0, timeFrom(o.createdAt), `<button data-action="adminDeliver" data-id="${o.id}" type="button">立即发货</button><button data-action="adminDeliver" data-id="${o.id}" type="button">转人工</button>`]), { title: '暂无待发货订单', desc: '已支付、发货中、发货失败的订单会进入履约队列。' })}</div><div class="admin-panel">${adminTable([{ label: '商品' }, { label: '发货能力' }, { label: 'SKU 数' }, { label: '库存来源' }, { label: '操作' }], productList.map((p) => [escapeHtml(p.name), deliveryLabel(p.deliveryType), (p.skus || []).length, '卡密库存 / 账号库存 / 人工队列', '<button data-action="adminSubTab" data-tab="inventory" data-subtab="list" type="button">配置库存来源</button><button data-action="adminTab" data-tab="audit" type="button">查看日志</button>']), { title: '暂无发货能力配置', desc: '商品创建后需要绑定库存来源和发货规则。' })}</div>`);
   if (tab === 'support') {
     const tickets = state.adminData.supportTickets.length ? state.adminData.supportTickets : JSON.parse(localStorage.getItem('gfTickets') || '[]');
     return adminPage('售后中心', '处理工单、补发、退款和用户沟通记录。', `${adminToolbar([{ label: '搜索工单', placeholder: '工单号 / 订单号 / 用户' }, { label: '状态', type: 'select', value: '全部状态' }, { label: '优先级', type: 'select', value: '全部优先级' }])}<div class="admin-panel"><div class="mini-tags"><span>请提供截图</span><span>已为您补发</span><span>请等待 1-3 分钟</span><span>发货后不支持退款</span></div>${adminTable([{ label: '工单号' }, { label: '订单号' }, { label: '用户' }, { label: '问题类型' }, { label: '状态' }, { label: '优先级' }, { label: '负责人' }, { label: '创建时间' }, { label: '最后回复' }, { label: '操作', width: '1.4fr' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.orderNo || t.orderId || '-'), escapeHtml(t.user || t.telegramUsername || '-'), escapeHtml(t.type || '售后问题'), adminStatus(t.status || '待处理', adminToneFromStatus(t.status)), escapeHtml(t.priority || '普通'), escapeHtml(t.owner || '未分配'), timeFrom(t.createdAt), timeFrom(t.updatedAt || t.createdAt), `<button data-action="adminReplyTicket" data-id="${t.id}" type="button">回复</button><button data-action="adminDeliver" data-id="${t.orderId}" type="button">补发</button>`]), { title: '暂无售后工单', desc: '用户提交售后后会显示在这里，并可关联订单、补发和退款流程。' })}</div>`);
@@ -4629,7 +4645,16 @@ function adminContent(tab) {
     `);
   }
   if (tab === 'marketing') return adminPage('营销中心', '管理优惠码、商品标签、活动和前台推荐资源位。', `<div class="admin-panel">${adminActionForm('coupon.create', [['name','名称'], ['code','优惠码'], ['discountType','类型','text','amount / percent'], ['discountValue','优惠值'], ['minAmount','最低消费'], ['usageLimit','使用次数','number']], '创建优惠码')}${adminTable([{ label: '优惠码' }, { label: '名称' }, { label: '类型' }, { label: '优惠值' }, { label: '状态' }], (ops.coupons || []).map((c) => [escapeHtml(c.code), escapeHtml(c.name), escapeHtml(c.discountType), escapeHtml(c.discountValue), adminStatus(c.status, adminToneFromStatus(c.status))]), { title: '暂无优惠码', desc: '创建优惠码后可用于活动、客服补偿和复购转化。' })}</div>`);
-  if (tab === 'system') return adminPage('系统设置', '管理管理员、角色权限、危险操作确认和系统开关。', `<div class="admin-panel">${adminTable([{ label: '账号' }, { label: '邮箱' }, { label: '角色' }, { label: '状态' }], (ops.adminUsers || []).map((u) => [escapeHtml(u.username), escapeHtml(u.email || '-'), escapeHtml(u.role), adminStatus(u.status, adminToneFromStatus(u.status))]), { title: '暂无管理员账号', desc: '生产环境至少需要一个拥有二次确认能力的管理员账号。' })}</div><div class="admin-panel">${adminTable([{ label: '角色' }, { label: '权限', width: '3fr' }, { label: '更新时间' }], (ops.roles || []).map((r) => [escapeHtml(r.role), escapeHtml(Array.isArray(r.permissionsJson) ? r.permissionsJson.join(', ') : r.permissionsJson), timeFrom(r.updatedAt)]), { title: '暂无角色权限', desc: '建议区分运营、客服、财务、超级管理员权限。' })}</div><div class="admin-risk-callout"><b>高风险操作保护</b><span>修改价格、导入或查看库存、修改收款地址、手动确认支付、人工发货、补发、退款与权限变更均需审计日志。</span></div>`);
+  if (tab === 'system') {
+    const systemLinks = `<div class="admin-tabs static admin-link-tabs">
+      <button class="active" type="button" disabled>权限设置</button>
+      <button data-action="adminTab" data-tab="content" type="button">内容配置</button>
+      <button data-action="adminTab" data-tab="marketing" type="button">营销配置</button>
+      <button data-action="adminTab" data-tab="notifications" type="button">通知模板</button>
+      <button data-action="adminTab" data-tab="audit" type="button">审计日志</button>
+    </div>`;
+    return adminPage('系统', '管理内容、营销、通知、权限、危险操作确认和系统开关。', `${systemLinks}<div class="admin-panel">${adminTable([{ label: '账号' }, { label: '邮箱' }, { label: '角色' }, { label: '状态' }], (ops.adminUsers || []).map((u) => [escapeHtml(u.username), escapeHtml(u.email || '-'), escapeHtml(u.role), adminStatus(u.status, adminToneFromStatus(u.status))]), { title: '暂无管理员账号', desc: '生产环境至少需要一个拥有二次确认能力的管理员账号。' })}</div><div class="admin-panel">${adminTable([{ label: '角色' }, { label: '权限', width: '3fr' }, { label: '更新时间' }], (ops.roles || []).map((r) => [escapeHtml(r.role), escapeHtml(Array.isArray(r.permissionsJson) ? r.permissionsJson.join(', ') : r.permissionsJson), timeFrom(r.updatedAt)]), { title: '暂无角色权限', desc: '建议区分运营、客服、财务、超级管理员权限。' })}</div><div class="admin-risk-callout"><b>高风险操作保护</b><span>修改价格、导入或查看库存、修改收款地址、手动确认支付、人工发货、补发、退款与权限变更均需审计日志。</span></div>`);
+  }
   return adminContent('dashboard');
 }
 
@@ -5134,6 +5159,11 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+  if (event.target.classList?.contains('admin-modal-backdrop')) return closeAdminModal();
+  if (event.target.classList?.contains('admin-drawer-backdrop')) {
+    state.adminDetail = { kind: '', id: '', loading: false, error: '', data: null };
+    return renderAdmin();
+  }
   const copy = event.target.closest('[data-copy]');
   if (copy) {
     try {
@@ -5156,6 +5186,9 @@ document.addEventListener('click', async (event) => {
     state.accountMenuOpen = false;
     persist();
     return navigate('/account');
+  }
+  if (action === 'accountDemoAction') {
+    return notify(el.dataset.message || '该功能将在真实数据接入后开放');
   }
   if (action === 'switchAuthMode') {
     const emailInput = document.querySelector('#loginEmail');
@@ -5458,7 +5491,7 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'adminModalSubmit') {
     event.preventDefault();
-    return submitAdminModal(el.closest('form') || el);
+    return submitAdminModal(el.closest('[data-admin-modal-form]') || el.closest('form') || el);
   }
   if (action === 'adminReplyTicket') {
     const content = prompt('请输入客服回复或内部备注');
