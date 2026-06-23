@@ -36,16 +36,17 @@ interface VerificationRow {
 export async function issueVerificationCode(
   db: D1Database,
   email: string,
-  env: CloudflareEnv
+  env: CloudflareEnv,
+  purpose: "register" | "reset" = "register"
 ): Promise<{ ok: boolean; throttledSeconds?: number; sendError?: string }> {
   const normalized = email.toLowerCase();
 
   // 节流：60 秒内不可重复发送
   const recent = await db
     .prepare(
-      "SELECT created_at FROM email_verifications WHERE email = ? AND purpose = 'register' ORDER BY created_at DESC LIMIT 1"
+      "SELECT created_at FROM email_verifications WHERE email = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1"
     )
-    .bind(normalized)
+    .bind(normalized, purpose)
     .first<{ created_at: string }>();
   if (recent) {
     const elapsed = Date.now() - new Date(`${recent.created_at.replace(" ", "T")}Z`).getTime();
@@ -61,20 +62,20 @@ export async function issueVerificationCode(
   // 作废该邮箱此前未消费的验证码，避免多码并存
   await db
     .prepare(
-      "UPDATE email_verifications SET consumed_at = datetime('now') WHERE email = ? AND purpose = 'register' AND consumed_at IS NULL"
+      "UPDATE email_verifications SET consumed_at = datetime('now') WHERE email = ? AND purpose = ? AND consumed_at IS NULL"
     )
-    .bind(normalized)
+    .bind(normalized, purpose)
     .run();
 
   await db
     .prepare(
       `INSERT INTO email_verifications (id, email, code_hash, purpose, attempts, expires_at, created_at)
-       VALUES (?, ?, ?, 'register', 0, ?, datetime('now'))`
+       VALUES (?, ?, ?, ?, 0, ?, datetime('now'))`
     )
-    .bind(crypto.randomUUID(), normalized, codeHash, expiresAt)
+    .bind(crypto.randomUUID(), normalized, codeHash, purpose, expiresAt)
     .run();
 
-  const sendResult = await sendVerificationEmail(normalized, code, env);
+  const sendResult = await sendVerificationEmail(normalized, code, env, purpose);
   // dev-log（本地联调降级）视为成功；其他 provider 失败需透出，避免"提示已发送但收不到"。
   if (!sendResult.ok && sendResult.provider !== "dev-log") {
     console.warn(
@@ -93,17 +94,18 @@ export type VerifyResult =
 export async function verifyCode(
   db: D1Database,
   email: string,
-  code: string
+  code: string,
+  purpose: "register" | "reset" = "register"
 ): Promise<VerifyResult> {
   const normalized = email.toLowerCase();
   const row = await db
     .prepare(
       `SELECT id, code_hash, attempts, expires_at, consumed_at, created_at
        FROM email_verifications
-       WHERE email = ? AND purpose = 'register' AND consumed_at IS NULL
+       WHERE email = ? AND purpose = ? AND consumed_at IS NULL
        ORDER BY created_at DESC LIMIT 1`
     )
-    .bind(normalized)
+    .bind(normalized, purpose)
     .first<VerificationRow>();
 
   if (!row) return { ok: false, reason: "not_found" };

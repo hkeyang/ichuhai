@@ -31,7 +31,7 @@ const ASSETS = {
 
 const SUPPORT_TELEGRAM_URL = 'https://t.me/ichuhaikefu';
 const SUPPORT_TELEGRAM_HANDLE = '@ichuhaikefu';
-const PASSWORD_RULE_RE = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
+const PASSWORD_RULE_RE = /^(?=.{6,}$)(?=.*[A-Za-z])(?=.*\d).+$/;
 const DEFAULT_SUPPORT_CHANNEL = {
   title: '客服频道',
   description: '保留订单号、支付截图或收货信息，客服频道可以更快帮你核对。',
@@ -395,7 +395,7 @@ const state = {
   loginRemember: false,
   loginCaptcha: null,
   loginReturnTo: '/account',
-  loginStep: 'form',          // form | verify
+  loginStep: 'form',          // form | verify | reset
   loginVerifyEmail: '',       // 待验证邮箱
   loginVerifyCode: '',        // 验证码输入暂存
   loginResendAt: 0,           // 下次可重发时间戳
@@ -1392,7 +1392,6 @@ function splitCodeInput({ id, value = '', maxLength = 6, placeholder = '', iconN
   </span>`;
   }
   return `<span class="login-code-input" data-code-shell data-target="${id}">
-    ${lineIcon(iconName, ariaLabel, 'login-field-icon')}
     <input id="${id}" class="code-real-input" inputmode="numeric" maxlength="${maxLength}" autocomplete="${id === 'loginCode' ? 'one-time-code' : 'off'}" placeholder="${escapeHtml(placeholder)}" value="${safeValue}" aria-label="${escapeHtml(ariaLabel)}" />
     <span class="code-slots" aria-hidden="true">
       ${Array.from({ length: maxLength }, (_, index) => `<i class="code-slot">${safeValue[index] ? escapeHtml(safeValue[index]) : ''}</i>`).join('')}
@@ -1462,12 +1461,6 @@ async function submitLoginPageLogin() {
   state.loginBusy = true;
   try {
     const { response, data } = await postJson('/api/auth/login', { email, password, remember });
-    if (response.status === 403 && data.next === 'verify') {
-      // 邮箱未验证：转到验证码步骤并自动发码
-      state.loginBusy = false;
-      notify(data.error || '邮箱尚未验证，请完成验证');
-      return startVerifyStep(email, { sendNow: true });
-    }
     if (!response.ok) {
       state.loginBusy = false;
       return notify(data.error || '登录失败');
@@ -1486,7 +1479,7 @@ async function submitLoginPageRegister() {
   const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
   const password = document.querySelector('#loginPassword')?.value || '';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
-  if (!PASSWORD_RULE_RE.test(password)) return notify('密码需要至少字母和数字的 6 位组合');
+  if (!PASSWORD_RULE_RE.test(password)) return notify('密码至少 6 位，需包含字母和数字，可使用符号');
   if (!validateLoginCaptcha()) return;
   state.loginBusy = true;
   try {
@@ -1510,6 +1503,16 @@ function startVerifyStep(email, { sendNow } = {}) {
   route();
   startVerifyCountdown();
   if (sendNow) resendVerifyCode();
+}
+
+function startPasswordResetStep(email) {
+  state.loginStep = 'reset';
+  state.loginVerifyEmail = email;
+  state.loginVerifyCode = '';
+  state.loginResendAt = Date.now() + 60 * 1000;
+  state.loginBusy = false;
+  route();
+  startVerifyCountdown();
 }
 
 function paymentExpiryMs(expiresAt, createdAt) {
@@ -1649,9 +1652,59 @@ async function submitVerifyCode() {
   }
 }
 
+async function submitPasswordResetRequest() {
+  if (state.loginBusy) return;
+  const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase() || state.email.trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请先输入有效邮箱');
+  state.loginBusy = true;
+  try {
+    const { response, data } = await postJson('/api/auth/password-reset/request', { email });
+    state.loginBusy = false;
+    if (!response.ok) return notify(data.error || '验证码发送失败');
+    state.email = email;
+    notify('验证码已发送到邮箱');
+    startPasswordResetStep(email);
+  } catch {
+    state.loginBusy = false;
+    notify('网络异常，请稍后重试');
+  }
+}
+
+async function submitPasswordResetConfirm() {
+  if (state.loginBusy) return;
+  const code = (document.querySelector('#loginCode')?.value || '').trim();
+  const password = document.querySelector('#loginPassword')?.value || '';
+  if (!/^\d{6}$/.test(code)) return notify('请输入 6 位验证码');
+  if (!PASSWORD_RULE_RE.test(password)) return notify('密码至少 6 位，需包含字母和数字，可使用符号');
+  state.loginBusy = true;
+  try {
+    const { response, data } = await postJson('/api/auth/password-reset/confirm', {
+      email: state.loginVerifyEmail,
+      code,
+      password
+    });
+    state.loginBusy = false;
+    if (!response.ok) return notify(data.error || '密码重置失败');
+    stopVerifyCountdown();
+    state.authMode = 'login';
+    state.loginStep = 'form';
+    state.loginVerifyEmail = '';
+    state.loginVerifyCode = '';
+    state.email = data.email || state.email;
+    state.loginPasswordVisible = false;
+    refreshLoginCaptcha();
+    notify('密码已重置，请使用新密码登录');
+    route();
+  } catch {
+    state.loginBusy = false;
+    notify('网络异常，请稍后重试');
+  }
+}
+
 async function resendVerifyCode() {
   try {
-    const { response, data } = await postJson('/api/auth/resend-code', { email: state.loginVerifyEmail });
+    const endpoint = state.loginStep === 'reset' ? '/api/auth/password-reset/request' : '/api/auth/resend-code';
+    const { response, data } = await postJson(endpoint, { email: state.loginVerifyEmail });
     if (!response.ok) return notify(data.error || '重发失败');
     state.loginResendAt = Date.now() + 60 * 1000;
     notify('验证码已重新发送');
@@ -1665,21 +1718,33 @@ async function resendVerifyCode() {
 function loginVerifySection() {
   const maskedEmail = maskEmail(state.loginVerifyEmail || '');
   const resendLeft = Math.max(0, Math.ceil((state.loginResendAt - Date.now()) / 1000));
+  const isReset = state.loginStep === 'reset';
+  const passwordType = state.loginPasswordVisible ? 'text' : 'password';
   return `
     <div class="login-verify">
       <span class="login-verify-icon">${lineIcon('mail', '邮箱验证', 'login-icon')}</span>
-      <h2 class="login-verify-title">验证您的邮箱</h2>
+      <h2 class="login-verify-title">${isReset ? '重置密码' : '验证您的邮箱'}</h2>
       <p class="login-verify-desc">验证码已发送至 <b>${maskedEmail}</b></p>
       <form class="login-fields" data-action="loginVerifySubmit">
         <label class="login-field">
           <span class="login-field-label">请在 5 分钟内输入 6 位验证码</span>
           ${splitCodeInput({ id: 'loginCode', value: state.loginVerifyCode, maxLength: 6, placeholder: '请输入 6 位验证码', ariaLabel: '邮箱验证码' })}
         </label>
-        <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>验证并登录</button>
+        ${isReset ? `
+        <label class="login-field">
+          <span class="login-field-label">新密码</span>
+          <span class="login-input">
+            ${lineIcon('lock', '新密码', 'login-field-icon')}
+            <input id="loginPassword" type="${passwordType}" autocomplete="new-password" placeholder="请输入新密码" />
+            <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
+          </span>
+        </label>
+        <small class="login-password-hint">密码至少 6 位，需包含字母和数字，可使用符号。</small>` : ''}
+        <button class="login-submit" type="submit" ${state.loginBusy ? 'disabled' : ''}>${isReset ? '重置密码' : '验证并登录'}</button>
       </form>
       <div class="login-verify-actions">
         <button data-action="loginResendCode" type="button" ${resendLeft ? 'disabled' : ''}>${resendLeft ? `重新发送 (${resendLeft}s)` : '重新发送验证码'}</button>
-        <button data-action="loginBackToForm" type="button">返回修改邮箱</button>
+        <button data-action="loginBackToForm" type="button">${isReset ? '返回登录' : '返回修改邮箱'}</button>
       </div>
     </div>`;
 }
@@ -1707,7 +1772,7 @@ function loginPage() {
           </div>
         </aside>
         <section class="login-form">
-          ${state.loginStep === 'verify' ? loginVerifySection() : `
+          ${state.loginStep === 'verify' || state.loginStep === 'reset' ? loginVerifySection() : `
           <div class="login-form-title">
             <h1>${isRegister ? '创建账号' : '欢迎回来'}</h1>
             <p>登录后查看订单、余额和自动发货内容。</p>
@@ -1732,7 +1797,7 @@ function loginPage() {
                 <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
               </span>
             </label>
-            ${isRegister ? `<small class="login-password-hint">密码需包含字母和数字，至少 6 位。</small>` : ''}
+            ${isRegister ? `<small class="login-password-hint">密码至少 6 位，需包含字母和数字，可使用符号。</small>` : ''}
             <label class="login-field">
               <span class="login-field-label">验证码</span>
               <span class="login-captcha-row">
@@ -1838,14 +1903,10 @@ function productBrowser(full = false) {
         <div class="catalog-help-card">
           <div class="catalog-help-head">
             ${lineIcon('headset', '需要帮助', 'catalog-help-icon')}
-            <span><b>需要帮助?</b><small>在线客服为您提供专业支持</small></span>
+            <span><b>需要帮助?</b><small>Need help?</small></span>
           </div>
-          <a class="catalog-help-button" href="${escapeHtml(supportChannel().url)}" target="_blank" rel="noopener">联系客服</a>
-          <a class="catalog-help-button secondary" href="/faq">帮助中心</a>
-          <a class="catalog-help-channel" href="${escapeHtml(supportChannel().url)}" target="_blank" rel="noopener">
-            ${lineIcon('telegram', '客服频道', 'catalog-help-channel-icon')}
-            <span><b>客服频道</b><small>${escapeHtml(supportChannel().label)}</small></span>
-          </a>
+          <a class="catalog-help-button" href="${escapeHtml(supportChannel().url)}" target="_blank" rel="noopener">${lineIcon('headset', '联系客服', 'catalog-help-button-icon')} 联系客服</a>
+          <a class="catalog-help-button secondary" href="/faq">帮助中心 ${lineIcon('chevron', '进入帮助中心', 'catalog-help-arrow')}</a>
         </div>
       </aside>
       <div class="catalog-main">
@@ -2030,15 +2091,17 @@ function card(item) {
   const hasMultiplePrices = (item.skus || []).length > 1;
   return `
     <a class="product-card catalog-card" href="/products/${item.slug}" role="listitem">
-      <span class="catalog-card-media">${icon(item.icon)}</span>
       <span class="catalog-card-info">
+        <span class="catalog-card-media">${icon(item.icon)}</span>
+        <span class="catalog-card-copy">
         <span class="catalog-card-title">
           <b>${escapeHtml(item.name)}</b>
         </span>
         ${spec ? `<small class="catalog-card-spec">${escapeHtml(spec)}</small>` : ''}
+        </span>
       </span>
       <span class="catalog-card-delivery">
-        <i class="delivery-chip ${deliveryClass}"><em class="delivery-dot">${deliveryAuto ? '⚡' : '🕒'}</em>${escapeHtml(deliveryAuto ? '自动发货' : '人工发货')}</i>
+        <i class="delivery-chip ${deliveryClass}">${lineIcon(deliveryAuto ? 'lightning' : 'clock', deliveryAuto ? '自动发货' : '人工发货', 'delivery-dot')}${escapeHtml(deliveryAuto ? '自动发货' : '人工发货')}</i>
       </span>
       <span class="catalog-card-price">${priceFrom(minimumPrice, hasMultiplePrices)}</span>
       <span class="catalog-card-stock">
@@ -5468,11 +5531,12 @@ document.addEventListener('click', async (event) => {
   if (action === 'toggleLoginAgree') { state.loginAgree = !!event.target.checked; return; }
   if (action === 'toggleLoginRemember') { state.loginRemember = !!event.target.checked; return; }
   if (action === 'refreshLoginCaptcha') { refreshLoginCaptcha(); return route(); }
-  if (action === 'loginForgot') { return notify('忘记密码将通过邮箱验证码重置，接口接入后启用。'); }
+  if (action === 'loginForgot') { return submitPasswordResetRequest(); }
   if (action === 'loginResendCode') { return resendVerifyCode(); }
   if (action === 'loginBackToForm') {
     stopVerifyCountdown();
     state.loginStep = 'form';
+    state.authMode = 'login';
     state.loginVerifyCode = '';
     state.loginBusy = false;
     return route();
@@ -6109,7 +6173,7 @@ document.addEventListener('submit', async (event) => {
   const verifyForm = event.target.closest('[data-action="loginVerifySubmit"]');
   if (verifyForm) {
     event.preventDefault();
-    return submitVerifyCode();
+    return state.loginStep === 'reset' ? submitPasswordResetConfirm() : submitVerifyCode();
   }
   const loginForm = event.target.closest('[data-action="adminLoginForm"]');
   if (loginForm) {

@@ -21,7 +21,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=admin-clean-20260623" type="module" strategy="afterInteractive" />;
+  return <Script src="/app.js?v=auth-reset-captcha-20260623" type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {

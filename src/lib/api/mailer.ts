@@ -92,12 +92,15 @@ export async function sendMail(
 export async function sendVerificationEmail(
   to: string,
   code: string,
-  env: CloudflareEnv
+  env: CloudflareEnv,
+  purpose: "register" | "reset" = "register"
 ): Promise<MailResult> {
-  const subject = "ichuhai 邮箱验证码";
-  const text = `您的 ichuhai 注册验证码是 ${code}，5 分钟内有效。如果不是您本人操作，请忽略本邮件。`;
+  const isReset = purpose === "reset";
+  const subject = isReset ? "ichuhai 密码重置验证码" : "ichuhai 邮箱验证码";
+  const actionText = isReset ? "重置密码" : "注册";
+  const text = `您的 ichuhai ${actionText}验证码是 ${code}，5 分钟内有效。如果不是您本人操作，请忽略本邮件。`;
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#0B1538">
-    <p>您正在注册 <b>ichuhai</b> 账号，验证码为：</p>
+    <p>您正在${actionText} <b>ichuhai</b> 账号，验证码为：</p>
     <p style="font-size:30px;font-weight:800;letter-spacing:6px;color:#4F7CFF;margin:18px 0">${code}</p>
     <p style="color:#64708B">验证码 5 分钟内有效。如果不是您本人操作，请忽略本邮件。</p>
   </div>`;

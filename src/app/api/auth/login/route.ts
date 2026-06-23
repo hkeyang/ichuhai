@@ -49,15 +49,6 @@ export async function POST(request: Request) {
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) throw new HttpError(401, "邮箱或密码错误");
 
-    if (user.email_verified !== 1) {
-      return jsonResponse(
-        { error: "邮箱尚未验证，请先完成邮箱验证", next: "verify", email },
-        403,
-        request,
-        cloudflareEnv
-      );
-    }
-
     await db
       .prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?")
       .bind(user.id)
