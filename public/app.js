@@ -3434,7 +3434,7 @@ function accountSections() {
     { key: 'orders', label: '我的订单', icon: 'receipt', desc: '查看和管理您的订单，追踪订单状态与售后进度。' },
     { key: 'wallet', label: '余额中心', icon: 'card', desc: '管理 USDT 余额、充值记录、消费流水和组合支付。' },
     { key: 'support', label: '售后服务', icon: 'headset', desc: '如需对订单或充值相关问题发起售后申请，欢迎随时与我们联系。' },
-    { key: 'profile', label: '账号设置', icon: 'shield-check', desc: '修改昵称、查看账号信息并管理登录安全。' },
+    { key: 'profile', label: '账号设置', icon: 'shield-check', desc: '管理您的账号与安全设置，保障账号安全与使用体验。' },
     { key: 'help', label: '帮助中心', icon: 'more', desc: '查看购买、充值、TRC20 支付、发货和售后规则。' }
   ];
 }
@@ -3708,14 +3708,12 @@ function accountSupportDetailPanel() {
 }
 
 function accountProfilePanel() {
-  return `<section class="member-panel profile-form">
-    <div class="profile-editor">
-      <div><h3>${escapeHtml(userNickname())}</h3><p>${escapeHtml(userEmail())}</p></div>
-    </div>
-    <label>昵称<input id="profileNickname" value="${escapeHtml(userNickname())}" maxlength="20" /></label>
-    <label>邮箱账号<input value="${escapeHtml(userEmail())}" disabled /></label>
-    <label>用户 ID<input value="${escapeHtml(state.user.id)}" disabled /></label>
-    <button class="primary" data-action="saveProfile" type="button">保存资料</button>
+  return `<section class="account-settings-card">
+    <form class="account-password-form">
+      <label><span>旧密码</span><div class="settings-password-field"><input id="oldPassword" type="password" placeholder="请输入旧密码" />${lineIcon('eye', '显示旧密码', 'settings-eye-icon')}</div></label>
+      <label><span>新密码</span><div class="settings-password-field"><input id="newPassword" type="password" placeholder="请输入新密码" />${lineIcon('eye', '显示新密码', 'settings-eye-icon')}</div></label>
+      <button class="settings-submit" data-action="changePassword" type="button">修改密码</button>
+    </form>
   </section>`;
 }
 
@@ -3817,14 +3815,25 @@ function account() {
   const userName = userNickname();
   const section = state.accountSection || 'orders';
   const sectionMeta = accountSectionMeta(section);
+  const isProfileSection = section === 'profile';
   shell(`
-    <section class="member-center">
+    <section class="member-center ${isProfileSection ? 'settings-member-center' : ''}">
       <aside class="member-sidebar">
-        <div class="member-user">
-          <h2>${escapeHtml(userName)}</h2>
-          <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
-          <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
-        </div>
+        ${isProfileSection ? `
+          <div class="member-user settings-user">
+            ${icon('discord')}
+            <h2>${escapeHtml(userName)}</h2>
+            <p>${escapeHtml(userEmail())}</p>
+            <em>ID： ${escapeHtml(state.user.id)}</em>
+            <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b><button data-action="selectAccountSection" data-section="wallet" type="button">充值</button></div>
+          </div>
+        ` : `
+          <div class="member-user">
+            <h2>${escapeHtml(userName)}</h2>
+            <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
+            <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
+          </div>
+        `}
         <nav class="member-nav">
           ${accountSections().map((item) => `<button class="${item.key === section || (item.key === 'wallet' && section === 'walletLedger') || (item.key === 'support' && section === 'supportDetail') ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
         </nav>
@@ -3833,7 +3842,7 @@ function account() {
 
       <section class="member-main">
         <header class="member-title">
-          <h1>个人中心 / ${escapeHtml(sectionMeta.label)}</h1>
+          <h1>${isProfileSection ? escapeHtml(sectionMeta.label) : `个人中心 / ${escapeHtml(sectionMeta.label)}`}</h1>
           <p>${escapeHtml(sectionMeta.desc)}</p>
         </header>
 
