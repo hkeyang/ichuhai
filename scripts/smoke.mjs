@@ -112,7 +112,9 @@ const lookup = await request('/api/orders/lookup', {
 assert(lookup.status === 'completed', 'lookup did not return completed order');
 
 const adminOrders = await adminRequest('/api/admin/orders');
-assert(adminOrders.some((order) => order.id === created.orderId), 'admin orders missing smoke order');
+const adminOrderItems = Array.isArray(adminOrders.items) ? adminOrders.items : adminOrders;
+assert(adminOrderItems.some((order) => order.id === created.orderId), 'admin orders missing smoke order');
+assert(typeof adminOrders.total === 'number', 'admin orders should return paginated envelope { items, total }');
 const adminDeliveries = await adminRequest('/api/admin/deliveries');
 assert(adminDeliveries.some((delivery) => delivery.orderId === created.orderId), 'admin deliveries missing smoke delivery');
 const adminNotifications = await adminRequest('/api/admin/notifications');
@@ -198,6 +200,145 @@ assert(manualDelivery.delivery.method === 'manual', 'admin manual delivery faile
 const auditLogs = await adminRequest('/api/admin/audit-logs');
 assert(Array.isArray(auditLogs), 'admin audit logs should return an array');
 
+// ── 新增后台能力验收 ───────────────────────────────────────────
+
+// 看板：今日指标 + 队列
+const dashboard = await adminRequest('/api/admin/dashboard');
+assert(dashboard.metrics && typeof dashboard.metrics.todayOrders === 'number', 'dashboard metrics missing');
+assert(dashboard.queues && Array.isArray(dashboard.queues.lowStockSkus), 'dashboard queues missing');
+
+// 库存列表：服务端分页 + 状态词
+const invList = await adminRequest('/api/admin/inventory?status=available&pageSize=5');
+assert(Array.isArray(invList.items) && typeof invList.total === 'number', 'inventory list envelope missing');
+const revealTarget = invList.items.find((i) => i.skuId === createdSku.id) || invList.items[0];
+
+// 查看明文 + 审计
+if (revealTarget) {
+  const revealed = await adminRequest(`/api/admin/inventory/${revealTarget.id}/reveal`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reason: 'smoke reveal' })
+  });
+  assert(typeof revealed.value === 'string', 'inventory reveal did not return plaintext');
+}
+
+// 作废库存：导入一条可用库存并作废，验证作废后不可重复作废
+const revokeImport = await adminRequest('/api/admin/inventory/import', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ skuId: createdSku.id, items: [`revoke-target-${suffix}`] })
+});
+assert(revokeImport.imported === 1, 'revoke target import failed');
+const revokeList = await adminRequest(`/api/admin/inventory?skuId=${createdSku.id}&status=available&pageSize=50`);
+const revokeItem = revokeList.items.find((i) => i.maskedValue && i.maskedValue.startsWith('revo'));
+if (revokeItem) {
+  const revoked = await adminRequest(`/api/admin/inventory/${revokeItem.id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'revoked', remark: 'smoke revoke' })
+  });
+  assert(revoked.status === 'revoked', 'inventory revoke failed');
+}
+
+// 库存导入重复检测：再次导入相同内容应为重复
+const dupItem = `dup-detect-${suffix}`;
+await adminRequest('/api/admin/ops', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'inventory.import', skuId: createdSku.id, productId: createdProductId, items: [dupItem] })
+});
+const dupAgain = await adminRequest('/api/admin/ops', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'inventory.import', skuId: createdSku.id, productId: createdProductId, items: [dupItem] })
+});
+const dupBatches = (dupAgain.inventoryBatches || []).filter((b) => b.skuId === createdSku.id);
+assert(dupBatches.some((b) => b.duplicateCount >= 1), 'inventory dedup not detected on re-import');
+
+// 手动确认支付：创建新订单，confirm-payment 写入 payment_transactions
+const payOrder = await request('/api/orders', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ productId: 'discord-nitro', skuId: 'dn-g-new-1', telegramUsername: '@smoke_pay', email: 'smokepay@example.com', paymentNetwork: 'TRON', fiatCurrency: 'CNY' })
+});
+const confirmTx = `smoke-confirm-${suffix}`;
+const confirmed = await adminRequest(`/api/admin/orders/${payOrder.orderId}/confirm-payment`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ txHash: confirmTx, amount: '999.999', reason: 'smoke manual confirm with mismatch' })
+});
+assert(confirmed.order.paymentStatus === 'paid', 'confirm-payment did not mark paid');
+assert(confirmed.transaction && confirmed.transaction.txHash === confirmTx, 'confirm-payment did not write payment_transaction');
+
+// txHash 不可重复绑定其它订单
+const payOrder2 = await request('/api/orders', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ productId: 'discord-nitro', skuId: 'dn-g-new-1', telegramUsername: '@smoke_pay2', email: 'smokepay2@example.com', paymentNetwork: 'TRON', fiatCurrency: 'CNY' })
+});
+let dupTxRejected = false;
+try {
+  await adminRequest(`/api/admin/orders/${payOrder2.orderId}/confirm-payment`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ txHash: confirmTx, reason: 'dup' })
+  });
+} catch {
+  dupTxRejected = true;
+}
+assert(dupTxRejected, 'duplicate txHash should be rejected on confirm-payment');
+
+// 到账交易列表 + 支付异常筛选
+const txList = await adminRequest('/api/admin/payment-transactions?pageSize=10');
+assert(Array.isArray(txList.items) && typeof txList.total === 'number', 'payment-transactions envelope missing');
+
+// 未支付订单默认不可人工发货
+const guardOrder = await request('/api/orders', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ productId: 'discord-nitro', skuId: 'dn-g-new-1', telegramUsername: '@smoke_guard', email: 'smokeguard@example.com', paymentNetwork: 'TRON', fiatCurrency: 'CNY' })
+});
+let unpaidDeliverBlocked = false;
+try {
+  await adminRequest(`/api/admin/orders/${guardOrder.orderId}/manual-deliver`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ operator: 'smoke', deliveryContent: 'should-be-blocked' })
+  });
+} catch {
+  unpaidDeliverBlocked = true;
+}
+assert(unpaidDeliverBlocked, 'unpaid order should not allow manual delivery by default');
+
+// 黑名单命中拦截下单
+const blockEmail = `blocked-${suffix}@example.com`;
+await adminRequest('/api/admin/ops', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'blacklist.create', kind: 'email', value: blockEmail, effect: 'block_order', reason: 'smoke block', status: 'active' })
+});
+let orderBlocked = false;
+try {
+  await request('/api/orders', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ productId: 'discord-nitro', skuId: 'dn-g-new-1', telegramUsername: '@smoke_blk', email: blockEmail, paymentNetwork: 'TRON', fiatCurrency: 'CNY' })
+  });
+} catch {
+  orderBlocked = true;
+}
+assert(orderBlocked, 'blacklisted email should be blocked from ordering');
+
+// 用户中心：列表 + 详情
+const users = await adminRequest('/api/admin/users?pageSize=5');
+assert(Array.isArray(users.items) && typeof users.total === 'number', 'admin users envelope missing');
+const userDetail = await adminRequest(`/api/admin/users/${encodeURIComponent('smoke@example.com')}`);
+assert(userDetail.profile && Array.isArray(userDetail.orders), 'user detail missing profile/orders');
+
+// 商品列表带真实可用库存字段
+const adminProductsList = await adminRequest('/api/admin/products');
+assert(adminProductsList.some((p) => typeof p.availableInventory === 'number'), 'product list missing availableInventory');
+
 console.log(JSON.stringify({
   ok: true,
   base,
@@ -222,6 +363,19 @@ console.log(JSON.stringify({
     'admin-order-status',
     'admin-manual-delivery',
     'admin-audit',
-    'mail-notifications'
+    'mail-notifications',
+    'dashboard-metrics',
+    'inventory-list',
+    'inventory-reveal',
+    'inventory-revoke',
+    'inventory-dedup',
+    'confirm-payment',
+    'confirm-payment-dup-tx',
+    'payment-transactions-list',
+    'unpaid-deliver-guard',
+    'blacklist-block-order',
+    'admin-users-list',
+    'admin-user-detail',
+    'product-available-inventory'
   ]
 }, null, 2));

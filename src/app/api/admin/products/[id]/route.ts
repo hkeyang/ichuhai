@@ -6,13 +6,15 @@ import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
-import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { cleanString, cleanEnum } from "@/lib/api/validators";
+import { writeAuditLog } from "@/lib/api/audit";
+import { requireAdmin } from "@/lib/api/admin-guard";
 import { formatProduct } from "@/lib/api/formatters";
 import type { ProductRow } from "@/lib/api/types";
 
 const PRODUCT_STATUSES = new Set(["active", "hidden", "archived"]);
 const DELIVERY_TYPES = new Set(["auto", "manual", "mixed"]);
+const PRODUCT_TYPES = new Set(["subscription", "card", "account", "recharge", "service"]);
 
 export async function OPTIONS(request: Request) {
   const { env } = await getCloudflareContext();
@@ -27,12 +29,7 @@ export async function PATCH(
   const cloudflareEnv = env as CloudflareEnv;
 
   try {
-    const token = request.headers.get("x-admin-token") || "";
-    const isProduction = cloudflareEnv.NODE_ENV === "production";
-    if (isProduction) {
-      const valid = await verifyAdminSessionToken(token, cloudflareEnv);
-      if (!valid) return jsonResponse({ error: "admin auth required" }, 401, request, cloudflareEnv);
-    }
+    const actor = await requireAdmin(request, cloudflareEnv);
 
     const { id } = await params;
     const db = cloudflareEnv.DB;
@@ -51,12 +48,16 @@ export async function PATCH(
       categoryId?: unknown;
       status?: unknown;
       deliveryType?: unknown;
+      productType?: unknown;
       baseCurrency?: unknown;
       shortDescription?: unknown;
       featureTags?: unknown;
       detailDescription?: unknown;
       purchaseNotice?: unknown;
       afterSaleRule?: unknown;
+      isHomeVisible?: unknown;
+      isRecommended?: unknown;
+      sortOrder?: unknown;
     }>(request);
 
     const fields: string[] = [];
@@ -82,6 +83,10 @@ export async function PATCH(
       fields.push("delivery_type = ?");
       values.push(cleanEnum(body.deliveryType, "deliveryType", DELIVERY_TYPES));
     }
+    if (body.productType !== undefined) {
+      fields.push("product_type = ?");
+      values.push(cleanEnum(body.productType, "productType", PRODUCT_TYPES));
+    }
     if (body.baseCurrency !== undefined) {
       fields.push("base_currency = ?");
       values.push(cleanString(body.baseCurrency, "baseCurrency", { max: 10, pattern: /^[A-Z]{3}$/ }));
@@ -101,6 +106,18 @@ export async function PATCH(
     if (body.afterSaleRule !== undefined) {
       fields.push("after_sale_rule = ?");
       values.push(cleanString(body.afterSaleRule, "afterSaleRule", { max: 2000, allowEmpty: true }));
+    }
+    if (body.isHomeVisible !== undefined) {
+      fields.push("is_home_visible = ?");
+      values.push(body.isHomeVisible ? 1 : 0);
+    }
+    if (body.isRecommended !== undefined) {
+      fields.push("is_recommended = ?");
+      values.push(body.isRecommended ? 1 : 0);
+    }
+    if (body.sortOrder !== undefined) {
+      fields.push("sort_order = ?");
+      values.push(Math.floor(Number(body.sortOrder)) || 0);
     }
     if (body.featureTags !== undefined) {
       const tags = Array.isArray(body.featureTags)
@@ -124,6 +141,13 @@ export async function PATCH(
       .prepare("SELECT * FROM products WHERE id = ?")
       .bind(id)
       .first<ProductRow>();
+
+    // 上下架/字段变更写审计
+    await writeAuditLog(db, request, actor, "product.update", "product", id, {
+      changedFields: Object.keys(body),
+      previousStatus: body.status !== undefined ? existing.status : undefined,
+      nextStatus: body.status !== undefined ? updated?.status : undefined,
+    });
 
     return jsonResponse(updated ? formatProduct(updated) : null, 200, request, cloudflareEnv);
   } catch (error) {

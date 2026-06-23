@@ -33,15 +33,35 @@ export async function GET(request: Request) {
 
     const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
-    const [productsResult, skusResult] = await db.batch<ProductRow | SkuRow>([
+    const [productsResult, skusResult, invResult] = await db.batch<ProductRow | SkuRow | { sku_id: string; available: number }>([
       db.prepare("SELECT * FROM products ORDER BY created_at ASC"),
       db.prepare("SELECT * FROM skus ORDER BY product_id, created_at ASC"),
+      db.prepare("SELECT sku_id, SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS available FROM inventory_items GROUP BY sku_id"),
     ]);
-    const skus = (skusResult.results as SkuRow[]).map(formatSku);
-    const products = (productsResult.results as ProductRow[]).map((product) => ({
-      ...formatProduct(product),
-      skus: skus.filter((sku) => sku.productId === product.id),
+    const availableBySku = new Map<string, number>();
+    for (const row of invResult.results as { sku_id: string; available: number }[]) {
+      availableBySku.set(row.sku_id, Number(row.available || 0));
+    }
+    const skus = (skusResult.results as SkuRow[]).map((sku) => ({
+      ...formatSku(sku),
+      availableInventory: availableBySku.get(sku.id) ?? 0,
     }));
+    const products = (productsResult.results as ProductRow[]).map((product) => {
+      const productSkus = skus.filter((sku) => sku.productId === product.id);
+      const sellableSkuCount = productSkus.filter((s) => s.stockStatus !== "sold_out").length;
+      const outOfStockSkuCount = productSkus.filter(
+        (s) => (s.deliveryType === "auto" || s.deliveryType === "mixed") && s.availableInventory <= 0
+      ).length;
+      const availableInventory = productSkus.reduce((sum, s) => sum + s.availableInventory, 0);
+      return {
+        ...formatProduct(product),
+        skus: productSkus,
+        skuCount: productSkus.length,
+        sellableSkuCount,
+        outOfStockSkuCount,
+        availableInventory,
+      };
+    });
 
     return jsonResponse(products, 200, request, cloudflareEnv);
   } catch (error) {

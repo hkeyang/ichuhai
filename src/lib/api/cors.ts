@@ -14,7 +14,7 @@ export function securityHeaders(request: Request, env: CloudflareEnv): Record<st
   if (origin && allowed.has(origin)) {
     headers['access-control-allow-origin'] = origin;
     headers['access-control-allow-methods'] = 'GET,POST,PATCH,OPTIONS';
-    headers['access-control-allow-headers'] = 'content-type,x-admin-token,x-internal-token';
+    headers['access-control-allow-headers'] = 'content-type,x-admin-token,x-admin-username,x-internal-token';
   }
   return headers;
 }

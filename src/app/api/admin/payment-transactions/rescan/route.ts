@@ -1,8 +1,12 @@
+// src/app/api/admin/payment-transactions/rescan/route.ts
+// POST /api/admin/payment-transactions/rescan — 手动触发链上重扫（需 admin token + 审计）
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
-import { timingSafeEqual } from "@/lib/api/admin-session";
+import { requireAdmin } from "@/lib/api/admin-guard";
+import { writeAuditLog } from "@/lib/api/audit";
 import { scanTronPayments } from "@/lib/api/payment-scan";
 
 export async function OPTIONS(request: Request) {
@@ -15,26 +19,25 @@ export async function POST(request: Request) {
   const cloudflareEnv = env as CloudflareEnv;
 
   try {
-    const internalToken = request.headers.get("x-internal-token") || "";
-    if (cloudflareEnv.NODE_ENV === "production") {
-      if (!cloudflareEnv.INTERNAL_API_SECRET || !timingSafeEqual(internalToken, cloudflareEnv.INTERNAL_API_SECRET)) {
-        return jsonResponse({ error: "internal auth required" }, 401, request, cloudflareEnv);
-      }
-    }
-
+    const actor = await requireAdmin(request, cloudflareEnv);
     const db = cloudflareEnv.DB;
     await ensureDatabaseReady(db);
 
-    const result = await scanTronPayments(db, request, cloudflareEnv, { actorId: "payment-listener", role: "internal" });
-    if (result.error === "TRON payment network is not configured") {
-      throw new HttpError(400, result.error);
-    }
+    const result = await scanTronPayments(db, request, cloudflareEnv, actor);
+
+    await writeAuditLog(db, request, actor, "payment.rescan", "payment_transactions", "trongrid", {
+      checked: result.checked,
+      matched: result.matched,
+      exceptions: result.exceptions,
+      error: result.error ?? null,
+    });
+
     return jsonResponse(result, 200, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
     }
-    console.error("[POST /api/internal/payment-listener/check] unexpected error:", error);
+    console.error("[POST /api/admin/payment-transactions/rescan] unexpected error:", error);
     return jsonResponse({ error: "internal server error" }, 500, request, cloudflareEnv);
   }
 }

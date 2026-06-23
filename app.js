@@ -419,7 +419,18 @@ const state = {
   adminSubTabs: JSON.parse(localStorage.getItem('adminSubTabs') || '{}'),
   adminFilters: JSON.parse(localStorage.getItem('adminFilters') || '{}'),
   adminImportPreview: null,
-  adminData: { loaded: false, loading: false, products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [], ops: {} },
+  adminData: { loaded: false, loading: false, error: '', products: [], orders: [], paymentNetworks: [], deliveries: [], notifications: [], supportTickets: [], auditLogs: [], ops: {} },
+  adminDashboard: { loaded: false, loading: false, error: '', metrics: null, queues: null },
+  adminPages: {
+    orders: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
+    inventory: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
+    transactions: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
+    users: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false }
+  },
+  adminDetail: { kind: '', id: '', loading: false, error: '', data: null },
+  adminModal: null,
+  adminProductEditId: '',
+  adminOrderTab: 'all',
   config: { telegram: { botUsername: '', loginMode: 'mock' }, admin: { authMode: 'dev-open' }, payments: { provider: 'direct', nowpayments: { enabled: false, payCurrencies: {} } }, support: DEFAULT_SUPPORT_CHANNEL },
   telegramPanelOpen: false,
   accountMenuOpen: false,
@@ -780,6 +791,13 @@ function normalizeServerOrder(order) {
     payAmount: Number.isFinite(payAmount) ? payAmount : amountUsdt,
     payCurrency,
     status: order.status,
+    paymentStatus: order.paymentStatus || order.payment_status || 'unpaid',
+    deliveryStatus: order.deliveryStatus || order.delivery_status || 'undelivered',
+    afterSaleStatus: order.afterSaleStatus || order.after_sale_status || 'none',
+    quantity: Number(order.quantity ?? 1) || 1,
+    userInput: parseMaybeJson(order.userInput ?? order.user_input_json, {}),
+    adminNote: order.adminNote ?? order.admin_note ?? '',
+    txHash: order.txHash || order.tx_hash || null,
     deliveryType: skuSnapshot.deliveryType || order.deliveryType || order.delivery_type || 'manual',
     delivery: order.delivery || null,
     createdAt: order.createdAt || order.created_at,
@@ -1354,8 +1372,14 @@ function maskEmail(email = '') {
   return escapeHtml(`${prefix}***@${domain}`);
 }
 
-function splitCodeInput({ id, value = '', maxLength = 6, placeholder = '', iconName = 'shield-check', ariaLabel = '验证码' }) {
+function splitCodeInput({ id, value = '', maxLength = 6, placeholder = '', iconName = 'shield-check', ariaLabel = '验证码', mode = 'slots' }) {
   const safeValue = escapeHtml(String(value || '').slice(0, maxLength));
+  if (mode === 'plain') {
+    return `<span class="login-code-input login-code-input-plain" data-code-shell data-target="${id}">
+    ${lineIcon(iconName, ariaLabel, 'login-field-icon')}
+    <input id="${id}" class="code-real-input code-real-input-plain" inputmode="numeric" maxlength="${maxLength}" autocomplete="${id === 'loginCode' ? 'one-time-code' : 'off'}" placeholder="${escapeHtml(placeholder)}" value="${safeValue}" aria-label="${escapeHtml(ariaLabel)}" />
+  </span>`;
+  }
   return `<span class="login-code-input" data-code-shell data-target="${id}">
     ${lineIcon(iconName, ariaLabel, 'login-field-icon')}
     <input id="${id}" class="code-real-input" inputmode="numeric" maxlength="${maxLength}" autocomplete="${id === 'loginCode' ? 'one-time-code' : 'off'}" placeholder="${escapeHtml(placeholder)}" value="${safeValue}" aria-label="${escapeHtml(ariaLabel)}" />
@@ -1450,10 +1474,8 @@ async function submitLoginPageRegister() {
   if (state.loginBusy) return;
   const email = document.querySelector('#loginEmail')?.value.trim().toLowerCase();
   const password = document.querySelector('#loginPassword')?.value || '';
-  const password2 = document.querySelector('#loginPassword2')?.value || '';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return notify('请输入有效邮箱');
   if (!PASSWORD_RULE_RE.test(password)) return notify('密码需要至少字母和数字的 6 位组合');
-  if (password !== password2) return notify('两次密码不一致');
   if (!validateLoginCaptcha()) return;
   state.loginBusy = true;
   try {
@@ -1501,6 +1523,70 @@ function paymentInstructionSteps() {
   return ['确认金额/网络', '扫码或复制地址', '转账', '等待自动确认']
     .map((label, index) => `<span><b>${index + 1}</b>${label}</span>`)
     .join('');
+}
+
+function requiredConfirmations(order) {
+  const providerConfirmations = Number(order?.providerPayload?.matching?.confirmations);
+  const network = networks.find((item) => item.code === (order?.paymentNetwork || state.paymentNetwork));
+  const networkConfirmations = Number(network?.confirmations || network?.requiredConfirmations);
+  const value = Number.isFinite(providerConfirmations) && providerConfirmations > 0
+    ? providerConfirmations
+    : Number.isFinite(networkConfirmations) && networkConfirmations > 0
+      ? networkConfirmations
+      : 3;
+  return Math.max(1, Math.floor(value));
+}
+
+function payStatusMeta(status = 'pending_payment', required = 3) {
+  const total = Math.max(1, Number(required) || 3);
+  const map = {
+    created: { label: '待付款', desc: '正在监听收款地址', tone: 'waiting', current: 0 },
+    pending_payment: { label: '待付款', desc: '正在监听收款地址', tone: 'waiting', current: 0 },
+    payment_confirming: { label: '链上确认中', desc: '已监听到交易，等待区块确认', tone: 'processing', current: Math.max(1, total - 1) },
+    paid: { label: '已付款', desc: '付款到账，正在准备发货', tone: 'success', current: total },
+    delivering: { label: '发货中', desc: '付款已确认，正在自动发货', tone: 'success', current: total },
+    completed: { label: '已完成', desc: '订单已完成，即将跳转', tone: 'success', current: total },
+    expired: { label: '已超时', desc: '订单支付时间已结束', tone: 'danger', current: 0 },
+    failed: { label: '支付失败', desc: '请联系客服核对付款', tone: 'danger', current: 0 }
+  };
+  const meta = map[status] || map.pending_payment;
+  const current = Math.min(total, Math.max(0, meta.current));
+  return {
+    ...meta,
+    confirmations: `${current} / ${total}`,
+    required: total,
+    progress: Math.round((current / total) * 100)
+  };
+}
+
+function payStatusHero(order, paymentAmountText, expiresAt) {
+  const required = requiredConfirmations(order);
+  const meta = payStatusMeta(order.status, required);
+  return `
+    <section class="pay-status-hero" data-pay-status="${escapeHtml(order.status || 'pending_payment')}" data-required-confirmations="${required}">
+      <div class="pay-status-block pay-status-amount">
+        <span>支付金额</span>
+        <strong>${escapeHtml(paymentAmountText.replace(' USDT', ''))}<small>USDT</small></strong>
+        <p>${lineIcon('warning', '提示', 'pay-inline-icon')} 仅接受 USDT-TRC20 转账，其他币种或网络将无法找回</p>
+      </div>
+      <div class="pay-status-block pay-status-countdown">
+        <span>倒计时状态</span>
+        <strong class="timer" data-expires="${expiresAt}">15:00</strong>
+        <p>后失效，请尽快支付</p>
+      </div>
+      <div class="pay-status-block pay-status-chain">
+        <div class="pay-status-chain-head">
+          <span>链上进度</span>
+          <b data-pay-confirmations>${meta.confirmations}</b>
+        </div>
+        <div class="pay-progress" aria-label="链上确认进度"><i data-pay-progress style="width:${meta.progress}%"></i></div>
+        <div class="pay-status-order">
+          <span>订单状态</span>
+          <b class="pay-live-status ${meta.tone}" data-pay-live-status>${meta.label}</b>
+        </div>
+        <p data-pay-live-desc>需要 ${meta.required} 个区块确认，${meta.desc}</p>
+      </div>
+    </section>`;
 }
 
 // ── 验证码重发倒计时 ──────────────────────────────────────────
@@ -1635,20 +1721,11 @@ function loginPage() {
                 <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
               </span>
             </label>
-            ${isRegister ? `
-            <label class="login-field">
-              <span class="login-field-label">确认密码</span>
-              <span class="login-input">
-                ${lineIcon('lock', '确认密码', 'login-field-icon')}
-                <input id="loginPassword2" type="${passwordType}" autocomplete="new-password" placeholder="请再次输入密码" />
-                <button class="login-eye" data-action="toggleLoginPassword" type="button" aria-label="${state.loginPasswordVisible ? '隐藏密码' : '显示密码'}">${lineIcon(state.loginPasswordVisible ? 'eye-off' : 'eye', '切换密码可见', 'login-field-icon')}</button>
-              </span>
-              <small class="login-password-hint">密码需要至少字母和数字的 6 位组合</small>
-            </label>` : ''}
+            ${isRegister ? `<small class="login-password-hint">密码需要至少字母和数字的 6 位组合；创建账号后将进入邮箱验证码确认。</small>` : ''}
             <label class="login-field">
               <span class="login-field-label">验证码</span>
               <span class="login-captcha-row">
-                ${splitCodeInput({ id: 'loginCaptcha', value: '', maxLength: 6, placeholder: '请输入答案', ariaLabel: '验证码' })}
+                ${splitCodeInput({ id: 'loginCaptcha', value: '', maxLength: 2, placeholder: '请输入数字答案', ariaLabel: '验证码', mode: 'plain' })}
                 <button class="login-captcha-card" data-action="refreshLoginCaptcha" type="button" aria-label="刷新验证码"><b>${escapeHtml(captcha.question)}</b></button>
               </span>
             </label>
@@ -1960,6 +2037,10 @@ function card(item) {
 
 function deliveryLabel(type) {
   return { auto: '自动发货', mixed: '部分自动', manual: '人工处理' }[type] || type;
+}
+
+function productTypeLabel(type) {
+  return { subscription: '订阅', card: '礼品卡 / 卡密', account: '账号', recharge: '充值', service: '服务' }[type] || type || '订阅';
 }
 
 function stockLabel(status) {
@@ -2731,13 +2812,11 @@ async function pay(id) {
   const expiresAt = paymentExpiryMs(order.expiresAt, order.createdAt);
   const qrData = order.paymentAddress || paymentSummaryText(order);
   shell(`
-    <section class="pay-head">
-      <div><h1>等待支付</h1><p>请按页面显示的金额和网络转账，系统会自动进行链上校验。</p></div>
-    </section>
-    <section class="pay-grid pay-waiting-layout">
+    <section class="pay-waiting-layout">
+      ${payStatusHero(order, paymentAmountText, expiresAt)}
       <section class="glass panel pay-info">
         <h3>订单信息</h3>
-        ${[['订单号', order.orderNo + ' ⧉'], ['商品', `${order.productName}  ${Object.values(order.options || {}).join(' / ')}`], ['剩余支付时间', '<strong class="timer" data-expires="' + expiresAt + '">15:00</strong>']].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+        ${[['订单号', order.orderNo + ' ⧉'], ['商品', `${order.productName}  ${Object.values(order.options || {}).join(' / ')}`], ['创建时间', timeFrom(order.createdAt)]].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
       </section>
       <section class="glass panel qr-panel">
         <div class="qr-panel-title">
@@ -2803,6 +2882,7 @@ async function checkPaymentStatus(orderId, { silent = false } = {}) {
     const response = await fetch(`/api/orders/${orderId}/status`);
     if (!response.ok) return;
     const status = await response.json();
+    updatePayStatusUi(status.status);
     const paidStatuses = new Set(['payment_confirming', 'paid', 'delivering', 'completed']);
     if (paidStatuses.has(status.status)) {
       stopPaymentStatusPolling();
@@ -2814,6 +2894,24 @@ async function checkPaymentStatus(orderId, { silent = false } = {}) {
   } catch {
     if (!silent) notify('订单状态检查失败，请稍后重试');
   }
+}
+
+function updatePayStatusUi(status) {
+  const root = document.querySelector('.pay-status-hero');
+  const required = Number(root?.dataset.requiredConfirmations || 3);
+  const meta = payStatusMeta(status, required);
+  if (root) root.dataset.payStatus = status || 'pending_payment';
+  const live = document.querySelector('[data-pay-live-status]');
+  if (live) {
+    live.textContent = meta.label;
+    live.className = `pay-live-status ${meta.tone}`;
+  }
+  const desc = document.querySelector('[data-pay-live-desc]');
+  if (desc) desc.textContent = `需要 ${meta.required} 个区块确认，${meta.desc}`;
+  const confirmations = document.querySelector('[data-pay-confirmations]');
+  if (confirmations) confirmations.textContent = meta.confirmations;
+  const progress = document.querySelector('[data-pay-progress]');
+  if (progress) progress.style.width = `${meta.progress}%`;
 }
 
 function startPaymentStatusPolling(orderId) {
@@ -3577,6 +3675,12 @@ async function renderAdmin() {
   }
   await loadAdminData();
   const tab = state.adminTab;
+  // 按当前 tab 加载服务端分页/聚合数据
+  if (tab === 'dashboard') await loadAdminDashboard();
+  else if (tab === 'orders') await loadAdminPage('orders');
+  else if (tab === 'inventory') { await loadAdminPage('inventory'); if (currentAdminSubTab('inventory', 'list') === 'warning') await loadAdminDashboard(); }
+  else if (tab === 'payments') await loadAdminPage('transactions');
+  else if (tab === 'users') await loadAdminPage('users');
   const activeMeta = adminMenu().find((item) => item.key === tab) || adminMenu()[0];
   const globalFilters = adminFiltersFor('global');
   shell(`
@@ -3590,12 +3694,14 @@ async function renderAdmin() {
           <div><span>ichuhai 运营后台 / ${activeMeta.label}</span><strong>${activeMeta.label}</strong></div>
           <label class="admin-global-search"><input data-action="adminFilter" data-filter-scope="global" name="q" value="${escapeHtml(globalFilters.q || '')}" placeholder="全局搜索订单号 / 商品 / 用户" /></label>
           <button class="admin-icon-button" data-action="adminTab" data-tab="notifications" type="button">通知</button>
-          <button class="admin-account" type="button">管理员 Eyang</button>
+          <button class="admin-account" type="button">管理员 ${escapeHtml(state.adminUsername || 'admin')}</button>
           <button class="admin-logout" data-action="adminLogout" type="button">退出登录</button>
         </header>
+        ${state.adminData.error ? `<div class="admin-risk-callout danger"><b>部分后台数据加载失败</b><span>${escapeHtml(state.adminData.error)}</span></div>` : ''}
         <section class="admin-content">${adminContent(tab)}</section>
       </section>
     </section>
+    ${adminModalMarkup()}
   `, 'admin-page');
 }
 
@@ -3858,6 +3964,389 @@ function inventoryPreviewPanel(preview) {
   </div>`;
 }
 
+// ── 后台弹窗 / 二次确认基础设施 ──────────────────────────────
+// state.adminModal = { kind, title, desc, fields:[{name,label,type,placeholder,value,options,required}],
+//                      confirm:{ requireText }, danger, submitLabel, context }
+function openAdminModal(modal) {
+  state.adminModal = modal;
+  renderAdmin();
+}
+
+function closeAdminModal() {
+  state.adminModal = null;
+  renderAdmin();
+}
+
+function adminModalMarkup() {
+  const m = state.adminModal;
+  if (!m) return '';
+  const fields = (m.fields || []).map((f) => {
+    const val = f.value != null ? String(f.value) : '';
+    if (f.type === 'textarea') {
+      return `<label class="admin-field-wide">${escapeHtml(f.label)}${f.required ? ' *' : ''}<textarea name="${f.name}" placeholder="${escapeHtml(f.placeholder || '')}">${escapeHtml(val)}</textarea></label>`;
+    }
+    if (f.type === 'select') {
+      return `<label>${escapeHtml(f.label)}${f.required ? ' *' : ''}<select name="${f.name}">${optionHtml(f.options || [], val)}</select></label>`;
+    }
+    if (f.type === 'static') {
+      return `<div class="admin-modal-static"><span>${escapeHtml(f.label)}</span><b>${escapeHtml(val)}</b></div>`;
+    }
+    return `<label class="admin-field-wide">${escapeHtml(f.label)}${f.required ? ' *' : ''}<input name="${f.name}" type="${f.type || 'text'}" placeholder="${escapeHtml(f.placeholder || '')}" value="${escapeHtml(val)}" autocomplete="off" /></label>`;
+  }).join('');
+  const confirmText = m.confirm?.requireText
+    ? `<label class="admin-field-wide">请输入「${escapeHtml(m.confirm.requireText)}」以确认<input name="__confirmText" placeholder="${escapeHtml(m.confirm.requireText)}" autocomplete="off" /></label>`
+    : '';
+  return `
+    <div class="admin-modal-backdrop" data-action="adminModalClose">
+      <form class="admin-modal ${m.danger ? 'danger' : ''}" data-action="adminModalSubmit" onclick="event.stopPropagation()">
+        <div class="admin-modal-head"><h2>${escapeHtml(m.title || '确认操作')}</h2>${m.desc ? `<p>${escapeHtml(m.desc)}</p>` : ''}</div>
+        <div class="admin-modal-body">${fields}${confirmText}</div>
+        <div class="admin-modal-actions">
+          <button class="secondary" type="button" data-action="adminModalClose">取消</button>
+          <button class="${m.danger ? 'danger' : 'primary'} small" type="submit">${escapeHtml(m.submitLabel || '确认')}</button>
+        </div>
+      </form>
+    </div>`;
+}
+
+// 收集弹窗字段值并执行回调（在 click handler 中调用）
+async function submitAdminModal(form) {
+  const m = state.adminModal;
+  if (!m) return;
+  const data = new FormData(form);
+  const values = {};
+  for (const f of (m.fields || [])) values[f.name] = String(data.get(f.name) ?? '').trim();
+  // 校验必填
+  for (const f of (m.fields || [])) {
+    if (f.required && !values[f.name]) return notify(`请填写：${f.label}`);
+  }
+  if (m.confirm?.requireText) {
+    const typed = String(data.get('__confirmText') ?? '').trim();
+    if (typed !== m.confirm.requireText) return notify(`请输入「${m.confirm.requireText}」确认`);
+  }
+  const handler = ADMIN_MODAL_HANDLERS[m.kind];
+  if (!handler) return notify('未知操作');
+  await handler(values, m.context || {});
+}
+
+// 弹窗提交后的实际 API 调用。每个 handler 负责请求、错误提示、刷新数据、关闭弹窗。
+const ADMIN_MODAL_HANDLERS = {
+  async confirmPayment(values, ctx) {
+    const body = { txHash: values.txHash || '', amount: values.amount || ctx.amount || '', fromAddress: values.fromAddress || '', reason: values.reason || '' };
+    if (!body.txHash && !body.reason) return notify('无 txHash 时必须填写确认原因');
+    const response = await adminFetch(`/api/admin/orders/${ctx.id}/confirm-payment`, { method: 'POST', body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '确认到账失败');
+    state.adminModal = null;
+    await loadAdminPage('orders', { force: true });
+    notify('已确认到账并写入到账交易');
+    return renderAdmin();
+  },
+  async manualDeliver(values, ctx) {
+    const body = { operator: state.adminUsername || 'admin', deliveryContent: values.deliveryContent };
+    if (ctx.unpaid) {
+      if (String(values.force).trim().toLowerCase() !== 'force') { return notify('未支付订单需输入 force 确认'); }
+      body.force = true;
+    }
+    const response = await adminFetch(`/api/admin/orders/${ctx.id}/manual-deliver`, { method: 'POST', body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '人工发货失败');
+    state.adminModal = null;
+    await loadAdminPage('orders', { force: true });
+    const notifFailed = (data.notification && data.notification.status === 'failed');
+    notify(notifFailed ? '已发货，但邮件通知失败（已记录）' : '已写入发货记录并发送通知');
+    return renderAdmin();
+  },
+  async inventoryReveal(values, ctx) {
+    const response = await adminFetch(`/api/admin/inventory/${ctx.id}/reveal`, { method: 'POST', body: JSON.stringify({ reason: values.reason }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '查看明文失败');
+    // 明文仅短时显示，不落本地缓存
+    state.adminModal = {
+      kind: 'inventoryRevealResult', title: '库存明文（请勿截图外传）', desc: '该明文不会缓存，关闭后需重新查看。本次查看已写入审计。',
+      submitLabel: '我已复制', danger: true, context: {},
+      fields: [{ name: 'value', label: '明文', type: 'textarea', value: data.value }]
+    };
+    return renderAdmin();
+  },
+  async inventoryRevealResult() {
+    state.adminModal = null;
+    return renderAdmin();
+  },
+  async inventoryRevoke(values, ctx) {
+    const response = await adminFetch(`/api/admin/inventory/${ctx.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'revoked', remark: values.remark || '' }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '作废失败');
+    state.adminModal = null;
+    await loadAdminPage('inventory', { force: true });
+    notify('库存已作废，自动发货不会再领取该库存');
+    return renderAdmin();
+  },
+  async paymentBind(values, ctx) {
+    const response = await adminFetch(`/api/admin/payment-transactions/${ctx.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'bind', orderId: values.orderId, reason: values.reason }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '绑定失败');
+    state.adminModal = null;
+    await loadAdminPage('transactions', { force: true });
+    notify('已绑定订单并标记已支付');
+    return renderAdmin();
+  },
+  async paymentIgnore(values, ctx) {
+    const response = await adminFetch(`/api/admin/payment-transactions/${ctx.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'ignore', reason: values.reason }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '操作失败');
+    state.adminModal = null;
+    await loadAdminPage('transactions', { force: true });
+    notify('已忽略该支付异常');
+    return renderAdmin();
+  },
+  async editConfirmations(values, ctx) {
+    const confirmations = Math.max(1, Math.floor(Number(values.confirmations)));
+    if (!Number.isFinite(confirmations)) return notify('确认数无效');
+    const response = await adminFetch(`/api/admin/payment-networks/${ctx.code}`, { method: 'PATCH', body: JSON.stringify({ confirmations }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '修改确认数失败');
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify('确认数已更新');
+    return renderAdmin();
+  },
+  async toggleNetwork(values, ctx) {
+    const response = await adminFetch(`/api/admin/payment-networks/${ctx.code}`, { method: 'PATCH', body: JSON.stringify({ isEnabled: ctx.nextEnabled }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '支付网络更新失败');
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify(ctx.nextEnabled ? '支付网络已启用' : '支付网络已关闭');
+    return renderAdmin();
+  },
+  async productCreate(values) {
+    const response = await adminFetch('/api/admin/products', { method: 'POST', body: JSON.stringify({ name: values.name, slug: values.slug, categoryId: values.categoryId || 'more', productType: values.productType, deliveryType: values.deliveryType, baseCurrency: 'USDT' }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '创建商品失败');
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify('商品已创建');
+    return renderAdmin();
+  },
+  async skuCreate(values, ctx) {
+    let optionValues = {};
+    try { optionValues = JSON.parse(values.optionValues || '{}'); } catch { return notify('规格 JSON 格式错误'); }
+    const response = await adminFetch('/api/admin/skus', { method: 'POST', body: JSON.stringify({ productId: values.productId || ctx.productId, optionValues, priceUsdt: values.priceUsdt, deliveryType: values.deliveryType, stockStatus: values.stockStatus }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '创建 SKU 失败');
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify('SKU 已创建');
+    return renderAdmin();
+  },
+  async skuEdit(values, ctx) {
+    let optionValues;
+    if (values.optionValues) { try { optionValues = JSON.parse(values.optionValues); } catch { return notify('规格 JSON 格式错误'); } }
+    const body = { priceUsdt: values.priceUsdt, deliveryType: values.deliveryType, stockStatus: values.stockStatus, warningStock: Number(values.warningStock) || 5, isRecommended: values.isRecommended === '1' };
+    if (optionValues) body.optionValues = optionValues;
+    const response = await adminFetch(`/api/admin/skus/${ctx.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '保存 SKU 失败');
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify('SKU 已保存');
+    return renderAdmin();
+  },
+  async skuBatchPrice(values) {
+    const product = adminProducts().find((p) => p.id === values.productId);
+    if (!product || !(product.skus || []).length) { state.adminModal = null; return notify('该商品没有 SKU'); }
+    const num = Number(values.value);
+    if (!Number.isFinite(num)) return notify('数值无效');
+    let failed = 0;
+    for (const sku of product.skus) {
+      const price = values.mode === 'percent' ? Number(sku.priceUsdt || 0) * (1 + num / 100) : num;
+      const response = await adminFetch(`/api/admin/skus/${sku.id}`, { method: 'PATCH', body: JSON.stringify({ priceUsdt: price.toFixed(2) }) });
+      if (!response.ok) failed += 1;
+    }
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify(failed ? `批量改价完成，${failed} 个失败` : '批量改价完成');
+    return renderAdmin();
+  },
+  async skuBatchStatus(values) {
+    const product = adminProducts().find((p) => p.id === values.productId);
+    if (!product || !(product.skus || []).length) { state.adminModal = null; return notify('该商品没有 SKU'); }
+    let failed = 0;
+    for (const sku of product.skus) {
+      const response = await adminFetch(`/api/admin/skus/${sku.id}`, { method: 'PATCH', body: JSON.stringify({ stockStatus: values.stockStatus }) });
+      if (!response.ok) failed += 1;
+    }
+    state.adminModal = null;
+    await loadAdminData(true);
+    notify(failed ? `批量更新完成，${failed} 个失败` : '批量更新完成');
+    return renderAdmin();
+  },
+  async blacklistCreate(values) {
+    const response = await adminFetch('/api/admin/ops', { method: 'POST', body: JSON.stringify({ action: 'blacklist.create', kind: values.kind, value: values.value, effect: values.effect, reason: values.reason, status: 'active' }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '加入黑名单失败');
+    state.adminModal = null;
+    state.adminData.ops = data;
+    notify('已加入黑名单');
+    return renderAdmin();
+  }
+};
+
+// 后台分页控件
+function adminPagerServer(kind) {
+  const slice = state.adminPages[kind];
+  if (!slice) return '';
+  const totalPages = Math.max(1, Math.ceil((slice.total || 0) / (slice.pageSize || 20)));
+  const page = slice.page || 1;
+  return `<div class="admin-pager">
+    <span>共 ${slice.total || 0} 条记录 · 第 ${page}/${totalPages} 页</span>
+    <button type="button" data-action="adminPage" data-kind="${kind}" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+    <button class="active" type="button">${page}</button>
+    <button type="button" data-action="adminPage" data-kind="${kind}" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+  </div>`;
+}
+
+// 订单详情抽屉：复盘支付与发货链路
+function adminOrderDetailPanel() {
+  const d = state.adminDetail;
+  if (d.kind !== 'order' || !d.id) return '';
+  if (d.loading && !d.data) {
+    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>加载中…</b><span>正在拉取订单详情。</span></div></div></div>`;
+  }
+  if (d.error && !d.data) {
+    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>详情加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
+  }
+  if (!d.data) return '';
+  const o = normalizeServerOrder(d.data.order) || {};
+  const deliveries = d.data.deliveries || [];
+  const notifications = d.data.notifications || [];
+  const transactions = d.data.transactions || [];
+  const tickets = d.data.supportTickets || [];
+  const audits = d.data.auditLogs || [];
+  const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
+  const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
+  return `<div class="admin-drawer-backdrop" data-action="adminDetailClose">
+    <div class="admin-drawer" onclick="event.stopPropagation()">
+      <div class="admin-drawer-head"><div><h2>${escapeHtml(o.orderNo)}</h2><span>${escapeHtml(String(o.id))}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
+      <div class="admin-drawer-body">
+        ${section('状态', kv([
+          ['订单状态', adminStatus(statusLabel(o.status), adminToneFromStatus(o.status))],
+          ['支付状态', adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus))],
+          ['发货状态', adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus))],
+          ['售后状态', adminStatus(afterSaleStatusLabel(o.afterSaleStatus), o.afterSaleStatus === 'none' ? 'neutral' : 'warning')]
+        ]))}
+        ${section('商品 / SKU 快照', kv([
+          ['商品', escapeHtml(o.productName)],
+          ['规格', escapeHtml(Object.values(o.options || {}).join(' / ') || '-')],
+          ['数量', o.quantity || 1]
+        ]))}
+        ${section('用户填写信息', kv([
+          ['Telegram', escapeHtml(o.telegramUsername || '-')],
+          ['Email', escapeHtml(o.email || '-')],
+          ...Object.entries(o.userInput || {}).map(([k, v]) => [k, escapeHtml(String(v))])
+        ]))}
+        ${section('支付信息', kv([
+          ['应付金额', `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`],
+          ['收款地址', escapeHtml(o.paymentAddress || '-')],
+          ['txHash', escapeHtml(o.txHash || '-')],
+          ['确认时间', timeFrom(o.paidAt)]
+        ]))}
+        ${section('到账交易', transactions.length ? adminTable([{ label: 'Hash' }, { label: '金额' }, { label: '状态' }, { label: '检测时间' }], transactions.map((t) => [`${escapeHtml(String(t.txHash).slice(0, 14))}…`, `${formatUsdt(t.amount)} USDT`, adminStatus(matchStatusLabel(t.matchStatus), paymentToneFromMatch(t.matchStatus)), timeFrom(t.detectedAt)]), { title: '暂无到账交易', desc: '匹配或人工绑定后会显示。' }) : '<p class="admin-muted">暂无到账交易记录。</p>')}
+        ${section('发货记录', deliveries.length ? adminTable([{ label: '方式' }, { label: '内容(脱敏)' }, { label: '状态' }, { label: '时间' }], deliveries.map((dv) => [escapeHtml(dv.method), escapeHtml(dv.maskedContent || '***'), adminStatus(dv.status === 'sent' ? '已发送' : dv.status, dv.status === 'sent' ? 'success' : 'warning'), timeFrom(dv.createdAt)]), { title: '暂无发货记录', desc: '自动或人工发货后会显示。' }) : '<p class="admin-muted">暂无发货记录。</p>')}
+        ${section('通知记录', notifications.length ? adminTable([{ label: '类型' }, { label: '渠道' }, { label: '状态' }, { label: '时间' }], notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '暂无通知', desc: '' }) : '<p class="admin-muted">暂无通知记录。</p>')}
+        ${section('售后工单', tickets.length ? adminTable([{ label: '工单号' }, { label: '类型' }, { label: '状态' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.type), adminStatus(t.status, adminToneFromStatus(t.status))]), { title: '暂无工单', desc: '' }) : '<p class="admin-muted">暂无售后工单。</p>')}
+        ${section('管理员备注', `<p class="admin-muted">${escapeHtml(o.adminNote || '无')}</p>`)}
+        ${section('操作日志', audits.length ? adminTable([{ label: '动作' }, { label: '操作人' }, { label: '时间' }], audits.map((a) => [escapeHtml(a.action), `${escapeHtml(a.actorRole)}:${escapeHtml(a.actorId)}`, timeFrom(a.createdAt)]), { title: '暂无操作日志', desc: '' }) : '<p class="admin-muted">暂无操作日志。</p>')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// 用户详情/风险档案抽屉
+function adminUserDetailPanel() {
+  const d = state.adminDetail;
+  if (d.kind !== 'user' || !d.id) return '';
+  if (d.loading && !d.data) {
+    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>加载中…</b><span>正在拉取用户档案。</span></div></div></div>`;
+  }
+  if (d.error && !d.data) {
+    return `<div class="admin-drawer-backdrop" data-action="adminDetailClose"><div class="admin-drawer" onclick="event.stopPropagation()"><div class="admin-empty"><b>用户档案加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
+  }
+  if (!d.data) return '';
+  const p = d.data.profile || {};
+  const orders = (d.data.orders || []).map(normalizeServerOrder).filter(Boolean);
+  const notifications = d.data.notifications || [];
+  const tickets = d.data.supportTickets || [];
+  const hits = d.data.blacklistHits || [];
+  const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
+  const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
+  return `<div class="admin-drawer-backdrop" data-action="adminDetailClose">
+    <div class="admin-drawer" onclick="event.stopPropagation()">
+      <div class="admin-drawer-head"><div><h2>${escapeHtml(p.email)}</h2><span>${escapeHtml(p.telegramUsername || '')}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
+      <div class="admin-drawer-body">
+        ${section('基础身份', kv([
+          ['邮箱', escapeHtml(p.email)],
+          ['Telegram', escapeHtml(p.telegramUsername || '-')],
+          ['订单数', p.orderCount],
+          ['成交金额', `${formatUsdt(p.paidAmountUsdt)} USDT`],
+          ['售后数', p.afterSaleCount],
+          ['风险状态', adminStatus(p.riskStatus === 'blacklisted' ? '黑名单' : '正常', p.riskStatus === 'blacklisted' ? 'danger' : 'success')]
+        ]))}
+        ${section('钱包/支付地址', (p.walletAddresses || []).length ? `<div class="admin-kv">${(p.walletAddresses || []).map((a) => `<div><span>收款地址</span><b>${escapeHtml(a)}</b></div>`).join('')}</div>` : '<p class="admin-muted">暂无记录。</p>')}
+        ${section('黑名单命中记录', hits.length ? adminTable([{ label: '类型' }, { label: '值' }, { label: '效果' }, { label: '原因' }], hits.map((h) => [escapeHtml(h.kind), escapeHtml(h.value), escapeHtml(h.effect), escapeHtml(h.reason)]), { title: '无命中', desc: '' }) : '<p class="admin-muted">未命中黑名单。</p>')}
+        ${section('订单历史', orders.length ? adminTable([{ label: '订单号' }, { label: '金额' }, { label: '支付' }, { label: '发货' }, { label: '时间' }], orders.map((o) => [escapeHtml(o.orderNo), `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`, adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus)), adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)), timeFrom(o.createdAt)]), { title: '暂无订单', desc: '' }) : '<p class="admin-muted">暂无订单历史。</p>')}
+        ${section('售后记录', tickets.length ? adminTable([{ label: '工单号' }, { label: '类型' }, { label: '状态' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.type), adminStatus(t.status, adminToneFromStatus(t.status))]), { title: '无售后', desc: '' }) : '<p class="admin-muted">暂无售后记录。</p>')}
+        ${section('通知记录', notifications.length ? adminTable([{ label: '类型' }, { label: '渠道' }, { label: '状态' }, { label: '时间' }], notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '无通知', desc: '' }) : '<p class="admin-muted">暂无通知记录。</p>')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// 状态文案
+function paymentStatusLabel(s) {
+  return { unpaid: '未支付', confirming: '确认中', paid: '已支付', failed: '支付失败', exception: '支付异常' }[s] || s || '未支付';
+}
+function deliveryStatusLabel(s) {
+  return { undelivered: '未发货', manual_required: '待人工发货', delivering: '发货中', delivered: '已发货', failed: '发货失败' }[s] || s || '未发货';
+}
+function afterSaleStatusLabel(s) {
+  return { none: '无售后', open: '售后待处理', in_progress: '售后处理中', resolved: '已解决', closed: '已关闭' }[s] || s || '无售后';
+}
+function inventoryStatusLabel(s) {
+  return { available: '可用', reserved: '占用中', delivered: '已交付', revoked: '已作废' }[s] || s;
+}
+function matchStatusLabel(s) {
+  return { matched: '已匹配', manual_confirm: '人工确认', confirming: '确认中', duplicate: '重复交易', exception: '异常', unmatched: '未匹配', ignored: '已忽略', resolved: '已处理' }[s] || s;
+}
+function exceptionTypeLabel(s) {
+  return { confirming: '等待确认', duplicate_tx: '重复 Hash', amount_collision: '金额冲突', overpaid: '多付', underpaid: '少付', unmatched: '未匹配' }[s] || s || '-';
+}
+function paymentToneFromMatch(s) {
+  if (['matched', 'manual_confirm', 'resolved'].includes(s)) return 'success';
+  if (['confirming'].includes(s)) return 'warning';
+  if (['ignored'].includes(s)) return 'neutral';
+  return 'danger';
+}
+function deliveryTone(s) {
+  if (s === 'delivered') return 'success';
+  if (['delivering', 'manual_required'].includes(s)) return 'warning';
+  if (s === 'failed') return 'danger';
+  return 'neutral';
+}
+function paymentTone(s) {
+  if (s === 'paid') return 'success';
+  if (s === 'confirming') return 'warning';
+  if (['failed', 'exception'].includes(s)) return 'danger';
+  return 'neutral';
+}
+function formatUsdt(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return '0.000';
+  // 保留三位以体现尾差金额（如 1.801），这是链上自动匹配的关键。
+  return n.toFixed(3);
+}
+
 function adminContent(tab) {
   const orderList = adminOrders();
   const productList = adminProducts();
@@ -3865,44 +4354,77 @@ function adminContent(tab) {
   const ops = adminOps();
   const skuRows = adminSkuRows(productList);
   if (tab === 'dashboard') {
-    const paid = orderList.filter((o) => ['paid', 'delivering', 'completed'].includes(o.status));
-    const revenue = paid.reduce((sum, order) => sum + Number(order.amountUsdt || 0), 0);
-    const failedDelivery = orderList.filter((o) => ['failed', 'delivering'].includes(o.status));
-    const lowStockRows = productList.flatMap((p) => (p.skus || []).filter((sku) => (sku.stockStatus || sku.stock) === 'low_stock' || Number(sku.stockQuantity || 0) <= Number(sku.warningStock || 5)).map((sku) => ({ product: p, sku })));
-    return adminPage('运营看板', '集中处理订单、发货、库存、支付与售后异常。', `
-      <div class="metric-grid admin-metrics">${[
-        ['今日订单', orderList.length, 'orders'],
-        ['今日成交额', `${revenue.toFixed(2)} USDT`, 'orders'],
-        ['待发货', orderList.filter((o) => ['paid', 'delivering'].includes(o.status)).length, 'delivery'],
-        ['发货失败', failedDelivery.length, 'delivery'],
-        ['售后待处理', (state.adminData.supportTickets || []).filter((t) => ['open', 'in_progress'].includes(t.status)).length, 'support'],
-        ['库存预警', lowStockRows.length, 'inventory'],
-        ['支付异常', (ops.paymentTransactions || []).filter((t) => !['matched', 'manual_confirm'].includes(t.matchStatus)).length, 'payments'],
-        ['通知失败', (state.adminData.notifications || []).filter((n) => n.status === 'failed').length, 'notifications']
-      ].map(([a, b, key]) => `<button type="button" data-action="adminTab" data-tab="${key}"><span>${a}</span><b>${b}</b></button>`).join('')}</div>
+    const d = state.adminDashboard;
+    if (d.loading && !d.metrics) {
+      return adminPage('运营看板', '集中处理订单、发货、库存、支付与售后异常。', `<div class="admin-panel"><div class="admin-empty"><b>加载中…</b><span>正在拉取今日运营指标。</span></div></div>`, { eyebrow: '今日工作台' });
+    }
+    if (d.error && !d.metrics) {
+      return adminPage('运营看板', '集中处理订单、发货、库存、支付与售后异常。', `<div class="admin-panel"><div class="admin-empty"><b>看板加载失败</b><span>${escapeHtml(d.error)}</span><button class="primary small" data-action="adminReloadDashboard" type="button">重试</button></div></div>`, { eyebrow: '今日工作台' });
+    }
+    const m = d.metrics || {};
+    const queues = d.queues || {};
+    // 指标卡：点击带筛选跳转到对应中心
+    const metricCards = [
+      ['今日订单', m.todayOrders ?? 0, 'orders', ''],
+      ['今日成交额', `${formatUsdt(m.todayRevenueUsdt)} USDT`, 'orders', 'paid'],
+      ['待支付', m.pendingPayment ?? 0, 'orders', 'pending_payment'],
+      ['待发货', m.paidPendingDelivery ?? 0, 'orders', 'undelivered'],
+      ['发货失败', m.deliveryFailed ?? 0, 'orders', 'delivery_failed'],
+      ['人工发货', m.manualDeliveryRequired ?? 0, 'orders', 'undelivered'],
+      ['支付异常', m.paymentExceptions ?? 0, 'payments:exceptions', ''],
+      ['售后待处理', m.supportPending ?? 0, 'support', ''],
+      ['通知失败', m.notificationFailed ?? 0, 'notifications', ''],
+      ['库存预警', m.lowStockSkuCount ?? 0, 'inventory:warning', '']
+    ];
+    return adminPage('运营看板', '集中处理订单、发货、库存、支付与售后异常。今日数据按服务器时间当天统计。', `
+      <div class="metric-grid admin-metrics">${metricCards.map(([label, value, target, orderTab]) =>
+        `<button type="button" data-action="adminDashboardJump" data-target="${target}" data-order-tab="${orderTab}"><span>${label}</span><b>${value}</b></button>`
+      ).join('')}</div>
       <section class="admin-section-grid">
         <div class="admin-panel">
-          <div class="admin-section-title"><h2>待处理队列</h2><span>最近 5 条需要人工介入的任务</span></div>
+          <div class="admin-section-title"><h2>支付异常</h2><span>需要人工核验的链上交易</span></div>
           ${adminTable([
-            { label: '对象', width: '1.2fr' }, { label: '商品', width: '1.2fr' }, { label: '状态' }, { label: '操作', width: '1.1fr' }
-          ], failedDelivery.concat(orderList.filter((o) => o.status === 'paid')).slice(0, 5).map((o) => [
-            `<b>${escapeHtml(o.orderNo)}</b>`,
-            escapeHtml(o.productName),
-            adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)),
-            `<button data-action="adminDeliver" data-id="${o.id}" type="button">处理发货</button>`
-          ]), { title: '暂无积压任务', desc: '支付异常、发货失败和售后待回复会显示在这里。' })}
+            { label: 'Hash', width: '1.6fr' }, { label: '金额' }, { label: '异常' }, { label: '操作' }
+          ], (queues.paymentExceptions || []).slice(0, 6).map((t) => [
+            `<b>${escapeHtml(String(t.txHash || '').slice(0, 16))}…</b>`,
+            `${formatUsdt(t.amount)} USDT`,
+            adminStatus(exceptionTypeLabel(t.exceptionType || t.matchStatus), 'warning'),
+            `<button data-action="adminDashboardJump" data-target="payments:exceptions" type="button">去处理</button>`
+          ]), { title: '暂无支付异常', desc: '少付、多付、金额冲突、重复 Hash、未匹配交易会显示在这里。' })}
         </div>
         <div class="admin-panel">
-          <div class="admin-section-title"><h2>库存预警</h2><span>按 SKU 维度追踪补货优先级</span></div>
+          <div class="admin-section-title"><h2>待发货 / 发货任务</h2><span>已支付待发货与人工介入任务</span></div>
           ${adminTable([
-            { label: '商品 / SKU', width: '1.7fr' }, { label: '当前库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '操作' }
-          ], lowStockRows.slice(0, 6).map(({ product, sku }) => [
-            `<b>${escapeHtml(product.name)}</b><small>${skuName(sku)}</small>`,
-            Number(sku.stockQuantity || 0),
-            Number(sku.warningStock || 5),
-            deliveryLabel(sku.deliveryType || product.deliveryType),
-            `<button data-action="adminTab" data-tab="inventory" type="button">去补货</button>`
+            { label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '发货状态' }, { label: '操作' }
+          ], (queues.deliveryTasks || []).slice(0, 6).map((o) => [
+            `<b>${escapeHtml(o.orderNo)}</b>`,
+            escapeHtml(o.telegramUsername || o.email || '-'),
+            adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)),
+            `<button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">人工发货</button>`
+          ]), { title: '暂无待发货任务', desc: '已支付待发货、人工介入、发货失败的订单会显示在这里。' })}
+        </div>
+        <div class="admin-panel">
+          <div class="admin-section-title"><h2>库存预警</h2><span>按 SKU 真实可用库存追踪补货</span></div>
+          ${adminTable([
+            { label: '商品 / SKU', width: '1.7fr' }, { label: '可用库存' }, { label: '预警值' }, { label: '建议补货' }, { label: '操作' }
+          ], (queues.lowStockSkus || []).slice(0, 8).map((s) => [
+            `<b>${escapeHtml(s.productName || s.productId || '-')}</b><small>${escapeHtml(s.skuName || Object.values(s.optionValues || {}).join(' / ') || s.skuId)}</small>`,
+            `<b class="${s.available <= 0 ? 'admin-text-danger' : ''}">${s.available}</b>`,
+            s.warningStock,
+            s.suggestedRestock,
+            `<button data-action="adminDashboardJump" data-target="inventory:warning" type="button">去补货</button>`
           ]), { title: '暂无库存预警', desc: '低于预警值的自动发货 SKU 会显示在这里。' })}
+        </div>
+        <div class="admin-panel">
+          <div class="admin-section-title"><h2>售后待处理</h2><span>open / in_progress 工单</span></div>
+          ${adminTable([
+            { label: '工单号' }, { label: '订单号' }, { label: '类型' }, { label: '操作' }
+          ], (queues.supportTickets || []).slice(0, 6).map((t) => [
+            `<b>${escapeHtml(t.ticketNo || t.id)}</b>`,
+            escapeHtml(t.orderNo || '-'),
+            escapeHtml(t.type || '售后'),
+            `<button data-action="adminTab" data-tab="support" type="button">去处理</button>`
+          ]), { title: '暂无售后工单', desc: '用户提交售后后会显示在这里。' })}
         </div>
       </section>
     `, { eyebrow: '今日工作台' });
@@ -3923,49 +4445,68 @@ function adminContent(tab) {
       ], (ops.tags || []).map((t) => [escapeHtml(t.name), escapeHtml(t.color), escapeHtml(t.icon), adminStatus(t.enabled ? '启用' : '停用', t.enabled ? 'success' : 'neutral'), '<button type="button">编辑</button>']), { title: '暂无标签', desc: '商品标签可用于首页推荐、热销、限时活动等运营场景。' })}</div>`;
     } else if (sub === 'skus') {
       const visibleSkuRows = filterAdminSkuRows(skuRows, filters);
-      body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: '库存状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], '<button class="primary small" type="button">批量改价</button><button class="secondary" type="button">批量上下架</button>', scope)}<div class="admin-panel">${adminTable([
-        { label: 'SKU', width: '1.4fr' }, { label: '商品' }, { label: '规格组合' }, { label: '价格' }, { label: '库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '状态' }, { label: '操作' }
-      ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USD`, Number(sku.stockQuantity ?? productStockCount(product)), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), '<button type="button">编辑</button>']), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
+      body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: '库存状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], `<button class="primary small" data-action="adminSkuCreate" type="button">新建 SKU</button><button class="secondary" data-action="adminSkuBatchPrice" type="button">批量改价</button><button class="secondary" data-action="adminSkuBatchStatus" type="button">批量上下架</button>`, scope)}<div class="admin-panel">${adminTable([
+        { label: 'SKU', width: '1.4fr' }, { label: '商品' }, { label: '规格组合' }, { label: '价格' }, { label: '可用库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '状态' }, { label: '操作' }
+      ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USDT`, Number(sku.availableInventory ?? 0), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), `<button data-action="adminSkuEdit" data-id="${escapeHtml(sku.id)}" data-product="${escapeHtml(product.id)}" type="button">编辑</button>`]), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
     } else if (sub === 'edit') {
-      const product = productList[0] || {};
+      const product = productList.find((p) => p.id === state.adminProductEditId) || productList[0] || {};
       const productTags = productFeatureTags(product).join('，');
       const productNotice = product.purchaseNotice || product.notice?.usageGuide || '';
       const afterSaleRule = product.afterSaleRule || product.notice?.refundRule || product.notice?.attention || '';
+      const skuList = product.skus || [];
+      const autoNoStock = (product.deliveryType === 'auto' || product.deliveryType === 'mixed') && skuList.length > 0 && skuList.every((s) => Number(s.availableInventory ?? 0) <= 0);
+      const categoryOptions = [...new Set(productList.map((p) => p.categoryId || p.category).filter(Boolean))];
       body = `<div class="admin-panel">
-        <div class="admin-editor-layout">
-          <aside>${['基础信息','购买字段','SKU 配置','库存绑定','发货规则','购买须知','展示设置'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</aside>
-          <div>
-            <h2>${escapeHtml(product.name || '选择商品')}</h2>
-            <p>商品文案和前台展示内容都应由后台配置，前端只负责按字段渲染。</p>
-            <form class="admin-form admin-product-content-form" data-action="adminProductContent" data-id="${escapeHtml(product.id || '')}">
-              <label>商品短描述<textarea name="shortDescription" placeholder="一句话介绍商品">${escapeHtml(product.shortDescription || product.subtitle || product.short || '')}</textarea></label>
-              <label>商品卖点标签<textarea name="featureTags" placeholder="最多 6 个，用逗号或换行分隔">${escapeHtml(productTags)}</textarea></label>
-              <label>商品详情说明<textarea name="detailDescription" placeholder="商品详情、适用场景、使用限制">${escapeHtml(product.detailDescription || product.description || '')}</textarea></label>
-              <label>购买须知<textarea name="purchaseNotice" placeholder="购买前需要用户确认的规则">${escapeHtml(productNotice)}</textarea></label>
-              <label>售后规则<textarea name="afterSaleRule" placeholder="保修、补发、退款等规则">${escapeHtml(afterSaleRule)}</textarea></label>
-              <div class="admin-form-actions"><button class="primary small" type="submit">保存商品文案</button></div>
-            </form>
-            ${adminActionForm('purchaseField.create', [['productId','商品 ID','text', product.id || ''], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / quantity / text / email / number / textarea / switch'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global","subtitle":"全球通用"}]'], ['affectsSku','影响 SKU','checkbox']], '保存购买字段')}
-          </div>
+        <div class="admin-section-title"><h2>编辑商品</h2><span>选择商品后可修改基础信息、前台文案与购买字段。所有价格以 USDT 结算。</span>
+          <label class="admin-inline-select">切换商品<select data-action="adminSelectEditProduct">${optionHtml(productList.map((p) => ({ label: p.name, value: p.id })), product.id || '')}</select></label>
         </div>
+        ${autoNoStock ? `<div class="admin-risk-callout danger"><b>上架风险提示</b><span>该商品为自动发货，但所有 SKU 当前可用库存为 0，上架后用户下单将无法自动发货。请先补货或转人工。</span></div>` : ''}
+        <form class="admin-form admin-product-base-form" data-action="adminProductBase" data-id="${escapeHtml(product.id || '')}">
+          <label>商品名称<input name="name" value="${escapeHtml(product.name || '')}" /></label>
+          <label>Slug<input name="slug" value="${escapeHtml(product.slug || '')}" placeholder="小写字母数字与连字符" /></label>
+          <label>分类<select name="categoryId">${optionHtml(categoryOptions.map((c) => ({ label: c, value: c })), product.categoryId || product.category || '')}</select></label>
+          <label>商品类型<select name="productType">${optionHtml([{label:'订阅 subscription',value:'subscription'},{label:'礼品卡/卡密 card',value:'card'},{label:'账号 account',value:'account'},{label:'充值 recharge',value:'recharge'},{label:'服务 service',value:'service'}], product.productType || 'subscription')}</select></label>
+          <label>发货方式<select name="deliveryType">${optionHtml([{label:'自动发货 auto',value:'auto'},{label:'人工处理 manual',value:'manual'},{label:'部分自动 mixed',value:'mixed'}], product.deliveryType || 'manual')}</select></label>
+          <label>上架状态<select name="status">${optionHtml([{label:'已上架 active',value:'active'},{label:'已隐藏 hidden',value:'hidden'},{label:'已归档 archived',value:'archived'}], product.status || 'active')}</select></label>
+          <label class="checkline"><input name="isHomeVisible" type="checkbox" ${product.isHomeVisible === false ? '' : 'checked'} /> 前台展示</label>
+          <label class="checkline"><input name="isRecommended" type="checkbox" ${product.isRecommended ? 'checked' : ''} /> 推荐/热门</label>
+          <div class="admin-form-actions"><button class="primary small" type="submit">保存基础信息</button></div>
+        </form>
+        <form class="admin-form admin-product-content-form" data-action="adminProductContent" data-id="${escapeHtml(product.id || '')}">
+          <label class="admin-field-wide">商品短描述<textarea name="shortDescription" placeholder="一句话介绍商品">${escapeHtml(product.shortDescription || product.subtitle || product.short || '')}</textarea></label>
+          <label class="admin-field-wide">商品卖点标签<textarea name="featureTags" placeholder="最多 6 个，用逗号或换行分隔">${escapeHtml(productTags)}</textarea></label>
+          <label class="admin-field-wide">商品详情说明<textarea name="detailDescription" placeholder="商品详情、适用场景、使用限制">${escapeHtml(product.detailDescription || product.description || '')}</textarea></label>
+          <label class="admin-field-wide">购买须知<textarea name="purchaseNotice" placeholder="购买前需要用户确认的规则">${escapeHtml(productNotice)}</textarea></label>
+          <label class="admin-field-wide">售后规则<textarea name="afterSaleRule" placeholder="保修、补发、退款等规则">${escapeHtml(afterSaleRule)}</textarea></label>
+          <div class="admin-form-actions"><button class="primary small" type="submit">保存商品文案</button></div>
+        </form>
+        <div class="admin-section-title"><h2>SKU 列表</h2><span>价格 USDT，库存为真实可用项数量。</span><button class="primary small" data-action="adminSkuCreate" data-product="${escapeHtml(product.id || '')}" type="button">新建 SKU</button></div>
+        ${adminTable([{ label: 'SKU' }, { label: '规格' }, { label: '价格' }, { label: '可用库存' }, { label: '发货' }, { label: '状态' }, { label: '操作' }], skuList.map((sku) => [skuName(sku), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USDT`, Number(sku.availableInventory ?? 0), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus), adminToneFromStatus(sku.stockStatus)), `<button data-action="adminSkuEdit" data-id="${escapeHtml(sku.id)}" data-product="${escapeHtml(product.id)}" type="button">编辑</button>`]), { title: '暂无 SKU', desc: '至少需要一个有价格的 SKU 才能上架。' })}
+        <div class="admin-section-title"><h2>购买字段</h2><span>配置用户下单时填写或选择的字段。</span></div>
+        ${adminActionForm('purchaseField.create', [['productId','商品 ID','text', product.id || ''], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / quantity / text / email / number / textarea / switch'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global","subtitle":"全球通用"}]'], ['affectsSku','影响 SKU','checkbox']], '保存购买字段')}
       </div>`;
     } else {
       const categories = [...new Set(productList.map((p) => p.category || p.categoryId).filter(Boolean))];
       const visibleProducts = filterAdminProducts(productList, filters);
-      body = `${adminToolbar([{ name: 'q', label: '搜索商品', placeholder: '商品名称 / SKU' }, { name: 'category', label: '分类筛选', type: 'select', value: '全部分类', options: categories }, { name: 'status', label: '状态筛选', type: 'select', value: '全部状态', options: ['已上架','已下架'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], '<button class="primary small" type="button">新增商品</button>', scope)}<div class="admin-panel">${adminTable([
-        { label: '商品', width: '1.5fr' }, { label: '分类' }, { label: '类型' }, { label: 'SKU 数' }, { label: '库存' }, { label: '最低价' }, { label: '状态' }, { label: '前台展示' }, { label: '更新时间' }, { label: '操作', width: '1.4fr' }
+      body = `${adminToolbar([{ name: 'q', label: '搜索商品', placeholder: '商品名称 / SKU' }, { name: 'category', label: '分类筛选', type: 'select', value: '全部分类', options: categories }, { name: 'status', label: '状态筛选', type: 'select', value: '全部状态', options: ['已上架','已下架'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], '<button class="primary small" data-action="adminProductCreate" type="button">新增商品</button>', scope)}<div class="admin-panel">${adminTable([
+        { label: '商品', width: '1.5fr' }, { label: '分类' }, { label: '类型' }, { label: '发货' }, { label: 'SKU(可售/缺货)' }, { label: '可用库存' }, { label: '最低价' }, { label: '状态' }, { label: '前台展示' }, { label: '更新时间' }, { label: '操作', width: '1.6fr' }
       ], visibleProducts.map((p) => {
-        const minPrice = Math.min(...(p.skus || [{ priceUsdt: 0 }]).map((sku) => Number(sku.priceUsdt || 0)));
-        return [`<b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.id)}</small>`, escapeHtml(p.category || p.categoryId || '-'), escapeHtml(p.productType || 'subscription'), (p.skus || []).length, productStockCount(p), `${minPrice.toFixed(2)} USD`, adminStatus(p.status === 'hidden' ? '已下架' : '已上架', p.status === 'hidden' ? 'neutral' : 'success'), adminStatus(p.status === 'hidden' ? '隐藏' : '展示', p.status === 'hidden' ? 'neutral' : 'success'), timeFrom(p.updatedAt || p.createdAt), `<button data-action="adminSubTab" data-tab="products" data-subtab="edit" type="button">编辑</button><button data-action="adminToggleProduct" data-id="${p.id}" type="button">${p.status === 'hidden' ? '上架' : '下架'}</button>`];
+        const skus = p.skus || [];
+        const minPrice = skus.length ? Math.min(...skus.map((sku) => Number(sku.priceUsdt || 0))) : 0;
+        const sellable = p.sellableSkuCount ?? skus.filter((s) => (s.stockStatus || s.stock) !== 'sold_out').length;
+        const outOfStock = p.outOfStockSkuCount ?? 0;
+        const available = p.availableInventory ?? 0;
+        return [`<b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.slug || p.id)}</small>`, escapeHtml(p.category || p.categoryId || '-'), productTypeLabel(p.productType), deliveryLabel(p.deliveryType), `${skus.length} <small>(${sellable}/${outOfStock})</small>`, available, `${minPrice.toFixed(2)} USDT`, adminStatus(p.status === 'hidden' ? '已下架' : (p.status === 'archived' ? '已归档' : '已上架'), p.status === 'active' ? 'success' : 'neutral'), adminStatus(p.isHomeVisible === false ? '隐藏' : '展示', p.isHomeVisible === false ? 'neutral' : 'success'), timeFrom(p.updatedAt || p.createdAt), `<button data-action="adminProductEdit" data-id="${escapeHtml(p.id)}" type="button">编辑</button><button data-action="adminSubTab" data-tab="products" data-subtab="skus" type="button">SKU</button><button data-action="adminToggleProduct" data-id="${escapeHtml(p.id)}" type="button">${p.status === 'hidden' ? '上架' : '下架'}</button>`];
       }), { title: '没有匹配商品', desc: '调整分类、状态、发货方式或关键词后重试。' })}${adminPager(visibleProducts.length)}</div>`;
     }
-    return adminPage('商品中心', '管理所有上架商品、SKU、价格与前台展示状态。', body, { tabKey: 'products', tabs, actions: '<button class="primary small" type="button">新增商品</button>' });
+    return adminPage('商品中心', '管理所有上架商品、SKU、价格（USDT）与前台展示状态。', body, { tabKey: 'products', tabs, actions: '<button class="primary small" data-action="adminProductCreate" type="button">新增商品</button>' });
   }
   if (tab === 'inventory') {
     const sub = currentAdminSubTab(tab, 'list');
     const tabs = ['list|库存列表', 'import|批量导入', 'batches|导入批次', 'warning|库存预警', 'locks|库存占用记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const scope = adminFilterScope(tab, sub);
     const filters = adminFiltersFor(scope);
+    const invSlice = state.adminPages.inventory;
     let body = '';
     if (sub === 'import') {
       const preview = state.adminImportPreview;
@@ -3978,37 +4519,64 @@ function adminContent(tab) {
           <div class="admin-form-actions"><button class="secondary" data-import-mode="preview" type="submit">校验格式</button><button class="primary small" data-import-mode="commit" type="submit" ${preview && !preview.errors.length ? '' : 'disabled'}>确认导入</button></div>
         </form>${inventoryPreviewPanel(preview)}</div>`;
     } else if (sub === 'batches') {
-      body = `<div class="admin-panel">${adminTable([{ label: '批次' }, { label: '类型' }, { label: 'SKU' }, { label: '成功' }, { label: '重复' }, { label: '失败' }, { label: '创建时间' }], (ops.inventoryBatches || []).map((b) => [escapeHtml(String(b.id).slice(0, 8)), escapeHtml(b.type), escapeHtml(b.skuId), b.successCount, b.duplicateCount, b.failedCount, timeFrom(b.createdAt)]), { title: '暂无导入批次', desc: '每次确认导入都会生成批次，方便回溯和审计。' })}</div>`;
+      body = `<div class="admin-panel">${adminTable([{ label: '批次' }, { label: '类型' }, { label: 'SKU' }, { label: '成功' }, { label: '重复' }, { label: '失败' }, { label: '空行' }, { label: '创建时间' }], (ops.inventoryBatches || []).map((b) => [escapeHtml(String(b.id).slice(0, 8)), escapeHtml(b.type), escapeHtml(b.skuId), b.successCount, b.duplicateCount, b.failedCount, b.emptyCount ?? 0, timeFrom(b.createdAt)]), { title: '暂无导入批次', desc: '每次确认导入都会生成批次，方便回溯和审计。' })}</div>`;
     } else if (sub === 'warning') {
-      const rows = skuRows.filter(({ sku }) => (sku.stockStatus || sku.stock) === 'low_stock' || Number(sku.stockQuantity || 0) <= Number(sku.warningStock || 5));
-      body = `<div class="admin-panel">${adminTable([{ label: '商品 / SKU', width: '1.6fr' }, { label: '当前库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '操作' }], rows.map(({ product, sku }) => [`<b>${escapeHtml(product.name)}</b><small>${skuName(sku)}</small>`, Number(sku.stockQuantity || 0), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), '<button data-action="adminSubTab" data-tab="inventory" data-subtab="import" type="button">去补货</button>']), { title: '暂无库存预警', desc: '低库存 SKU 会在这里形成补货队列。' })}</div>`;
+      // 与看板同源：服务端按真实 available 聚合
+      const rows = (state.adminDashboard.queues?.lowStockSkus) || [];
+      body = `<div class="admin-panel"><div class="admin-section-title"><h2>库存预警</h2><span>按 SKU 真实可用库存（available）与预警值比较，与看板口径一致。</span></div>${adminTable([{ label: '商品 / SKU', width: '1.6fr' }, { label: '可用库存' }, { label: '预警值' }, { label: '建议补货' }, { label: '最近导入' }, { label: '操作' }], rows.map((s) => [`<b>${escapeHtml(s.productName || s.productId || '-')}</b><small>${escapeHtml(s.skuName || Object.values(s.optionValues || {}).join(' / ') || s.skuId)}</small>`, `<b class="${s.available <= 0 ? 'admin-text-danger' : ''}">${s.available}</b>`, s.warningStock, s.suggestedRestock, timeFrom(s.lastImportAt), `<button data-action="adminGoImport" data-sku="${escapeHtml(s.skuId)}" data-product="${escapeHtml(s.productId || '')}" type="button">去补货</button>`]), { title: '暂无库存预警', desc: '低于预警值的自动发货 SKU 会在这里形成补货队列。' })}</div>`;
     } else if (sub === 'locks') {
-      body = `<div class="admin-panel">${adminTable([{ label: '库存' }, { label: '商品 / SKU' }, { label: '绑定订单' }, { label: '状态' }, { label: '占用时间' }, { label: '操作' }], (ops.inventory || []).filter((i) => i.status === 'locked').map((i) => [escapeHtml(i.maskedValue), `${escapeHtml(i.productName || i.productId || '-')} / ${escapeHtml(i.skuId)}`, escapeHtml(i.orderId || i.boundOrderId || '-'), adminStatus('已锁定', 'warning'), timeFrom(i.updatedAt || i.createdAt), '<button type="button">解锁</button>']), { title: '暂无库存占用', desc: '支付中或待发货订单锁定的库存会显示在这里。' })}</div>`;
+      const reserved = (invSlice.items || []).filter((i) => i.status === 'reserved');
+      body = `<div class="admin-panel"><div class="admin-section-title"><h2>库存占用</h2><span>状态为 reserved 的库存（已被订单占用，尚未交付）。</span></div>${adminTable([{ label: '库存' }, { label: '商品 / SKU' }, { label: '绑定订单' }, { label: '状态' }, { label: '占用时间' }], reserved.map((i) => [escapeHtml(i.maskedValue), `${escapeHtml(i.productName || i.productId || '-')} / ${escapeHtml(i.skuId)}`, escapeHtml(i.orderNo || i.orderId || '-'), adminStatus(inventoryStatusLabel(i.status), 'warning'), timeFrom(i.lockedAt || i.createdAt)]), { title: '暂无库存占用', desc: '支付中或待发货订单占用的库存会显示在这里。' })}</div>`;
     } else {
-      const inventoryRows = filterAdminInventory(ops.inventory || [], filters);
-      body = `${adminToolbar([{ name: 'q', label: '搜索库存', placeholder: '卡密预览 / SKU / 批次' }, { name: 'type', label: '类型', type: 'select', value: '全部类型', options: ['card','account','coupon'] }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: ['available','locked','used','void'] }], '<button class="primary small" data-action="adminSubTab" data-tab="inventory" data-subtab="import" type="button">批量导入</button>', scope)}<div class="admin-panel">${adminTable([{ label: '库存内容预览', width: '1.5fr' }, { label: '商品' }, { label: 'SKU' }, { label: '类型' }, { label: '状态' }, { label: '绑定订单' }, { label: '导入批次' }, { label: '创建时间' }, { label: '操作' }], inventoryRows.map((i) => [escapeHtml(i.maskedValue || '********'), escapeHtml(i.productName || i.productId || '-'), escapeHtml(i.skuId), escapeHtml(i.type), adminStatus(i.status, adminToneFromStatus(i.status)), escapeHtml(i.orderId || i.boundOrderId || '-'), escapeHtml(i.importBatchId || '手动'), timeFrom(i.createdAt), '<button type="button">查看</button><button type="button">作废</button>']), { title: '没有匹配库存', desc: '导入卡密或账号后可按内容、SKU、批次、状态筛选。' })}</div>`;
+      const rows = invSlice.items || [];
+      const errorBanner = invSlice.error ? `<div class="admin-risk-callout danger"><b>库存加载失败</b><span>${escapeHtml(invSlice.error)}</span></div>` : '';
+      body = `${adminToolbar([{ name: 'q', label: '搜索库存', placeholder: '卡密预览 / 商品 / 订单' }, { name: 'type', label: '类型', type: 'select', value: '全部类型', options: [{label:'卡密 card',value:'card'},{label:'账号 account',value:'account'},{label:'优惠码 coupon',value:'coupon'}] }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: [{label:'可用 available',value:'available'},{label:'占用 reserved',value:'reserved'},{label:'已交付 delivered',value:'delivered'},{label:'已作废 revoked',value:'revoked'}] }], '<button class="primary small" data-action="adminSubTab" data-tab="inventory" data-subtab="import" type="button">批量导入</button>', scope)}${errorBanner}<div class="admin-panel">${invSlice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取库存列表。</span></div>' : adminTable([{ label: '库存内容预览', width: '1.5fr' }, { label: '商品' }, { label: 'SKU' }, { label: '类型' }, { label: '状态' }, { label: '绑定订单' }, { label: '导入批次' }, { label: '创建时间' }, { label: '操作', width: '1.3fr' }], rows.map((i) => [escapeHtml(i.maskedValue || '********'), escapeHtml(i.productName || i.productId || '-'), escapeHtml(i.skuId), escapeHtml(i.type), adminStatus(inventoryStatusLabel(i.status), adminToneFromStatus(i.status === 'available' ? 'in_stock' : i.status === 'revoked' ? 'failed' : i.status === 'reserved' ? 'pending' : 'neutral')), escapeHtml(i.orderNo || i.orderId || '-'), escapeHtml(i.importBatchId ? String(i.importBatchId).slice(0, 8) : '手动'), timeFrom(i.createdAt), `<button data-action="adminInventoryReveal" data-id="${escapeHtml(i.id)}" type="button">查看明文</button>${(i.status === 'available' || i.status === 'reserved') ? `<button class="danger-text" data-action="adminInventoryRevoke" data-id="${escapeHtml(i.id)}" data-masked="${escapeHtml(i.maskedValue || '')}" type="button">作废</button>` : ''}`]), { title: rows.length ? '没有匹配库存' : '暂无可用库存', desc: '导入卡密或账号后可按内容、SKU、批次、状态筛选。' })}${adminPagerServer('inventory')}</div>`;
     }
-    return adminPage('库存中心', '管理卡密、账号、导入批次、预警与库存占用。', body, { tabKey: 'inventory', tabs });
+    return adminPage('库存中心', '管理卡密、账号、导入批次、预警与库存占用。状态：available / reserved / delivered / revoked。', body, { tabKey: 'inventory', tabs });
   }
   if (tab === 'orders') {
     const scope = adminFilterScope(tab);
-    const visibleOrders = filterAdminOrders(orderList, adminFiltersFor(scope));
-    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram' }, { name: 'status', label: '订单状态', type: 'select', value: '全部状态', options: ['待付款','链上确认中','已付款','发货中','已完成','已超时','支付失败','退款中','已退款'] }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'date', label: '时间范围', placeholder: '最近 30 天' }], '', scope)}<div class="admin-tabs static">${['全部订单','待支付','已支付','待发货','已发货','发货失败','异常订单','已取消','售后中'].map((label, index) => `<button class="${index === 0 ? 'active' : ''}" type="button">${label}</button>`).join('')}</div><div class="admin-panel">${adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '金额' }, { label: '支付通道', width: '1.2fr' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.6fr' }], visibleOrders.map((o) => [`<b>${escapeHtml(o.orderNo)}</b>`, escapeHtml(o.telegramUsername || o.email || '-'), `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`, o.quantity || 1, `${Number(o.payAmount || o.amountUsdt || 0).toFixed(6).replace(/\.?0+$/, '')} ${escapeHtml(o.payCurrency || 'USDT')}`, paymentChannelLabel(o), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status)), adminStatus(o.deliveryStatus || statusLabel(o.status), adminToneFromStatus(o.deliveryStatus || o.status)), adminStatus(o.ticketStatus || '无售后', 'neutral'), timeFrom(o.createdAt), `<a href="/order/${o.id}">详情</a><button data-action="adminMarkPaid" data-id="${o.id}" type="button">手动确认</button><button data-action="adminDeliver" data-id="${o.id}" type="button">人工发货</button>`]), { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPager(visibleOrders.length)}</div><div class="admin-panel admin-detail-skeleton"><h2>订单详情页结构</h2>${['订单状态时间线','用户信息','商品快照','SKU 快照','用户填写信息','支付信息','发货信息','售后记录','通知记录','操作日志','管理员备注'].map((label) => `<span>${label}</span>`).join('')}</div>`);
+    const filters = adminFiltersFor(scope);
+    const slice = state.adminPages.orders;
+    const orderTab = state.adminOrderTab || 'all';
+    const orderTabs = [
+      ['all', '全部订单'], ['pending_payment', '待支付'], ['confirming', '链上确认中'], ['paid', '已支付'],
+      ['undelivered', '待发货'], ['delivered', '已发货'], ['delivery_failed', '发货失败'],
+      ['after_sale', '售后中'], ['refunded', '已退款']
+    ];
+    const errorBanner = slice.error ? `<div class="admin-risk-callout danger"><b>订单加载失败</b><span>${escapeHtml(slice.error)}</span></div>` : '';
+    const rows = orderList.map((o) => [
+      `<b>${escapeHtml(o.orderNo)}</b><small>${escapeHtml(String(o.id).slice(0, 8))}</small>`,
+      `${escapeHtml(o.telegramUsername || '-')}<small>${escapeHtml(o.email || '')}</small>`,
+      `${escapeHtml(o.productName)}<small>${escapeHtml(Object.values(o.options || {}).join(' / '))}</small>`,
+      o.quantity || 1,
+      `<b>${formatUsdt(o.payAmount || o.amountUsdt)}</b> USDT<small>原价 ${Number(o.amountUsdt || 0).toFixed(2)}</small>`,
+      'USDT TRC20',
+      adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus)),
+      adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)),
+      adminStatus(afterSaleStatusLabel(o.afterSaleStatus), o.afterSaleStatus === 'none' ? 'neutral' : 'warning'),
+      timeFrom(o.createdAt),
+      `<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">详情</button><button data-action="adminConfirmPayment" data-id="${escapeHtml(o.id)}" type="button">确认支付</button><button data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">人工发货</button>`
+    ]);
+    return adminPage('订单中心', '追踪订单从创建、支付、发货、通知到售后的完整链路。金额展示三位尾差（如 1.801 USDT）。', `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram / txHash' }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'dateFrom', label: '开始日期', type: 'date' }, { name: 'dateTo', label: '结束日期', type: 'date' }], '', scope)}<div class="admin-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}</button>`).join('')}</div>${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取订单列表。</span></div>' : adminTable([{ label: '订单号', width: '1.3fr' }, { label: '用户', width: '1.2fr' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '数量' }, { label: '应付金额' }, { label: '支付网络' }, { label: '支付状态' }, { label: '发货状态' }, { label: '售后状态' }, { label: '创建时间' }, { label: '操作', width: '1.8fr' }], rows, { title: '没有匹配订单', desc: '按订单号、用户、商品、状态或网络快速筛选。' })}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`);
   }
   if (tab === 'payments') {
     const sub = currentAdminSubTab(tab, 'networks');
     const tabs = ['networks|支付网络', 'addresses|收款地址', 'transactions|到账交易', 'exceptions|支付异常'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const providerBanner = `<div class="admin-risk-callout"><b>当前支付通道：USDT TRC20 直付</b><span>新订单使用固定 TRON 收款地址、三位小数尾差和 TronGrid 轮询自动确认。</span></div>`;
+    const txSlice = state.adminPages.transactions;
+    const scope = adminFilterScope(tab, sub);
     let body = '';
     if (sub === 'addresses') {
-      body = `${providerBanner}<div class="admin-panel"><div class="admin-section-title"><h2>USDT TRC20 收款配置</h2><span>固定地址收款，订单通过精确金额自动匹配。</span></div>${adminPaymentAddressForm(networkList)}${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '确认数' }, { label: '操作人' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), adminNetworkCollectionMethod(n), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), n.confirmations || 3, 'admin', '<button data-action="adminSubTab" data-tab="payments" data-subtab="addresses" type="button">修改地址</button><button data-action="adminTab" data-tab="audit" type="button">日志</button>']), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
+      body = `${providerBanner}<div class="admin-panel"><div class="admin-section-title"><h2>USDT TRC20 收款配置</h2><span>固定地址收款，订单通过精确金额自动匹配。修改地址、确认数均需二次确认并写审计。</span></div>${adminPaymentAddressForm(networkList)}${adminTable([{ label: '网络' }, { label: '收款地址', width: '2fr' }, { label: '用途' }, { label: '状态' }, { label: '确认数' }, { label: '操作' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.address || '-'), '订单收款', adminStatus((n.enabled ?? n.isEnabled) ? '启用' : '关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), n.confirmations || 3, `<button data-action="adminEditConfirmations" data-code="${escapeHtml(n.code)}" data-confirmations="${n.confirmations || 3}" type="button">修改确认数</button>`]), { title: '暂无收款地址', desc: '启用支付网络前需要配置收款地址。' })}</div>`;
     } else if (sub === 'transactions') {
-      body = `<div class="admin-panel">${adminActionForm('paymentTransaction.create', [['txHash','交易 Hash'], ['network','网络','text','TRON'], ['toAddress','收款地址'], ['amount','到账金额'], ['orderNo','绑定订单号'], ['matchStatus','匹配状态','text','manual_confirm'], ['note','处理备注']], '记录到账交易')}${adminTable([{ label: 'Hash', width: '1.8fr' }, { label: '网络' }, { label: '金额' }, { label: '付款地址' }, { label: '收款地址' }, { label: '匹配订单' }, { label: '状态' }, { label: '检测时间' }, { label: '操作' }], (ops.paymentTransactions || []).map((t) => [`<b>${escapeHtml(t.txHash)}</b>`, escapeHtml(t.network), `${escapeHtml(t.amount)} ${escapeHtml(t.token || 'USDT')}`, escapeHtml(t.fromAddress || '-'), escapeHtml(t.toAddress || '-'), escapeHtml(t.matchedOrderNo || t.orderNo || '未绑定'), adminStatus(t.matchStatus || 'unmatched', adminToneFromStatus(t.matchStatus)), timeFrom(t.detectedAt || t.createdAt), '<button type="button">绑定订单</button>']), { title: '暂无监听交易', desc: '链上监听或手动录入的到账交易会显示在这里。' })}</div>`;
+      const errorBanner = txSlice.error ? `<div class="admin-risk-callout danger"><b>到账交易加载失败</b><span>${escapeHtml(txSlice.error)}</span></div>` : '';
+      body = `${adminToolbar([{ name: 'q', label: '搜索交易', placeholder: 'txHash / 地址 / 订单号' }, { name: 'matchStatus', label: '匹配状态', type: 'select', value: '全部状态', options: [{label:'已匹配 matched',value:'matched'},{label:'人工确认 manual_confirm',value:'manual_confirm'},{label:'确认中 confirming',value:'confirming'},{label:'重复 duplicate',value:'duplicate'},{label:'异常 exception',value:'exception'},{label:'未匹配 unmatched',value:'unmatched'},{label:'已忽略 ignored',value:'ignored'}] }], '<button class="primary small" data-action="adminRescanPayments" type="button">重新扫描链上</button>', scope)}${errorBanner}<div class="admin-panel">${txSlice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取到账交易。</span></div>' : adminTable([{ label: 'Hash', width: '1.8fr' }, { label: '网络' }, { label: '金额' }, { label: '付款地址' }, { label: '收款地址' }, { label: '匹配订单' }, { label: '确认数' }, { label: '状态' }, { label: '检测时间' }], (txSlice.items || []).map((t) => [`<b>${escapeHtml(String(t.txHash).slice(0, 18))}…</b>`, escapeHtml(t.network), `${formatUsdt(t.amount)} ${escapeHtml(t.token || 'USDT')}`, escapeHtml(t.fromAddress || '-'), escapeHtml(t.toAddress || '-'), escapeHtml(t.matchedOrderNo || '未绑定'), t.confirmations ?? 0, adminStatus(matchStatusLabel(t.matchStatus), paymentToneFromMatch(t.matchStatus)), timeFrom(t.detectedAt || t.createdAt)]), { title: '暂无到账交易', desc: 'TronGrid 监听或重新扫描会写入到账交易记录。' })}${adminPagerServer('transactions')}</div>`;
     } else if (sub === 'exceptions') {
-      const exceptions = (ops.paymentTransactions || []).filter((t) => !['matched', 'manual_confirm'].includes(t.matchStatus));
-      body = `<div class="admin-panel">${adminTable([{ label: '异常类型' }, { label: 'Hash', width: '1.8fr' }, { label: '金额' }, { label: '网络' }, { label: '可能订单' }, { label: '原因' }, { label: '处理状态' }, { label: '操作' }], exceptions.map((t) => [escapeHtml(t.exceptionType || '未匹配'), escapeHtml(t.txHash), `${escapeHtml(t.amount)} USDT`, escapeHtml(t.network), escapeHtml(t.matchedOrderNo || '-'), escapeHtml(t.note || '需要人工核验'), adminStatus(t.matchStatus || '待处理', 'warning'), '<button type="button">人工绑定</button><button type="button">忽略</button>']), { title: '暂无支付异常', desc: '少付、多付、错链、超时、重复 Hash、未匹配交易会显示在这里。' })}</div>`;
+      const errorBanner = txSlice.error ? `<div class="admin-risk-callout danger"><b>支付异常加载失败</b><span>${escapeHtml(txSlice.error)}</span></div>` : '';
+      body = `${adminToolbar([{ name: 'q', label: '搜索异常', placeholder: 'txHash / 订单号' }, { name: 'exceptionType', label: '异常类型', type: 'select', value: '全部类型', options: [{label:'等待确认 confirming',value:'confirming'},{label:'重复 Hash',value:'duplicate_tx'},{label:'金额冲突',value:'amount_collision'},{label:'多付',value:'overpaid'},{label:'少付',value:'underpaid'},{label:'未匹配',value:'unmatched'}] }], '<button class="secondary" data-action="adminRescanPayments" type="button">重新扫描</button>', scope)}${errorBanner}<div class="admin-panel">${txSlice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取支付异常。</span></div>' : adminTable([{ label: '异常类型' }, { label: 'Hash', width: '1.6fr' }, { label: '金额' }, { label: '可能订单' }, { label: '原因' }, { label: '状态' }, { label: '操作', width: '1.4fr' }], (txSlice.items || []).map((t) => [exceptionTypeLabel(t.exceptionType || t.matchStatus), `${escapeHtml(String(t.txHash).slice(0, 16))}…`, `${formatUsdt(t.amount)} USDT`, escapeHtml(t.matchedOrderNo || '-'), escapeHtml(t.note || '需要人工核验'), adminStatus(matchStatusLabel(t.matchStatus), paymentToneFromMatch(t.matchStatus)), `<button data-action="adminPaymentBind" data-id="${escapeHtml(t.id)}" data-tx="${escapeHtml(t.txHash)}" data-amount="${escapeHtml(t.amount)}" type="button">人工绑定</button><button class="danger-text" data-action="adminPaymentIgnore" data-id="${escapeHtml(t.id)}" type="button">忽略</button>`]), { title: '暂无支付异常', desc: '少付、多付、金额冲突、重复 Hash、未匹配交易会显示在这里。' })}${adminPagerServer('transactions')}</div>`;
     } else {
-      body = `${providerBanner}<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '协议' }, { label: '币种' }, { label: '收款方式', width: '1.4fr' }, { label: '确认数' }, { label: '状态' }, { label: '推荐' }, { label: '操作', width: '1.5fr' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.tokenStandard || '-'), 'USDT', adminNetworkCollectionMethod(n), n.confirmations || 3, adminStatus((n.enabled ?? n.isEnabled) ? '已启用' : '已关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), adminStatus((n.recommended ?? n.isRecommended) ? '推荐' : '普通', (n.recommended ?? n.isRecommended) ? 'success' : 'neutral'), `<button data-action="adminToggleNetwork" data-code="${n.code}" type="button">${(n.enabled ?? n.isEnabled) ? '关闭' : '启用'}</button><button data-action="adminRecommendNetwork" data-code="${n.code}" type="button">设为推荐</button>`]), { title: '暂无支付网络', desc: '当前只开放 TRON / USDT TRC20。' })}</div>`;
+      body = `${providerBanner}<div class="admin-panel">${adminTable([{ label: '网络' }, { label: '协议' }, { label: '币种' }, { label: '固定收款地址', width: '1.6fr' }, { label: '确认数' }, { label: '状态' }, { label: '推荐' }, { label: '操作', width: '1.6fr' }], networkList.map((n) => [escapeHtml(n.displayName || n.code), escapeHtml(n.tokenStandard || '-'), 'USDT', escapeHtml(n.address || '-'), n.confirmations || 3, adminStatus((n.enabled ?? n.isEnabled) ? '已启用' : '已关闭', (n.enabled ?? n.isEnabled) ? 'success' : 'neutral'), adminStatus((n.recommended ?? n.isRecommended) ? '推荐' : '普通', (n.recommended ?? n.isRecommended) ? 'success' : 'neutral'), `<button class="${(n.enabled ?? n.isEnabled) ? 'danger-text' : ''}" data-action="adminToggleNetwork" data-code="${escapeHtml(n.code)}" type="button">${(n.enabled ?? n.isEnabled) ? '关闭' : '启用'}</button><button data-action="adminEditConfirmations" data-code="${escapeHtml(n.code)}" data-confirmations="${n.confirmations || 3}" type="button">确认数</button>`]), { title: '暂无支付网络', desc: '当前只开放 TRON / USDT TRC20。' })}</div>`;
     }
     return adminPage('支付中心', '管理支付网络、收款地址、到账交易和支付异常。', body, { tabKey: 'payments', tabs });
   }
@@ -4019,7 +4587,29 @@ function adminContent(tab) {
   }
   if (tab === 'notifications') return adminPage('通知中心', '管理 Telegram、邮件、站内通知模板与发送记录。', `<div class="admin-panel">${adminActionForm('template.save', [['type','模板类型','text','stock_warning'], ['title','标题'], ['content','模板内容','textarea','支持 {{orderNo}} {{skuName}} 等变量'], ['enabled','启用','checkbox']], '保存通知模板')}${adminTable([{ label: '模板类型' }, { label: '标题' }, { label: '状态' }, { label: '内容', width: '2fr' }], (ops.notificationTemplates || []).map((n) => [escapeHtml(n.type), escapeHtml(n.title), adminStatus(n.enabled ? '启用' : '停用', n.enabled ? 'success' : 'neutral'), escapeHtml(n.content)]), { title: '暂无通知模板', desc: '库存预警、订单支付、发货成功和售后回复都应配置通知模板。' })}</div><div class="admin-panel">${adminTable([{ label: '类型' }, { label: '渠道' }, { label: '提供方' }, { label: '状态' }, { label: '创建时间' }], state.adminData.notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), escapeHtml(n.provider), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '暂无通知记录', desc: '通知发送成功、失败和重试记录会显示在这里。' })}</div>`);
   if (tab === 'audit') return adminPage('审计日志', '记录高风险操作、配置修改和人工处理行为。', `${adminToolbar([{ label: '搜索日志', placeholder: '动作 / 对象 / 操作人' }, { label: '操作类型', type: 'select', value: '全部类型' }, { label: '时间范围', placeholder: '最近 30 天' }])}<div class="admin-panel">${adminTable([{ label: '动作' }, { label: '操作人' }, { label: '对象' }, { label: '对象 ID' }, { label: '时间' }], state.adminData.auditLogs.map((log) => [escapeHtml(log.action), `${escapeHtml(log.actorRole)}:${escapeHtml(log.actorId)}`, escapeHtml(log.target), escapeHtml(log.targetId), timeFrom(log.createdAt)]), { title: '暂无审计日志', desc: '修改价格、库存明文查看、收款地址、手动确认支付等操作必须留下审计。' })}</div>`);
-  if (tab === 'users') return adminPage('用户中心', '聚合用户订单、售后、支付记录、风险备注和黑名单。', `<div class="admin-panel">${adminActionForm('blacklist.create', [['kind','类型','text','telegram_id / wallet / ip / device'], ['value','拉黑值'], ['reason','原因'], ['effect','效果','text','block_order'], ['status','状态','text','active']], '加入黑名单')}${adminTable([{ label: '类型' }, { label: '值' }, { label: '原因' }, { label: '效果' }, { label: '状态' }], (ops.blacklists || []).map((b) => [escapeHtml(b.kind), escapeHtml(b.value), escapeHtml(b.reason), escapeHtml(b.effect || '-'), adminStatus(b.status, adminToneFromStatus(b.status))]), { title: '暂无黑名单', desc: '命中风险规则的用户、钱包、IP 或设备会显示在这里。' })}</div>`);
+  if (tab === 'users') {
+    const sub = currentAdminSubTab(tab, 'list');
+    const tabs = ['list|用户列表', 'blacklist|黑名单'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
+    const scope = adminFilterScope(tab, sub);
+    let body = '';
+    if (sub === 'blacklist') {
+      const blacklists = ops.blacklists || [];
+      body = `<div class="admin-panel"><div class="admin-section-title"><h2>新增黑名单</h2><span>命中 block_order/block_payment 的用户将无法下单；require_manual_review 创建但标记风险。</span></div>
+        <form class="admin-form" data-action="adminBlacklistCreate">
+          <label>类型<select name="kind">${optionHtml([{label:'Telegram 用户名',value:'telegram_username'},{label:'Telegram ID',value:'telegram_id'},{label:'邮箱',value:'email'},{label:'钱包地址',value:'wallet'},{label:'IP',value:'ip'},{label:'设备',value:'device'}], 'email')}</select></label>
+          <label>拉黑值<input name="value" placeholder="邮箱 / @用户名 / 地址" autocomplete="off" /></label>
+          <label>效果<select name="effect">${optionHtml([{label:'拒绝下单 block_order',value:'block_order'},{label:'需人工审核 require_manual_review',value:'require_manual_review'},{label:'拒绝支付 block_payment',value:'block_payment'}], 'block_order')}</select></label>
+          <label class="admin-field-wide">原因<input name="reason" placeholder="风险原因" autocomplete="off" /></label>
+          <div class="admin-form-actions"><button class="primary small" type="submit">加入黑名单</button></div>
+        </form>
+        ${adminTable([{ label: '类型' }, { label: '值' }, { label: '原因' }, { label: '效果' }, { label: '状态' }, { label: '操作', width: '1.4fr' }], blacklists.map((b) => [escapeHtml(b.kind), escapeHtml(b.value), escapeHtml(b.reason), escapeHtml(b.effect || '-'), adminStatus(b.status === 'active' ? '生效' : '停用', b.status === 'active' ? 'success' : 'neutral'), `<button data-action="adminBlacklistHits" data-id="${escapeHtml(b.id)}" type="button">命中订单</button><button data-action="adminBlacklistToggle" data-id="${escapeHtml(b.id)}" data-status="${b.status === 'active' ? 'inactive' : 'active'}" type="button">${b.status === 'active' ? '停用' : '启用'}</button>`]), { title: '暂无黑名单', desc: '命中风险规则的用户、钱包、IP 或设备会显示在这里。' })}</div>`;
+    } else {
+      const slice = state.adminPages.users;
+      const errorBanner = slice.error ? `<div class="admin-risk-callout danger"><b>用户加载失败</b><span>${escapeHtml(slice.error)}</span></div>` : '';
+      body = `${adminToolbar([{ name: 'q', label: '搜索用户', placeholder: '邮箱 / Telegram' }], '', scope)}${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取用户列表。</span></div>' : adminTable([{ label: '用户', width: '1.6fr' }, { label: 'Telegram' }, { label: '订单数' }, { label: '成交金额' }, { label: '售后数' }, { label: '最近下单' }, { label: '风险' }, { label: '操作' }], (slice.items || []).map((u) => [`<b>${escapeHtml(u.email)}</b>`, escapeHtml(u.telegramUsername || '-'), u.orderCount, `${formatUsdt(u.paidAmountUsdt)} USDT`, u.afterSaleCount, timeFrom(u.lastOrderAt), adminStatus(u.riskStatus === 'blacklisted' ? '黑名单' : '正常', u.riskStatus === 'blacklisted' ? 'danger' : 'success'), `<button data-action="adminUserDetail" data-id="${escapeHtml(u.email)}" type="button">查看</button><button data-action="adminUserBlacklist" data-email="${escapeHtml(u.email)}" data-telegram="${escapeHtml(u.telegramUsername || '')}" type="button">加入黑名单</button>`]), { title: '暂无用户', desc: '有过下单记录的用户会按邮箱聚合显示在这里。' })}${adminPagerServer('users')}</div>`;
+    }
+    return adminPage('用户中心', '聚合用户订单、售后、支付记录、风险备注和黑名单。', `${body}${adminUserDetailPanel()}`, { tabKey: 'users', tabs });
+  }
   if (tab === 'content') {
     const support = adminContentSetting('support_channel', DEFAULT_SUPPORT_CHANNEL);
     return adminPage('内容中心', '管理帮助中心、客服频道和商品详情说明模板。', `
@@ -4210,19 +4800,20 @@ async function submitAdminOps(form) {
 function hydrateAdminProduct(serverProduct) {
   const local = products.find((item) => item.id === serverProduct.id || item.slug === serverProduct.slug);
   return {
-    ...(local || {}),
     ...serverProduct,
-    category: local?.category || serverProduct.category || serverProduct.categoryId || '更多',
+    category: serverProduct.category || serverProduct.categoryId || local?.category || '更多',
     skus: Array.isArray(serverProduct.skus) ? serverProduct.skus : (local?.skus || [])
   };
 }
 
 function adminProducts() {
-  return state.adminData.products.length ? state.adminData.products.map(hydrateAdminProduct) : products;
+  // 后台数据以服务端为准，不再静默回落 demo 商品。
+  return (state.adminData.products || []).map(hydrateAdminProduct);
 }
 
 function adminOrders() {
-  return state.adminData.orders.length ? state.adminData.orders.map(normalizeServerOrder).filter(Boolean) : orders();
+  // 订单走服务端分页，统一来源 adminPages.orders，避免本地/服务端混用导致 order not found。
+  return (state.adminPages.orders.items || []).map(normalizeServerOrder).filter(Boolean);
 }
 
 function adminNetworks() {
@@ -4269,10 +4860,10 @@ function adminPaymentAddressForm(networkList) {
 async function loadAdminData(force = false) {
   if (isAdminLocked() || state.adminData.loading || (state.adminData.loaded && !force)) return;
   state.adminData.loading = true;
+  state.adminData.error = '';
   try {
     const entries = await Promise.all([
       ['products', '/api/admin/products'],
-      ['orders', '/api/admin/orders'],
       ['paymentNetworks', '/api/admin/payment-networks'],
       ['deliveries', '/api/admin/deliveries'],
       ['notifications', '/api/admin/notifications'],
@@ -4280,20 +4871,163 @@ async function loadAdminData(force = false) {
       ['auditLogs', '/api/admin/audit-logs'],
       ['ops', '/api/admin/ops']
     ].map(async ([key, url]) => {
-      const response = await adminFetch(url);
-      if (!response.ok) return [key, key === 'ops' ? {} : []];
-      return [key, await response.json().catch(() => [])];
+      try {
+        const response = await adminFetch(url);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          return [key, key === 'ops' ? {} : [], err.error || `HTTP ${response.status}`];
+        }
+        const data = await response.json().catch(() => null);
+        return [key, data, ''];
+      } catch (e) {
+        return [key, key === 'ops' ? {} : [], e?.message || '网络错误'];
+      }
     }));
-    for (const [key, value] of entries) state.adminData[key] = key === 'ops' ? (value || {}) : (Array.isArray(value) ? value : []);
+    const errors = [];
+    for (const [key, value, err] of entries) {
+      if (err) errors.push(`${key}: ${err}`);
+      // 兼容信封 { items, total } 与裸数组
+      const normalized = value && !Array.isArray(value) && Array.isArray(value.items) ? value.items : value;
+      state.adminData[key] = key === 'ops' ? (normalized || {}) : (Array.isArray(normalized) ? normalized : []);
+    }
+    state.adminData.error = errors.length ? errors.join(' · ') : '';
     state.adminData.loaded = true;
     for (const network of state.adminData.paymentNetworks) {
       syncLocalNetwork(networks.find((item) => item.code === network.code), network);
     }
-  } catch {
-    notify('后台数据拉取失败，已保留本地缓存视图');
+  } catch (e) {
+    state.adminData.error = e?.message || '后台数据加载失败';
+    notify('后台数据加载失败：' + state.adminData.error);
   } finally {
     state.adminData.loading = false;
   }
+}
+
+// 服务端分页加载：订单 / 库存 / 到账交易 / 用户
+async function loadAdminPage(kind, { page, force } = {}) {
+  const slice = state.adminPages[kind];
+  if (!slice || slice.loading) return;
+  if (page) slice.page = page;
+  if (slice.loaded && !force && !page) return;
+  slice.loading = true;
+  slice.error = '';
+  const endpoints = {
+    orders: '/api/admin/orders',
+    inventory: '/api/admin/inventory',
+    transactions: '/api/admin/payment-transactions',
+    users: '/api/admin/users'
+  };
+  const filters = adminPageFilters(kind);
+  const qs = new URLSearchParams({ page: String(slice.page || 1), pageSize: String(slice.pageSize || 20) });
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') qs.set(k, String(v).trim());
+  }
+  try {
+    const response = await adminFetch(`${endpoints[kind]}?${qs.toString()}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      slice.error = data.error || `HTTP ${response.status}`;
+      slice.items = [];
+      slice.total = 0;
+    } else {
+      slice.items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
+      slice.total = Number(data.total ?? slice.items.length);
+      slice.page = Number(data.page ?? slice.page ?? 1);
+      slice.pageSize = Number(data.pageSize ?? slice.pageSize ?? 20);
+    }
+    slice.loaded = true;
+  } catch (e) {
+    slice.error = e?.message || '加载失败';
+    slice.items = [];
+    slice.total = 0;
+  } finally {
+    slice.loading = false;
+  }
+}
+
+// 把后台筛选 UI 的值翻译成服务端查询参数
+function adminPageFilters(kind) {
+  if (kind === 'orders') {
+    const f = adminFiltersFor('orders');
+    const tab = state.adminOrderTab || 'all';
+    const out = {
+      q: f.q || '',
+      network: f.network && !['全部网络', '全部'].includes(f.network) ? f.network : '',
+      dateFrom: f.dateFrom || '',
+      dateTo: f.dateTo || ''
+    };
+    const tabMap = {
+      pending_payment: { status: 'pending_payment' },
+      confirming: { status: 'payment_confirming' },
+      paid: { paymentStatus: 'paid' },
+      undelivered: { deliveryStatus: 'manual_required' },
+      delivered: { deliveryStatus: 'delivered' },
+      delivery_failed: { deliveryStatus: 'failed' },
+      after_sale: { afterSaleStatus: 'open' },
+      refunded: { status: 'refunded' }
+    };
+    Object.assign(out, tabMap[tab] || {});
+    return out;
+  }
+  if (kind === 'inventory') {
+    const sub = currentAdminSubTab('inventory', 'list');
+    const f = adminFiltersFor(adminFilterScope('inventory', sub));
+    return {
+      q: f.q || '',
+      type: f.type && !['全部类型', '全部'].includes(f.type) ? f.type : '',
+      status: f.status && !['全部状态', '全部'].includes(f.status) ? f.status : '',
+      skuId: f.skuId || '',
+      batchId: f.batchId || ''
+    };
+  }
+  if (kind === 'transactions') {
+    const sub = currentAdminSubTab('payments', 'networks');
+    const f = adminFiltersFor(adminFilterScope('payments', sub));
+    return {
+      q: f.q || '',
+      matchStatus: f.matchStatus && !['全部状态', '全部'].includes(f.matchStatus) ? f.matchStatus : '',
+      exceptionType: f.exceptionType && !['全部类型', '全部'].includes(f.exceptionType) ? f.exceptionType : '',
+      onlyExceptions: sub === 'exceptions' ? '1' : ''
+    };
+  }
+  if (kind === 'users') {
+    const f = adminFiltersFor('users');
+    return { q: f.q || '' };
+  }
+  return {};
+}
+
+async function loadAdminDashboard(force = false) {
+  const slice = state.adminDashboard;
+  if (slice.loading || (slice.loaded && !force)) return;
+  slice.loading = true;
+  slice.error = '';
+  try {
+    const response = await adminFetch('/api/admin/dashboard');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      slice.error = data.error || `HTTP ${response.status}`;
+    } else {
+      slice.metrics = data.metrics || null;
+      slice.queues = data.queues || null;
+    }
+    slice.loaded = true;
+  } catch (e) {
+    slice.error = e?.message || '加载失败';
+  } finally {
+    slice.loading = false;
+  }
+}
+
+// 筛选变更后，按当前 tab 重置到第 1 页并从服务端重新加载
+async function reloadAdminAfterFilter() {
+  const tab = state.adminTab;
+  const map = { orders: 'orders', inventory: 'inventory', payments: 'transactions', users: 'users' };
+  const kind = map[tab];
+  if (kind) {
+    await loadAdminPage(kind, { page: 1, force: true });
+  }
+  renderAdmin();
 }
 
 function statusLabel(status) {
@@ -4356,7 +5090,7 @@ document.addEventListener('input', (event) => {
   if (event.target.matches('[data-action="adminFilter"]')) {
     setAdminFilter(event.target.dataset.filterScope || adminFilterScope(), event.target.name, event.target.value);
     clearTimeout(adminFilterTimer);
-    adminFilterTimer = setTimeout(() => renderAdmin(), 220);
+    adminFilterTimer = setTimeout(() => reloadAdminAfterFilter(), 280);
     return;
   }
   if (event.target.matches('[data-action="searchProducts"]')) {
@@ -4402,8 +5136,12 @@ document.addEventListener('click', (event) => {
 document.addEventListener('click', async (event) => {
   const copy = event.target.closest('[data-copy]');
   if (copy) {
-    await navigator.clipboard?.writeText(copy.dataset.copy);
-    return notify('已复制');
+    try {
+      await navigator.clipboard?.writeText(copy.dataset.copy);
+      return notify('已复制');
+    } catch {
+      return notify('浏览器限制剪贴板权限，请手动复制');
+    }
   }
   const el = event.target.closest('[data-action]');
   if (!el) return;
@@ -4428,7 +5166,7 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'toggleLoginPassword') {
     state.loginPasswordVisible = !state.loginPasswordVisible;
-    const inputs = document.querySelectorAll('#loginPassword, #loginPassword2');
+    const inputs = document.querySelectorAll('#loginPassword');
     inputs.forEach((input) => { input.type = state.loginPasswordVisible ? 'text' : 'password'; });
     document.querySelectorAll('.login-eye').forEach((eye) => {
       eye.setAttribute('aria-label', state.loginPasswordVisible ? '隐藏密码' : '显示密码');
@@ -4638,34 +5376,89 @@ document.addEventListener('click', async (event) => {
     event.preventDefault();
     return adminLogin();
   }
-  if (action === 'adminMarkPaid') {
-    const response = await adminFetch(`/api/admin/orders/${el.dataset.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'paid' })
+  if (action === 'adminConfirmPayment') {
+    const order = adminOrders().find((o) => o.id === el.dataset.id);
+    if (!order) return notify('订单不存在');
+    return openAdminModal({
+      kind: 'confirmPayment',
+      title: '人工确认到账',
+      desc: `订单 ${order.orderNo}，应付 ${formatUsdt(order.payAmount || order.amountUsdt)} USDT。无 txHash 时必须填写原因；金额不一致也必须填写原因。`,
+      danger: true,
+      submitLabel: '确认到账',
+      context: { id: order.id, amount: order.payAmount || order.amountUsdt },
+      fields: [
+        { name: 'txHash', label: '交易 Hash', placeholder: '链上 txHash，可留空' },
+        { name: 'amount', label: '到账金额 USDT', value: formatUsdt(order.payAmount || order.amountUsdt) },
+        { name: 'fromAddress', label: '付款地址', placeholder: '可选' },
+        { name: 'reason', label: '确认原因', type: 'textarea', placeholder: 'TronGrid 未自动匹配，人工核验到账' }
+      ]
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) return notify(result.error || '更新订单状态失败');
-    const order = normalizeServerOrder(result);
-    if (order) saveOrder(order);
-    state.adminData.orders = state.adminData.orders.map((item) => (item.id === result.id ? result : item));
-    notify('已标记为已支付');
-    return renderAdmin();
   }
   if (action === 'adminDeliver') {
-    const deliveryContent = prompt('请输入要发给用户的完整发货内容（任意格式，系统会加密保存并发送邮件）');
-    if (!deliveryContent || !deliveryContent.trim()) return notify('已取消人工发货');
-    const response = await adminFetch(`/api/admin/orders/${el.dataset.id}/manual-deliver`, {
-      method: 'POST',
-      body: JSON.stringify({ operator: 'admin', deliveryContent: deliveryContent.trim() })
+    const order = adminOrders().find((o) => o.id === el.dataset.id);
+    const unpaid = order && !(order.paymentStatus === 'paid' || ['paid', 'delivering', 'completed'].includes(order.status));
+    return openAdminModal({
+      kind: 'manualDeliver',
+      title: '人工发货',
+      desc: unpaid ? '⚠ 该订单尚未支付，默认不可发货。如确需强制发货请勾选并谨慎操作。' : '发货内容将加密保存并发送邮件。',
+      danger: !!unpaid,
+      submitLabel: '确认发货',
+      context: { id: el.dataset.id, unpaid: !!unpaid },
+      fields: [
+        { name: 'deliveryContent', label: '发货内容', type: 'textarea', required: true, placeholder: '卡密 / 账号密码 / 充值结果等' },
+        ...(unpaid ? [{ name: 'force', label: '强制发货未支付订单（输入 force 确认）', placeholder: 'force' }] : [])
+      ]
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) return notify(result.error || '手动补发失败');
-    const order = normalizeServerOrder(result.order);
-    if (order) saveOrder(order);
-    if (result.order) state.adminData.orders = state.adminData.orders.map((item) => (item.id === result.order.id ? result.order : item));
-    if (result.delivery) state.adminData.deliveries.unshift(result.delivery);
-    notify('已写入手动补发记录');
+  }
+  if (action === 'adminOrderDetail') {
+    state.adminDetail = { kind: 'order', id: el.dataset.id, loading: true, error: '', data: null };
+    renderAdmin();
+    try {
+      const response = await adminFetch(`/api/admin/orders/${el.dataset.id}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) state.adminDetail.error = data.error || '加载失败';
+      else state.adminDetail.data = data;
+    } catch (err) {
+      state.adminDetail.error = err?.message || '加载失败';
+    }
+    state.adminDetail.loading = false;
     return renderAdmin();
+  }
+  if (action === 'adminDetailClose') {
+    state.adminDetail = { kind: '', id: '', loading: false, error: '', data: null };
+    return renderAdmin();
+  }
+  if (action === 'adminOrderTab') {
+    state.adminOrderTab = el.dataset.orderTab || 'all';
+    await loadAdminPage('orders', { page: 1, force: true });
+    return renderAdmin();
+  }
+  if (action === 'adminPage') {
+    const kind = el.dataset.kind;
+    const page = Number(el.dataset.page);
+    if (!kind || !Number.isFinite(page) || page < 1) return;
+    await loadAdminPage(kind, { page, force: true });
+    return renderAdmin();
+  }
+  if (action === 'adminDashboardJump') {
+    const target = el.dataset.target || '';
+    const [tabKey, subKey] = target.split(':');
+    state.adminTab = tabKey;
+    if (subKey) { state.adminSubTabs[tabKey] = subKey; }
+    if (tabKey === 'orders' && el.dataset.orderTab) state.adminOrderTab = el.dataset.orderTab;
+    persist();
+    return renderAdmin();
+  }
+  if (action === 'adminReloadDashboard') {
+    await loadAdminDashboard(true);
+    return renderAdmin();
+  }
+  if (action === 'adminModalClose') {
+    return closeAdminModal();
+  }
+  if (action === 'adminModalSubmit') {
+    event.preventDefault();
+    return submitAdminModal(el.closest('form') || el);
   }
   if (action === 'adminReplyTicket') {
     const content = prompt('请输入客服回复或内部备注');
@@ -4696,17 +5489,28 @@ document.addEventListener('click', async (event) => {
     return renderAdmin();
   }
   if (action === 'adminToggleNetwork') {
-    const network = networks.find((n) => n.code === el.dataset.code) || state.adminData.paymentNetworks.find((n) => n.code === el.dataset.code);
-    const nextEnabled = !network.enabled;
-    const response = await adminFetch(`/api/admin/payment-networks/${network.code}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isEnabled: nextEnabled })
-    });
+    const network = adminNetworks().find((n) => n.code === el.dataset.code);
+    if (!network) return notify('支付网络不存在');
+    const enabled = network.enabled ?? network.isEnabled;
+    if (enabled) {
+      // 关闭支付网络是高风险操作，需二次确认
+      return openAdminModal({
+        kind: 'toggleNetwork',
+        title: '关闭支付网络',
+        desc: `关闭 ${network.code} 后用户将无法通过该网络下单/支付，请谨慎操作。将写入审计。`,
+        danger: true,
+        submitLabel: '确认关闭',
+        context: { code: network.code, nextEnabled: false },
+        confirm: { requireText: '确认关闭' },
+        fields: []
+      });
+    }
+    const response = await adminFetch(`/api/admin/payment-networks/${network.code}`, { method: 'PATCH', body: JSON.stringify({ isEnabled: true }) });
     const updated = await response.json().catch(() => ({}));
     if (!response.ok) return notify(updated.error || '支付网络更新失败');
-    syncLocalNetwork(network, updated);
+    syncLocalNetwork(networks.find((n) => n.code === network.code), updated);
     state.adminData.paymentNetworks = state.adminData.paymentNetworks.map((item) => (item.code === updated.code ? updated : item));
-    notify(network.enabled ? '支付网络已启用' : '支付网络已关闭');
+    notify('支付网络已启用');
     return renderAdmin();
   }
   if (action === 'adminRecommendNetwork') {
@@ -4721,6 +5525,225 @@ document.addEventListener('click', async (event) => {
     state.adminData.paymentNetworks = state.adminData.paymentNetworks.map((item) => ({ ...item, isRecommended: item.code === updated.code }));
     notify('推荐支付网络已更新');
     return renderAdmin();
+  }
+  if (action === 'adminInventoryReveal') {
+    return openAdminModal({
+      kind: 'inventoryReveal',
+      title: '查看库存明文',
+      desc: '查看明文属于高风险操作，将写入审计日志。请填写查看原因。',
+      danger: true,
+      submitLabel: '确认查看',
+      context: { id: el.dataset.id },
+      fields: [{ name: 'reason', label: '查看原因', type: 'textarea', required: true, placeholder: '核对发货内容 / 处理售后等' }]
+    });
+  }
+  if (action === 'adminInventoryRevoke') {
+    return openAdminModal({
+      kind: 'inventoryRevoke',
+      title: '作废库存',
+      desc: `作废后该库存不会再被自动发货领取。仅可作废 available / reserved 状态。`,
+      danger: true,
+      submitLabel: '确认作废',
+      context: { id: el.dataset.id },
+      confirm: { requireText: '作废' },
+      fields: [
+        { name: 'masked', label: '库存', type: 'static', value: el.dataset.masked || '' },
+        { name: 'remark', label: '作废备注', type: 'textarea', placeholder: '可选' }
+      ]
+    });
+  }
+  if (action === 'adminPaymentBind') {
+    return openAdminModal({
+      kind: 'paymentBind',
+      title: '人工绑定订单',
+      desc: '将该到账交易绑定到指定订单并标记已支付。txHash 不可重复绑定多个订单。',
+      submitLabel: '确认绑定',
+      context: { id: el.dataset.id },
+      fields: [
+        { name: 'tx', label: '交易 Hash', type: 'static', value: el.dataset.tx || '' },
+        { name: 'orderId', label: '订单 ID', required: true, placeholder: '粘贴订单 id（详情页可复制）' },
+        { name: 'reason', label: '绑定原因', type: 'textarea', required: true, placeholder: '人工核验金额与到账一致' }
+      ]
+    });
+  }
+  if (action === 'adminPaymentIgnore') {
+    return openAdminModal({
+      kind: 'paymentIgnore',
+      title: '忽略支付异常',
+      desc: '标记该异常为已忽略，将写入审计。',
+      danger: true,
+      submitLabel: '确认忽略',
+      context: { id: el.dataset.id },
+      fields: [{ name: 'reason', label: '忽略原因', type: 'textarea', required: true, placeholder: '测试转账 / 重复检测等' }]
+    });
+  }
+  if (action === 'adminRescanPayments') {
+    notify('正在触发链上重扫…');
+    try {
+      const response = await adminFetch('/api/admin/payment-transactions/rescan', { method: 'POST', body: '{}' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.error || '重扫失败');
+      notify(`重扫完成：检查 ${data.checked||0}，匹配 ${data.matched||0}，异常 ${data.exceptions||0}${data.error ? '（'+data.error+'）' : ''}`);
+      await loadAdminPage('transactions', { force: true });
+      return renderAdmin();
+    } catch (err) {
+      return notify(err?.message || '重扫失败');
+    }
+  }
+  if (action === 'adminEditConfirmations') {
+    return openAdminModal({
+      kind: 'editConfirmations',
+      title: '修改确认数',
+      desc: '确认数影响链上到账判定，属于高风险配置，将写入审计。',
+      danger: true,
+      submitLabel: '保存确认数',
+      context: { code: el.dataset.code },
+      confirm: { requireText: '确认修改' },
+      fields: [{ name: 'confirmations', label: '确认数', type: 'number', required: true, value: el.dataset.confirmations || '3' }]
+    });
+  }
+  if (action === 'adminProductEdit') {
+    state.adminProductEditId = el.dataset.id;
+    state.adminSubTabs.products = 'edit';
+    persist();
+    return renderAdmin();
+  }
+  if (action === 'adminProductCreate') {
+    return openAdminModal({
+      kind: 'productCreate',
+      title: '新增商品',
+      desc: '创建后可在编辑页补充 SKU、文案和购买字段。价格以 USDT 结算。',
+      submitLabel: '创建商品',
+      fields: [
+        { name: 'name', label: '商品名称', required: true },
+        { name: 'slug', label: 'Slug', required: true, placeholder: '小写字母数字与连字符，如 apple-gift-card' },
+        { name: 'categoryId', label: '分类', placeholder: 'social / game / software ...', value: 'more' },
+        { name: 'productType', label: '商品类型', type: 'select', value: 'subscription', options: [{label:'订阅 subscription',value:'subscription'},{label:'礼品卡/卡密 card',value:'card'},{label:'账号 account',value:'account'},{label:'充值 recharge',value:'recharge'},{label:'服务 service',value:'service'}] },
+        { name: 'deliveryType', label: '发货方式', type: 'select', value: 'manual', options: [{label:'自动 auto',value:'auto'},{label:'人工 manual',value:'manual'},{label:'部分自动 mixed',value:'mixed'}] }
+      ]
+    });
+  }
+  if (action === 'adminSelectEditProduct') {
+    return; // 由 change 事件处理
+  }
+  if (action === 'adminSkuCreate') {
+    const pid = el.dataset.product || state.adminProductEditId || (adminProducts()[0]?.id || '');
+    return openAdminModal({
+      kind: 'skuCreate',
+      title: '新建 SKU',
+      desc: '价格以 USDT 结算。规格 JSON 形如 {"duration":"1个月"}。',
+      submitLabel: '创建 SKU',
+      context: { productId: pid },
+      fields: [
+        { name: 'productId', label: '商品 ID', required: true, value: pid },
+        { name: 'optionValues', label: '规格 JSON', type: 'textarea', value: '{}', placeholder: '{"region":"Global","duration":"1个月"}' },
+        { name: 'priceUsdt', label: '价格 USDT', required: true, placeholder: '1.80' },
+        { name: 'deliveryType', label: '发货方式', type: 'select', value: 'manual', options: [{label:'自动 auto',value:'auto'},{label:'人工 manual',value:'manual'},{label:'部分自动 mixed',value:'mixed'}] },
+        { name: 'stockStatus', label: '库存状态', type: 'select', value: 'in_stock', options: [{label:'有货 in_stock',value:'in_stock'},{label:'紧张 low_stock',value:'low_stock'},{label:'售罄 sold_out',value:'sold_out'}] }
+      ]
+    });
+  }
+  if (action === 'adminSkuEdit') {
+    const product = adminProducts().find((p) => p.id === el.dataset.product);
+    const sku = (product?.skus || []).find((s) => s.id === el.dataset.id) || adminProducts().flatMap((p) => p.skus || []).find((s) => s.id === el.dataset.id);
+    if (!sku) return notify('SKU 不存在');
+    return openAdminModal({
+      kind: 'skuEdit',
+      title: '编辑 SKU',
+      desc: '价格以 USDT 结算。',
+      submitLabel: '保存 SKU',
+      context: { id: sku.id },
+      fields: [
+        { name: 'priceUsdt', label: '价格 USDT', required: true, value: Number(sku.priceUsdt || 0).toFixed(2) },
+        { name: 'optionValues', label: '规格 JSON', type: 'textarea', value: JSON.stringify(sku.optionValues || {}) },
+        { name: 'deliveryType', label: '发货方式', type: 'select', value: sku.deliveryType || 'manual', options: [{label:'自动 auto',value:'auto'},{label:'人工 manual',value:'manual'},{label:'部分自动 mixed',value:'mixed'}] },
+        { name: 'stockStatus', label: '库存状态', type: 'select', value: sku.stockStatus || 'in_stock', options: [{label:'有货 in_stock',value:'in_stock'},{label:'紧张 low_stock',value:'low_stock'},{label:'售罄 sold_out',value:'sold_out'}] },
+        { name: 'warningStock', label: '预警值', type: 'number', value: String(sku.warningStock ?? 5) },
+        { name: 'isRecommended', label: '推荐', type: 'select', value: sku.isRecommended ? '1' : '0', options: [{label:'否',value:'0'},{label:'是',value:'1'}] }
+      ]
+    });
+  }
+  if (action === 'adminSkuBatchPrice') {
+    return openAdminModal({
+      kind: 'skuBatchPrice',
+      title: '批量改价',
+      desc: '对选定商品下所有 SKU 统一调整价格（USDT）。',
+      submitLabel: '应用改价',
+      fields: [
+        { name: 'productId', label: '商品', type: 'select', required: true, options: adminProducts().map((p) => ({ label: p.name, value: p.id })) },
+        { name: 'mode', label: '方式', type: 'select', value: 'set', options: [{label:'设为固定价',value:'set'},{label:'按百分比涨跌(%)',value:'percent'}] },
+        { name: 'value', label: '数值', required: true, placeholder: 'set: 2.00 / percent: 10 或 -10' }
+      ]
+    });
+  }
+  if (action === 'adminSkuBatchStatus') {
+    return openAdminModal({
+      kind: 'skuBatchStatus',
+      title: '批量上下架/售罄',
+      desc: '批量设置选定商品下所有 SKU 的库存状态。',
+      submitLabel: '应用',
+      fields: [
+        { name: 'productId', label: '商品', type: 'select', required: true, options: adminProducts().map((p) => ({ label: p.name, value: p.id })) },
+        { name: 'stockStatus', label: '库存状态', type: 'select', value: 'in_stock', options: [{label:'有货 in_stock',value:'in_stock'},{label:'售罄 sold_out',value:'sold_out'},{label:'紧张 low_stock',value:'low_stock'}] }
+      ]
+    });
+  }
+  if (action === 'adminGoImport') {
+    state.adminTab = 'inventory';
+    state.adminSubTabs.inventory = 'import';
+    persist();
+    return renderAdmin();
+  }
+  if (action === 'adminUserDetail') {
+    state.adminDetail = { kind: 'user', id: el.dataset.id, loading: true, error: '', data: null };
+    renderAdmin();
+    try {
+      const response = await adminFetch(`/api/admin/users/${encodeURIComponent(el.dataset.id)}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) state.adminDetail.error = data.error || '加载失败';
+      else state.adminDetail.data = data;
+    } catch (err) {
+      state.adminDetail.error = err?.message || '加载失败';
+    }
+    state.adminDetail.loading = false;
+    return renderAdmin();
+  }
+  if (action === 'adminUserBlacklist') {
+    return openAdminModal({
+      kind: 'blacklistCreate',
+      title: '加入黑名单',
+      desc: '命中 block_order 的用户将无法下单。',
+      danger: true,
+      submitLabel: '加入黑名单',
+      fields: [
+        { name: 'kind', label: '类型', type: 'select', value: 'email', options: [{label:'邮箱',value:'email'},{label:'Telegram 用户名',value:'telegram_username'}] },
+        { name: 'value', label: '拉黑值', required: true, value: el.dataset.email || '' },
+        { name: 'effect', label: '效果', type: 'select', value: 'block_order', options: [{label:'拒绝下单 block_order',value:'block_order'},{label:'需人工审核 require_manual_review',value:'require_manual_review'},{label:'拒绝支付 block_payment',value:'block_payment'}] },
+        { name: 'reason', label: '原因', required: true, placeholder: '风险原因' }
+      ]
+    });
+  }
+  if (action === 'adminBlacklistToggle') {
+    const response = await adminFetch(`/api/admin/blacklists/${el.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: el.dataset.status }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(data.error || '操作失败');
+    await loadAdminData(true);
+    notify(el.dataset.status === 'active' ? '已启用黑名单' : '已停用黑名单');
+    return renderAdmin();
+  }
+  if (action === 'adminBlacklistHits') {
+    state.adminDetail = { kind: 'blacklistHits', id: el.dataset.id, loading: true, error: '', data: null };
+    try {
+      const response = await adminFetch(`/api/admin/blacklists/${el.dataset.id}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.error || '加载失败');
+      const count = (data.hits || []).length;
+      notify(`该黑名单命中 ${count} 笔订单${count ? '：' + data.hits.slice(0, 3).map((o) => o.orderNo).join(', ') : ''}`);
+    } catch (err) {
+      notify(err?.message || '加载失败');
+    }
+    state.adminDetail = { kind: '', id: '', loading: false, error: '', data: null };
+    return;
   }
   if (action === 'home') { navigate('/'); }
   if (action === 'revealSecret') { document.querySelector('.secret').classList.add('revealed'); notify('完整交付内容已解锁'); }
@@ -4821,6 +5844,42 @@ document.addEventListener('submit', async (event) => {
     notify('USDT TRC20 收款地址已更新');
     return renderAdmin();
   }
+  const productBaseForm = event.target.closest('[data-action="adminProductBase"]');
+  if (productBaseForm) {
+    event.preventDefault();
+    const id = productBaseForm.dataset.id;
+    if (!id) return notify('请先选择商品');
+    const data = new FormData(productBaseForm);
+    const payload = {
+      name: data.get('name') || '',
+      slug: data.get('slug') || '',
+      categoryId: data.get('categoryId') || 'more',
+      productType: data.get('productType') || 'subscription',
+      deliveryType: data.get('deliveryType') || 'manual',
+      status: data.get('status') || 'active',
+      isHomeVisible: !!data.get('isHomeVisible'),
+      isRecommended: !!data.get('isRecommended')
+    };
+    const response = await adminFetch(`/api/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    const updated = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(updated.error || '基础信息保存失败');
+    await loadAdminData(true);
+    notify('商品基础信息已保存');
+    return renderAdmin();
+  }
+  const blacklistForm = event.target.closest('[data-action="adminBlacklistCreate"]');
+  if (blacklistForm) {
+    event.preventDefault();
+    const data = new FormData(blacklistForm);
+    const value = String(data.get('value') || '').trim();
+    if (!value) return notify('请填写拉黑值');
+    const response = await adminFetch('/api/admin/ops', { method: 'POST', body: JSON.stringify({ action: 'blacklist.create', kind: data.get('kind'), value, effect: data.get('effect'), reason: data.get('reason') || '风险用户', status: 'active' }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(result.error || '加入黑名单失败');
+    state.adminData.ops = result;
+    notify('已加入黑名单');
+    return renderAdmin();
+  }
   const form = event.target.closest('[data-action="adminOps"]');
   if (!form) return;
   event.preventDefault();
@@ -4833,6 +5892,10 @@ document.addEventListener('change', (event) => {
   const action = el.dataset.action;
   if (action === 'adminFilter') {
     setAdminFilter(el.dataset.filterScope || adminFilterScope(), el.name, el.value);
+    return reloadAdminAfterFilter();
+  }
+  if (action === 'adminSelectEditProduct') {
+    state.adminProductEditId = el.value;
     return renderAdmin();
   }
   if (action === 'quickProduct') { state.selectedProductId = event.target.value; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }

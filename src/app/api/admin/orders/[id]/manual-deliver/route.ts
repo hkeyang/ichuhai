@@ -50,11 +50,13 @@ export async function POST(
       channel?: unknown;
       maskedContent?: unknown;
       deliveryContent?: unknown;
+      force?: unknown;
     }>(request);
 
     const method = String(body.method ?? "manual").trim();
     const operator = String(body.operator ?? "admin").trim();
     const channel = Array.isArray(body.channel) ? body.channel : ["email"];
+    const force = body.force === true || body.force === "true";
     const deliveryContent = String(body.deliveryContent ?? body.maskedContent ?? "").trim();
     if (!deliveryContent) throw new HttpError(422, "deliveryContent is required");
     if (deliveryContent.length > 4000) throw new HttpError(422, "deliveryContent is too long");
@@ -71,6 +73,13 @@ export async function POST(
       .first<OrderRow>();
 
     if (!order) throw new HttpError(404, "order not found");
+
+    // 2. 发货前置校验：仅允许对已支付 / 发货中 / 人工介入订单发货。
+    //    未支付订单默认禁止人工发货，除非显式 force（前端需二次确认）。
+    const isPaid = order.payment_status === "paid" || ["paid", "delivering", "completed"].includes(order.status);
+    if (!isPaid && !force) {
+      throw new HttpError(409, "订单尚未支付，默认不可人工发货；如确需发货请使用强制发货并二次确认");
+    }
 
     // 2. UPDATE orders SET status='completed', delivered_at=datetime('now')
     await db
@@ -159,7 +168,7 @@ export async function POST(
           "order.manual_deliver",
           "order",
           id,
-          { deliveryId, method, operator, channel }
+          { deliveryId, method, operator, channel, force, orderStatus: order.status, paymentStatus: order.payment_status }
         );
       } catch {
         // 审计日志写入失败不影响主流程

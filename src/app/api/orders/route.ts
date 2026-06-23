@@ -8,6 +8,7 @@ import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
+import { checkBlacklist } from "@/lib/api/blacklist";
 import { sendOrderCreatedEmail } from "@/lib/api/mailer";
 import {
   allocatePaymentAmount,
@@ -104,6 +105,37 @@ export async function POST(request: Request) {
     ) {
       throw new HttpError(422, "invalid email");
     }
+
+    // 7.5 黑名单拦截：命中 block_order/block_payment 拒绝下单；命中 require_manual_review 创建但标记风险。
+    const clientIp =
+      request.headers.get("cf-connecting-ip") ||
+      (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+      "";
+    const blacklistHits = await checkBlacklist(db, {
+      telegramUsername: rawTelegramUsername,
+      email: rawEmail,
+      ip: clientIp,
+    });
+    const blockingHit = blacklistHits.find(
+      (hit) => hit.effect === "block_order" || hit.effect === "block_payment"
+    );
+    if (blockingHit) {
+      try {
+        await writeAuditLog(
+          db,
+          request,
+          { actorId: rawTelegramUsername || rawEmail || clientIp || "anonymous", role: "customer" },
+          "order.blocked_blacklist",
+          "blacklist",
+          blockingHit.id,
+          { kind: blockingHit.kind, value: blockingHit.value, effect: blockingHit.effect, email: rawEmail, telegramUsername: rawTelegramUsername }
+        );
+      } catch {
+        // 审计失败不影响拦截
+      }
+      throw new HttpError(403, "当前账户暂时无法下单，请联系客服");
+    }
+    const requiresManualReview = blacklistHits.some((hit) => hit.effect === "require_manual_review");
 
     // 8. 确定 fiatCurrency 和汇率
     const rateRow = await db
@@ -222,6 +254,20 @@ export async function POST(request: Request) {
         paymentProvider, providerPaymentId, providerPaymentStatus, providerPaymentUrl, JSON.stringify(providerPayload)
       )
       .run();
+
+    // 命中 require_manual_review：订单照常创建，但标记风险备注，便于后台人工审核
+    if (requiresManualReview) {
+      try {
+        await db
+          .prepare(
+            "UPDATE orders SET admin_note = ?, after_sale_status = 'open', updated_at = datetime('now') WHERE id = ?"
+          )
+          .bind("命中黑名单 require_manual_review，需人工审核", orderId)
+          .run();
+      } catch {
+        // 标记失败不影响下单
+      }
+    }
 
     // 15. 异步发送订单确认邮件（fire-and-forget，不 await 阻塞）
     // 构建一个最小 OrderRow 用于邮件发送

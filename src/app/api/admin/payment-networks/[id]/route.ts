@@ -125,6 +125,10 @@ export async function PATCH(
         changedFields: Object.keys(body),
         previousAddress: body.address !== undefined ? existing.address : undefined,
         nextAddress: body.address !== undefined ? updated?.address : undefined,
+        previousEnabled: body.isEnabled !== undefined ? existing.is_enabled === 1 : undefined,
+        nextEnabled: body.isEnabled !== undefined ? updated?.is_enabled === 1 : undefined,
+        previousConfirmations: body.confirmations !== undefined ? existing.confirmations : undefined,
+        nextConfirmations: body.confirmations !== undefined ? updated?.confirmations : undefined,
       }
     );
 

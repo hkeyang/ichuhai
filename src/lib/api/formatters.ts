@@ -1,9 +1,12 @@
 import type {
   AuditLogRow,
+  BlacklistRow,
   DeliveryRow,
+  InventoryItemRow,
   NotificationRow,
   OrderRow,
   PaymentNetworkRow,
+  PaymentTransactionRow,
   ProductRow,
   SkuRow,
   SupportTicketRow,
@@ -38,6 +41,9 @@ export function formatProduct(product: ProductRow) {
     status: product.status,
     deliveryType: product.delivery_type,
     baseCurrency: product.base_currency,
+    isHomeVisible: (product.is_home_visible ?? 1) === 1,
+    isRecommended: (product.is_recommended ?? 0) === 1,
+    sortOrder: product.sort_order ?? 0,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
   };
@@ -47,13 +53,17 @@ export function formatSku(sku: SkuRow) {
   return {
     id: sku.id,
     productId: sku.product_id,
+    skuName: sku.sku_name ?? null,
     optionValues: parseJson<Record<string, string>>(sku.option_values, {}),
     priceUsdt: sku.price_usdt,
     stockStatus: sku.stock_status,
     stockQuantity: sku.stock_quantity,
+    warningStock: sku.warning_stock ?? 5,
     deliveryType: sku.delivery_type,
     isDefault: sku.is_default === 1,
     isRecommended: sku.is_recommended === 1,
+    disabledReason: sku.disabled_reason ?? null,
+    sortOrder: sku.sort_order ?? 0,
     createdAt: sku.created_at,
     updatedAt: sku.updated_at,
   };
@@ -88,6 +98,7 @@ export function formatOrder(order: OrderRow) {
     telegramUsername: order.telegram_username,
     email: order.email,
     amountUsdt: order.amount_usdt,
+    quantity: order.quantity ?? 1,
     fiatCurrency: order.fiat_currency,
     fiatAmountSnapshot: order.fiat_amount_snapshot,
     exchangeRateSnapshot: order.exchange_rate_snapshot,
@@ -95,6 +106,10 @@ export function formatOrder(order: OrderRow) {
     paymentNetwork: order.payment_network,
     paymentAddress: order.payment_address,
     status: order.status,
+    paymentStatus: order.payment_status ?? "unpaid",
+    deliveryStatus: order.delivery_status ?? "undelivered",
+    afterSaleStatus: order.after_sale_status ?? "none",
+    userInput: parseJson<Record<string, unknown>>(order.user_input_json, {}),
     txHash: order.tx_hash,
     paidAt: order.paid_at,
     deliveredAt: order.delivered_at,
@@ -164,5 +179,65 @@ export function formatAuditLog(log: AuditLogRow) {
     userAgent: log.user_agent,
     metadata: parseJson<Record<string, unknown>>(log.metadata, {}),
     createdAt: log.created_at,
+  };
+}
+
+export function formatInventoryItem(
+  item: InventoryItemRow & {
+    product_name?: string | null;
+    sku_product_id?: string | null;
+    order_no?: string | null;
+  }
+) {
+  return {
+    id: item.id,
+    skuId: item.sku_id,
+    productId: item.product_id ?? item.sku_product_id ?? null,
+    productName: item.product_name ?? null,
+    type: item.type ?? "card",
+    maskedValue: item.masked_value,
+    status: item.status,
+    orderId: item.order_id ?? null,
+    orderNo: item.order_no ?? null,
+    importBatchId: item.import_batch_id ?? null,
+    remark: item.remark ?? null,
+    lockedAt: item.locked_at ?? null,
+    soldAt: item.sold_at ?? null,
+    createdAt: item.created_at,
+  };
+}
+
+export function formatPaymentTransaction(tx: PaymentTransactionRow) {
+  return {
+    id: tx.id,
+    txHash: tx.tx_hash,
+    network: tx.network,
+    token: tx.token,
+    fromAddress: tx.from_address,
+    toAddress: tx.to_address,
+    amount: tx.amount,
+    confirmations: tx.confirmations,
+    matchedOrderId: tx.matched_order_id,
+    matchedOrderNo: tx.matched_order_no,
+    matchStatus: tx.match_status,
+    exceptionType: tx.exception_type ?? null,
+    detectedAt: tx.detected_at,
+    confirmedAt: tx.confirmed_at,
+    note: tx.note,
+    createdAt: tx.created_at,
+    updatedAt: tx.updated_at,
+  };
+}
+
+export function formatBlacklist(row: BlacklistRow) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    value: row.value,
+    reason: row.reason,
+    effect: row.effect,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

@@ -17,6 +17,9 @@ export interface ProductRow {
   status: "active" | "hidden" | "archived";
   delivery_type: "auto" | "manual" | "mixed";
   base_currency: string;
+  is_home_visible?: number | null;
+  is_recommended?: number | null;
+  sort_order?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +34,10 @@ export interface SkuRow {
   delivery_type: "auto" | "manual" | "mixed";
   is_default: number; // SQLite boolean (0 | 1)
   is_recommended: number; // SQLite boolean (0 | 1)
+  sku_name?: string | null;
+  warning_stock?: number | null;
+  disabled_reason?: string | null;
+  sort_order?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +78,11 @@ export interface OrderRow {
   delivered_at: string | null;
   admin_note: string | null;
   expires_at: string;
+  quantity?: number | null;
+  payment_status?: string | null;
+  delivery_status?: string | null;
+  after_sale_status?: string | null;
+  user_input_json?: string | null;
   payment_provider?: string | null;
   provider_payment_id?: string | null;
   provider_payment_status?: string | null;
@@ -142,9 +154,46 @@ export interface AuditLogRow {
 export interface InventoryItemRow {
   id: string;
   sku_id: string;
+  product_id?: string | null;
+  type?: string | null;
   masked_value: string;
   encrypted_value: string;
   status: "available" | "reserved" | "delivered" | "revoked";
   order_id: string | null;
+  import_batch_id?: string | null;
+  remark?: string | null;
+  locked_at?: string | null;
+  sold_at?: string | null;
   created_at: string;
+}
+
+export interface PaymentTransactionRow {
+  id: string;
+  tx_hash: string;
+  network: string;
+  token: string;
+  from_address: string | null;
+  to_address: string;
+  amount: string;
+  confirmations: number;
+  matched_order_id: string | null;
+  matched_order_no: string | null;
+  match_status: string;
+  exception_type?: string | null;
+  detected_at: string;
+  confirmed_at: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlacklistRow {
+  id: string;
+  kind: string;
+  value: string;
+  reason: string;
+  effect: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
 }
