@@ -1855,6 +1855,13 @@ function productBrowser(full = false) {
             <label class="catalog-sort"><span class="sort-current">${escapeHtml(state.sortBy || '默认排序')}</span>${lineIcon('chevron', '展开排序', 'sort-chevron')}<select data-action="sortProducts" aria-label="排序"><option>默认排序</option><option ${state.sortBy === '价格低到高' ? 'selected' : ''}>价格低到高</option></select></label>
           </div>
         </div>
+        <div class="catalog-list-head" aria-hidden="true">
+          <span class="col-info">商品信息</span>
+          <span class="col-delivery">发货方式</span>
+          <span class="col-price">价格</span>
+          <span class="col-stock">库存/销量</span>
+          <span class="col-buy">操作</span>
+        </div>
         <div class="catalog-list" role="list" aria-label="商品列表">
           ${visible.length ? visible.map(card).join('') : '<div class="empty-state">暂无匹配商品</div>'}
         </div>
@@ -2007,7 +2014,7 @@ function skuSpecSummary(item) {
     if (key === 'duration' && displayValues.every((value) => /^\d+个月$/.test(value))) {
       return displayValues.map((value) => value.replace('个月', '')).join('/') + '个月';
     }
-    return displayValues.slice(0, 4).join(' / ');
+    return displayValues.slice(0, 4).join(' · ');
   }).filter(Boolean);
   return pieces.join(' · ');
 }
@@ -2015,11 +2022,10 @@ function skuSpecSummary(item) {
 function card(item) {
   const sku = findSku(item, defaultOptions(item)) || item.skus[0];
   const spec = skuSpecSummary(item);
-  const deliveryClass = item.deliveryType === 'auto' ? 'auto' : item.deliveryType === 'mixed' ? 'mixed' : 'manual';
+  const deliveryAuto = item.deliveryType === 'auto' || item.deliveryType === 'mixed';
+  const deliveryClass = deliveryAuto ? 'auto' : 'manual';
   const stock = sku.stockStatus || sku.stock;
   const sold = Math.max(176, Math.round((item.name.length * 137 + Number(sku.priceUsdt || 1) * 89) % 3200));
-  const recommended = CORE_RECOMMENDED_PRODUCTS.has(item.slug);
-  const saleTag = CATALOG_SALE_TAGS[item.slug] || '官方授权';
   const minimumPrice = Number.isFinite(minSkuPrice(item)) ? minSkuPrice(item) : Number(sku.priceUsdt || 0);
   const hasMultiplePrices = (item.skus || []).length > 1;
   return `
@@ -2028,13 +2034,11 @@ function card(item) {
       <span class="catalog-card-info">
         <span class="catalog-card-title">
           <b>${escapeHtml(item.name)}</b>
-          ${recommended ? '<i class="catalog-badge">推荐</i>' : ''}
         </span>
         ${spec ? `<small class="catalog-card-spec">${escapeHtml(spec)}</small>` : ''}
-        <span class="catalog-tags">
-          <i class="delivery-chip ${deliveryClass}">${escapeHtml(deliveryLabel(item.deliveryType))}</i>
-          <i class="delivery-chip neutral">${escapeHtml(saleTag)}</i>
-        </span>
+      </span>
+      <span class="catalog-card-delivery">
+        <i class="delivery-chip ${deliveryClass}"><em class="delivery-dot">${deliveryAuto ? '⚡' : '🕒'}</em>${escapeHtml(deliveryAuto ? '自动发货' : '人工发货')}</i>
       </span>
       <span class="catalog-card-price">${priceFrom(minimumPrice, hasMultiplePrices)}</span>
       <span class="catalog-card-stock">

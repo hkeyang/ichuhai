@@ -15228,3 +15228,234 @@ button.danger-text {
   .admin-toolbar-actions button { flex: 1 1 auto; }
   .admin-sticky-col { position: static; box-shadow: none; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   首页改版（Linear/Stripe 风格视觉升级，去边框、增卡片感）
+   仅视觉，不改结构。作用域：.catalog-page 与全局顶栏。
+   ════════════════════════════════════════════════════════════ */
+
+/* 整体布局：收紧留白 */
+.catalog-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+.catalog-page .catalog-home { margin: 0; }
+.catalog-page .catalog-shell {
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 20px;
+}
+
+/* ── 顶部导航：去边框，圆角 + 轻阴影 ── */
+.topbar {
+  background: #fff !important;
+  border: none !important;
+  border-bottom: none !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04) !important;
+  border-radius: 20px;
+  margin: 16px auto 0;
+  max-width: 1440px;
+}
+.top-actions { gap: 6px; }
+/* 货币 / 通知 / 账户：统一 ghost 风格，无边框 */
+.top-actions .pill,
+.top-actions .currency-pill,
+.top-actions .icon-pill,
+.top-actions .account-trigger,
+.top-actions .telegram-pill {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+  transition: background .16s ease;
+}
+.top-actions .currency-pill { height: 40px; padding: 0 14px; }
+.message-center .icon-pill {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+.top-actions .account-trigger.logged-in {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  gap: 10px;
+}
+.top-actions .pill:hover,
+.top-actions .currency-pill:hover,
+.top-actions .icon-pill:hover,
+.top-actions .account-trigger:hover,
+.top-actions .telegram-pill:hover {
+  background: #f5f7fb !important;
+}
+
+/* ── 左侧分类侧栏：去厚边框，改轻卡片 ── */
+.catalog-page .catalog-sidebar {
+  border: none;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  backdrop-filter: none;
+  gap: 14px;
+}
+.catalog-page .catalog-category-list .category-tab {
+  min-height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  padding: 0 14px;
+}
+.catalog-page .catalog-category-list .category-tab:hover {
+  background: #f5f7fb;
+}
+.catalog-page .catalog-category-list .category-tab.active {
+  border: none;
+  background: rgba(99, 102, 241, .08);
+  color: #6366f1;
+}
+.catalog-page .catalog-category-list .category-tab.active .category-icon { color: #6366f1; }
+.catalog-page .catalog-category-list .category-tab em {
+  background: #f1f3f9;
+}
+
+/* ── 左下帮助区：浅底，无边框套边框 ── */
+.catalog-page .catalog-help-card {
+  border: none;
+  border-radius: 16px;
+  background: #f8f9fe;
+  padding: 16px;
+  gap: 12px;
+}
+.catalog-page .catalog-help-button {
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: #6366f1;
+  color: #fff;
+  box-shadow: none;
+}
+.catalog-page .catalog-help-button:hover { background: #5558e3; }
+.catalog-page .catalog-help-button.secondary {
+  height: 40px;
+  background: transparent;
+  color: #6366f1;
+  box-shadow: none;
+}
+.catalog-page .catalog-help-button.secondary:hover { background: rgba(99, 102, 241, .06); }
+
+/* ── 主区卡片：去厚边框 ── */
+.catalog-page .catalog-main {
+  border: none;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  backdrop-filter: none;
+  padding: 20px;
+}
+.catalog-page .product-header { margin-bottom: 20px; }
+
+/* ── 搜索 / 排序：52px、去边框、浅底、聚焦阴影 ── */
+.catalog-page .catalog-tools { gap: 12px; width: 100%; }
+.catalog-page .catalog-tools .search {
+  flex: 1 1 auto;
+  width: auto;
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  background: #f8f9fc;
+  transition: box-shadow .16s ease;
+}
+.catalog-page .catalog-tools .search:focus-within {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, .12);
+}
+.catalog-page .catalog-sort {
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  background: #f8f9fc;
+  padding: 0 16px;
+}
+
+/* ── 商品列表：表头 + 6 列网格 ── */
+.catalog-list-head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 132px 150px 132px 132px;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 20px 12px;
+  margin-top: 4px;
+  border-bottom: 1px solid #eef1f6;
+  color: #98a2b3;
+  font-size: 13px;
+  font-weight: 700;
+}
+.catalog-list-head .col-info { grid-column: 1 / 3; }
+.catalog-list-head .col-price,
+.catalog-list-head .col-stock,
+.catalog-list-head .col-delivery { justify-self: start; }
+.catalog-list-head .col-buy { justify-self: start; }
+.catalog-page .catalog-list { gap: 2px; padding-top: 4px; }
+
+/* ── 商品卡：去边框改阴影、紧凑行高 ── */
+.catalog-page .catalog-card {
+  grid-template-columns: 56px minmax(0, 1fr) 132px 150px 132px 132px;
+  gap: 18px;
+  min-height: 92px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 14px;
+  border-bottom: 1px solid #f2f4f8;
+  box-shadow: none;
+}
+.catalog-page .catalog-list .catalog-card:last-child { border-bottom: none; }
+.catalog-page .catalog-card:hover {
+  border-color: transparent;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .06);
+  background: #fff;
+}
+.catalog-page .catalog-card-media .product-icon { width: 52px; height: 52px; border-radius: 14px; }
+.catalog-page .catalog-card-title b { font-size: 18px; font-weight: 600; }
+.catalog-page .catalog-card-spec { margin-top: 4px; color: #667085; font-size: 13px; }
+
+/* 发货方式独立列 + badge 配色 */
+.catalog-card-delivery { display: flex; }
+.catalog-card-delivery .delivery-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 13px;
+}
+.catalog-card-delivery .delivery-chip .delivery-dot { font-style: normal; }
+.catalog-card-delivery .delivery-chip.auto { background: #ecfdf3; color: #12b76a; }
+.catalog-card-delivery .delivery-chip.manual { background: #fff7e6; color: #d97706; }
+
+/* 价格列 */
+.catalog-page .catalog-card-price .price-main { font-size: 17px; font-weight: 700; color: #101828; }
+.catalog-page .catalog-card-price .price-fiat { color: #98a2b3; font-size: 13px; }
+
+/* 购买按钮：紫色实心 */
+.catalog-page .catalog-card .buy-button {
+  width: auto;
+  min-height: 0;
+  height: 42px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 12px;
+  background: #6366f1;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: none;
+}
+.catalog-page .catalog-card:hover .buy-button { background: #5558e3; }
+
+@media (max-width: 960px) {
+  .catalog-page { padding: 16px; }
+  .catalog-list-head { display: none; }
+}
