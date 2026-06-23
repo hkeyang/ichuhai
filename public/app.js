@@ -3433,7 +3433,7 @@ function accountSections() {
   return [
     { key: 'orders', label: '我的订单', icon: 'receipt', desc: '查看和管理您的订单，追踪订单状态与售后进度。' },
     { key: 'wallet', label: '余额中心', icon: 'card', desc: '管理 USDT 余额、充值记录、消费流水和组合支付。' },
-    { key: 'support', label: '售后服务', icon: 'headset', desc: '提交工单，后台人工处理退款、补发和异常问题。' },
+    { key: 'support', label: '售后服务', icon: 'headset', desc: '如需对订单或充值相关问题发起售后申请，欢迎随时与我们联系。' },
     { key: 'profile', label: '账号设置', icon: 'shield-check', desc: '修改昵称、查看账号信息并管理登录安全。' },
     { key: 'help', label: '帮助中心', icon: 'more', desc: '查看购买、充值、TRC20 支付、发货和售后规则。' }
   ];
@@ -3446,6 +3446,7 @@ function accountSectionPanel(section) {
     wallet: accountWalletPanel,
     walletLedger: accountWalletLedgerPanel,
     support: accountSupportPanel,
+    supportDetail: accountSupportDetailPanel,
     profile: accountProfilePanel,
     security: accountSecurityPanel,
     notifications: accountNotificationsPanel,
@@ -3457,6 +3458,9 @@ function accountSectionPanel(section) {
 function accountSectionMeta(section) {
   if (section === 'walletLedger') {
     return { key: 'walletLedger', label: '全部流水', desc: '查看账户全部余额流水、充值记录与消费记录。' };
+  }
+  if (section === 'supportDetail') {
+    return { key: 'supportDetail', label: '售后详情', desc: '查看售后工单进度、问题描述与处理记录。' };
   }
   return accountSections().find((item) => item.key === section) || accountSections()[0];
 }
@@ -3603,20 +3607,102 @@ function accountWalletLedgerPanel() {
 }
 
 function accountSupportPanel() {
-  const tickets = JSON.parse(localStorage.getItem('gfTickets') || '[]');
-  return `<section class="support-layout">
-    <form class="member-panel support-form">
-      <h3>提交售后工单</h3>
-      <label>关联订单<select id="supportOrder">${accountDemoOrders().map((order) => `<option value="${order.orderNo}">${order.orderNo} · ${order.productName}</option>`).join('')}</select></label>
-      <label>问题类型<select id="supportType"><option>未收到内容</option><option>内容无法使用</option><option>账号异常</option><option>申请退款</option><option>其他问题</option></select></label>
-      <label>问题描述<textarea id="supportBody" placeholder="请描述问题，可补充截图凭证说明"></textarea></label>
-      <button class="primary" data-action="createSupportTicket" type="button">提交工单</button>
+  return `<section class="support-service-page">
+    <form class="support-apply-card">
+      <h3>发起售后申请</h3>
+      <label><span><i>*</i> 关联订单</span><select id="supportOrder"><option value="">请选择关联订单</option>${accountDemoOrders().map((order) => `<option value="${order.orderNo}">${order.orderNo}</option>`).join('')}</select></label>
+      <label><span><i>*</i> 问题类型</span><select id="supportType"><option value="">请选择问题类型</option><option>充值未到账</option><option>商品未到账</option><option>支付成功未到账</option><option>充值金额错误</option></select></label>
+      <label class="support-desc"><span><i>*</i> 问题描述</span><textarea id="supportBody" maxlength="500" placeholder="请详细描述您遇到的问题，以便我们更好地为您提供帮助（最多 500 字）"></textarea><em>0 / 500</em></label>
+      <button class="support-submit" data-action="createSupportTicket" type="button">提交申请</button>
+      <small>${lineIcon('warning', '提示', 'support-note-icon')} 提交后我们将在 24 小时内处理，请耐心等待。</small>
     </form>
-    <section class="member-panel">
-      <div class="section-toolbar"><b>我的工单</b><span>后台人工处理</span></div>
-      <div class="ticket-list">
-        ${tickets.length ? tickets.map((ticket) => `<article><b>${escapeHtml(ticket.ticketNo || ticket.id)}</b><span>${escapeHtml(ticket.type)} · ${escapeHtml(ticket.status || '待处理')}</span><p>${escapeHtml(ticket.description || '')}</p></article>`).join('') : '<p class="muted">暂无工单。提交后会显示待处理、处理中、等待用户回复、已解决等状态。</p>'}
+    <section class="support-record-card">
+      <h3>售后记录</h3>
+      <div class="support-record-table">
+        <div class="support-record-head"><span>工单号</span><span>关联订单</span><span>问题类型</span><span>提交时间</span><span>状态</span><span>操作</span></div>
+        ${accountSupportTickets().map((ticket) => `<div class="support-record-row">
+          <b>${escapeHtml(ticket.ticketNo)}</b>
+          <span>${escapeHtml(ticket.orderNo)}</span>
+          <span>${escapeHtml(ticket.type)}</span>
+          <time>${escapeHtml(ticket.createdAt)}</time>
+          <em class="${escapeHtml(ticket.tone)}">${escapeHtml(ticket.status)}</em>
+          <button data-action="openSupportDetail" data-ticket="${escapeHtml(ticket.ticketNo)}" type="button">查看详情</button>
+        </div>`).join('')}
       </div>
+      <section class="support-table-foot">
+        <span>共 4 条</span>
+        <div><button disabled type="button">‹</button><button class="active" disabled type="button">1</button><button disabled type="button">›</button></div>
+        <select><option>10 条/页</option></select>
+      </section>
+    </section>
+  </section>`;
+}
+
+function accountSupportTickets() {
+  return [
+    { ticketNo: 'AS202506020001', orderNo: 'CH202605028143218', type: '充值未到账', createdAt: '2025-06-02 16:22:31', status: '待处理', tone: 'pending' },
+    { ticketNo: 'AS202505310045', orderNo: 'CH20260527110836', type: '商品未到账', createdAt: '2025-05-31 11:08:20', status: '处理中', tone: 'processing' },
+    { ticketNo: 'AS202505280078', orderNo: 'CH20260525184231', type: '支付成功未到账', createdAt: '2025-05-28 18:43:06', status: '已解决', tone: 'resolved' },
+    { ticketNo: 'AS202505200033', orderNo: 'CH20260519153012', type: '充值金额错误', createdAt: '2025-05-20 15:31:44', status: '已解决', tone: 'resolved' }
+  ];
+}
+
+function accountSupportDetailPanel() {
+  const ticket = accountSupportTickets()[0];
+  return `<section class="support-detail-page">
+    <section class="support-detail-summary">
+      <div class="support-detail-kv">
+        ${[
+          ['工单号', ticket.ticketNo],
+          ['关联订单', ticket.orderNo],
+          ['提交时间', ticket.createdAt],
+          ['问题类型', ticket.type],
+          ['当前状态', `<em class="processing">处理中</em>`]
+        ].map(([label, value]) => `<p><span>${label}</span><b>${value}</b></p>`).join('')}
+      </div>
+      <div class="support-progress">
+        <div class="support-progress-line"></div>
+        ${[
+          ['✓', '已提交', '2025-06-02 16:22:31', 'done'],
+          ['2', '处理中', '2025-06-02 16:28:10', 'active'],
+          ['3', '已解决', '待完成', '']
+        ].map(([num, title, time, cls]) => `<div class="support-step ${cls}">
+          <i>${escapeHtml(num)}</i><b>${escapeHtml(title)}</b><span>${escapeHtml(time)}</span>
+        </div>`).join('')}
+      </div>
+    </section>
+    <section class="support-detail-grid">
+      <article class="support-info-card problem">
+        <h3>问题详情</h3>
+        <p>2025-06-02 16:15 左右使用支付宝完成充值，页面提示支付成功，<br>但余额中心尚未到账，请帮忙核实处理。</p>
+        <div><span>提交人</span><b>用户bitxyz</b></div>
+      </article>
+      <article class="support-info-card order">
+        <h3>关联订单信息</h3>
+        ${[
+          ['订单号', ticket.orderNo],
+          ['类型', '余额充值'],
+          ['支付方式', '支付宝'],
+          ['充值金额', '100 CNY'],
+          ['预计到账', '13.85 USDT']
+        ].map(([label, value]) => `<p><span>${label}</span><b>${value}</b></p>`).join('')}
+      </article>
+    </section>
+    <section class="support-process-card">
+      <h3>处理记录</h3>
+      ${[
+        ['check', '2025-06-02 16:22:31', '用户提交售后申请', 'submit'],
+        ['clock', '2025-06-02 16:28:10', '系统已受理，等待客服处理', 'system'],
+        ['headset', '2025-06-02 16:40:25', '客服回复：已为您核实支付记录，当前正在同步到账，请耐心等待。', 'reply']
+      ].map(([iconName, time, text, cls]) => `<div class="support-process-row ${cls}">
+        <i>${lineIcon(iconName, text, 'support-process-icon')}</i><time>${escapeHtml(time)}</time><b>${escapeHtml(text)}</b>
+      </div>`).join('')}
+    </section>
+    <section class="support-supplement-card">
+      <h3>补充说明</h3>
+      <textarea maxlength="500" placeholder="请补充更多信息，以便我们更快为您处理（最多 500 字）"></textarea>
+      <em>0/500</em>
+      <button data-action="accountDemoAction" data-message="补充说明会在真实工单接口接入后提交" type="button">提交补充说明</button>
     </section>
   </section>`;
 }
@@ -3740,7 +3826,7 @@ function account() {
           <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
         </div>
         <nav class="member-nav">
-          ${accountSections().map((item) => `<button class="${item.key === section || (item.key === 'wallet' && section === 'walletLedger') ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
+          ${accountSections().map((item) => `<button class="${item.key === section || (item.key === 'wallet' && section === 'walletLedger') || (item.key === 'support' && section === 'supportDetail') ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
         </nav>
         <button class="member-logout" data-action="logoutAccount" type="button">退出登录</button>
       </aside>
@@ -5661,6 +5747,11 @@ document.addEventListener('click', async (event) => {
     localStorage.setItem('gfTickets', JSON.stringify(tickets));
     addMessage('售后工单已提交', `${ticket.ticketNo} 已进入后台人工处理。`, 'support');
     notify(`售后工单已创建：${ticket.ticketNo}`);
+    return route();
+  }
+  if (action === 'openSupportDetail') {
+    state.accountSection = 'supportDetail';
+    persist();
     return route();
   }
   if (action === 'changePassword') {
