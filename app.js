@@ -74,6 +74,7 @@ const LINE_ICONS = {
   receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>',
   lightning: '<path d="m13 2-10 12h9l-1 8 10-12h-9z"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   qr: '<rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M16 16h.01"/><path d="M21 16h.01"/><path d="M16 21h.01"/><path d="M21 21h.01"/><path d="M18.5 18.5h.01"/>',
   warning: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
@@ -84,6 +85,7 @@ const LINE_ICONS = {
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
   bell: '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   telegram: '<path d="M22 3 2 10.5l6 2.2L18 6l-7.5 8.3.3 5.2 3-3.2 4.5 3.3z"/>',
   mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
@@ -3442,6 +3444,7 @@ function accountSectionPanel(section) {
     orders: accountOrdersPanel,
     content: accountContentPanel,
     wallet: accountWalletPanel,
+    walletLedger: accountWalletLedgerPanel,
     support: accountSupportPanel,
     profile: accountProfilePanel,
     security: accountSecurityPanel,
@@ -3449,6 +3452,13 @@ function accountSectionPanel(section) {
     help: accountHelpPanel
   };
   return (map[section] || accountOrdersPanel)();
+}
+
+function accountSectionMeta(section) {
+  if (section === 'walletLedger') {
+    return { key: 'walletLedger', label: '全部流水', desc: '查看账户全部余额流水、充值记录与消费记录。' };
+  }
+  return accountSections().find((item) => item.key === section) || accountSections()[0];
 }
 
 function accountOrdersPanel() {
@@ -3496,26 +3506,98 @@ function accountContentPanel() {
 }
 
 function accountWalletPanel() {
-  const ledger = state.wallet.ledger?.length ? state.wallet.ledger : [
-    { type: '充值入账', amount: 100, note: 'USDT 充值到账', status: 'completed', createdAt: '2025-05-26T11:00:00Z' },
-    { type: '订单消费', amount: -1.8, note: 'Discord Nitro 订单支付', status: 'completed', createdAt: '2025-05-28T14:32:18Z' }
-  ];
-  return `<section class="wallet-layout">
-    <div class="wallet-balance">
-      <span>当前余额</span>
-      <strong>${Number(state.wallet.balance || 0).toFixed(2)} USDT</strong>
-      <p>支持支付宝和 USDT 充值，到账后会计入余额。</p>
-    </div>
-    <form class="wallet-recharge">
-      <h3>余额充值</h3>
-      <label>充值金额<input id="rechargeAmount" type="number" min="1" step="0.01" value="${escapeHtml(state.rechargeDraft.amount)}" /></label>
-      <label>充值方式<select id="rechargeMethod"><option value="alipay">支付宝支付</option><option value="usdt_trc20">USDT TRC20</option></select></label>
-      <button class="primary" data-action="createRecharge" type="button">创建充值单</button>
-      <small>充值创建后请按页面提示完成支付，到账后余额会自动更新。</small>
+  return `<section class="wallet-dashboard">
+    <section class="wallet-hero-card">
+      <div>
+        <span>当前余额</span>
+        <strong>${Number(state.wallet.balance || 0).toFixed(2)} <small>USDT</small></strong>
+        <p>≈ ¥813.42 CNY ${lineIcon('eye-off', '隐藏折算金额', 'wallet-eye-icon')}</p>
+      </div>
+      <i></i>
+    </section>
+    <form class="wallet-recharge-card">
+      <h3>充值</h3>
+      <label>充值金额<div class="wallet-amount-field"><input id="rechargeAmount" type="number" min="1" step="0.01" value="100" /><b>USDT</b></div></label>
+      <div class="wallet-method-block">
+        <span>充值方式</span>
+        <div class="wallet-methods">
+          ${walletPaymentMethod('alipay', '支付宝', '即时到账，推荐使用', true)}
+          ${walletPaymentMethod('usdt_trc20', 'USDT-TRC20', '链上转账，低手续费', false)}
+        </div>
+      </div>
+      <button class="wallet-submit" data-action="createRecharge" type="button">立即充值</button>
+      <small>${lineIcon('warning', '提示', 'wallet-note-icon')} 选择支付方式，系统会按实时汇率结算人民币支付金额。</small>
     </form>
-    <section class="member-panel wide">
-      <div class="section-toolbar"><b>余额流水</b><button data-action="simulateRecharge" type="button">模拟最近充值到账</button></div>
-      <div class="ledger-list">${ledger.map((item) => `<div><span>${escapeHtml(item.type)}</span><b>${Number(item.amount).toFixed(2)} USDT</b><small>${escapeHtml(item.note)} · ${escapeHtml(timeFrom(item.createdAt))}</small><em>${escapeHtml(item.status)}</em></div>`).join('')}</div>
+    <section class="wallet-ledger-card">
+      <div class="wallet-section-head"><h2>余额流水</h2><button data-action="selectAccountSection" data-section="walletLedger" type="button">查看全部 ${lineIcon('chevron', '查看全部', 'wallet-link-icon')}</button></div>
+      ${walletLedgerTable(accountWalletLedgerEntries().slice(0, 5), { compact: true })}
+    </section>
+  </section>`;
+}
+
+function walletPaymentMethod(value, title, desc, active) {
+  const checked = state.rechargeDraft.method === value || (!state.rechargeDraft.method && active);
+  return `<button class="${checked ? 'active' : ''}" data-action="setRechargeMethod" data-method="${escapeHtml(value)}" type="button">
+    <i>${value === 'alipay' ? '支' : ''}</i>
+    <span><b>${escapeHtml(title)}</b><small>${escapeHtml(desc)}</small></span>
+  </button>`;
+}
+
+function accountWalletLedgerEntries() {
+  const demo = [
+    { type: '充值', amount: 13.85, method: '支付宝', detail: '订单号：CZ250623001234', time: '2025-06-23 20:10:32', status: '成功', tone: 'success', icon: 'card' },
+    { type: '订单支付', amount: -1.8, method: '', detail: '订单号：CH20260623001234', time: '2025-06-23 20:09:15', status: '成功', tone: 'success', icon: 'cart' },
+    { type: '充值', amount: 20, method: 'USDT-TRC20', detail: 'TxID：7f9ca...afb2c3d4e5f6', time: '2025-05-22 18:21:44', status: '成功', tone: 'success', icon: 'card' },
+    { type: '退款', amount: 1.8, method: '订单号：CH20205220000987', detail: '退款至：钱包', time: '2025-05-22 16:33:21', status: '成功', tone: 'success', icon: 'refund' },
+    { type: '充值', amount: 15, method: 'USDT-TRC20', detail: 'TxID：7e6b...9d8a7f96d5b4c3', time: '2025-05-22 16:10:05', status: '待确认', tone: 'warning', icon: 'card' },
+    { type: '订单支付', amount: -3.9, method: '', detail: '订单号：CH20260622001032', time: '2025-05-21 14:22:11', status: '成功', tone: 'success', icon: 'cart' },
+    { type: '充值', amount: 50, method: '支付宝', detail: '订单号：CZ250620008765', time: '2025-05-20 09:43:08', status: '成功', tone: 'success', icon: 'card' },
+    { type: '提现退款', amount: 5, method: '系统退款', detail: '备注：支付失败返还', time: '2025-05-18 16:51:20', status: '已完成', tone: 'success', icon: 'refund' }
+  ];
+  const local = (state.wallet.ledger || []).map((item) => ({
+    type: item.type || '余额变动',
+    amount: Number(item.amount || 0),
+    method: item.note || '',
+    detail: '',
+    time: timeFrom(item.createdAt || new Date().toISOString()),
+    status: item.status === 'pending' ? '待确认' : '成功',
+    tone: item.status === 'pending' ? 'warning' : 'success',
+    icon: Number(item.amount || 0) < 0 ? 'cart' : 'card'
+  }));
+  return local.length ? demo.concat(local).slice(0, 12) : demo;
+}
+
+function walletLedgerTable(rows, options = {}) {
+  return `<div class="wallet-ledger-table ${options.compact ? 'compact' : ''}">
+    <div class="wallet-ledger-head"><span>类型</span><span>金额</span><span>方式 / 详情</span><span>时间</span><span>状态</span></div>
+    ${rows.map((item) => `<div class="wallet-ledger-row">
+      <div class="wallet-ledger-type"><i>${lineIcon(item.icon || 'card', item.type, 'wallet-row-icon')}</i><b>${escapeHtml(item.type)}</b></div>
+      <strong class="${Number(item.amount) >= 0 ? 'positive' : 'negative'}">${Number(item.amount) >= 0 ? '+' : '-'}${Math.abs(Number(item.amount)).toFixed(Number.isInteger(Math.abs(Number(item.amount))) ? 2 : 2)} USDT</strong>
+      <p><b>${escapeHtml(item.method || item.detail)}</b>${item.method && item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ''}</p>
+      <time>${escapeHtml(item.time)}</time>
+      <em class="${escapeHtml(item.tone)}">${escapeHtml(item.status)}</em>
+    </div>`).join('')}
+  </div>`;
+}
+
+function accountWalletLedgerPanel() {
+  return `<section class="wallet-all-page">
+    <section class="wallet-ledger-filter">
+      <label>${lineIcon('search', '搜索', 'filter-icon')}<input placeholder="搜索订单号 / TxID / 备注" /></label>
+      <label class="date-range">${lineIcon('calendar', '日期', 'filter-icon')}<input placeholder="开始日期" /><span>-</span><input placeholder="结束日期" />${lineIcon('calendar', '日期', 'filter-icon')}</label>
+      <select><option>全部类型</option><option>充值</option><option>订单支付</option><option>退款</option></select>
+      <select><option>全部状态</option><option>成功</option><option>待确认</option><option>已完成</option></select>
+      <select><option>最新记录</option><option>金额从高到低</option></select>
+      <button data-action="accountDemoAction" data-message="导出记录需要真实流水接口接入后生成文件" type="button">${lineIcon('download', '导出记录', 'wallet-export-icon')} 导出记录</button>
+    </section>
+    <section class="wallet-ledger-card all">
+      <div class="wallet-section-head"><h2>余额流水</h2><span>共 128 条记录</span></div>
+      ${walletLedgerTable(accountWalletLedgerEntries())}
+      <section class="member-pagination wallet-pagination">
+        <span></span>
+        <div><button data-action="accountDemoAction" data-message="已经是第一页" type="button">‹</button><button class="active" type="button" disabled>1</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">2</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">3</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">4</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">5</button><em>...</em><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">13</button><button data-action="accountDemoAction" data-message="演示数据仅展示第一页" type="button">›</button></div>
+        <select><option>10 条/页</option></select>
+      </section>
     </section>
   </section>`;
 }
@@ -3648,7 +3730,7 @@ function account() {
 
   const userName = userNickname();
   const section = state.accountSection || 'orders';
-  const sectionMeta = accountSections().find((item) => item.key === section) || accountSections()[0];
+  const sectionMeta = accountSectionMeta(section);
   shell(`
     <section class="member-center">
       <aside class="member-sidebar">
@@ -3658,7 +3740,7 @@ function account() {
           <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
         </div>
         <nav class="member-nav">
-          ${accountSections().map((item) => `<button class="${item.key === section ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
+          ${accountSections().map((item) => `<button class="${item.key === section || (item.key === 'wallet' && section === 'walletLedger') ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
         </nav>
         <button class="member-logout" data-action="logoutAccount" type="button">退出登录</button>
       </aside>
@@ -5548,12 +5630,16 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'createRecharge') {
     const amount = Number(document.querySelector('#rechargeAmount')?.value || 0);
-    const method = document.querySelector('#rechargeMethod')?.value || 'wechat';
+    const method = state.rechargeDraft.method || 'alipay';
     if (!amount || amount <= 0) return notify('请输入有效充值金额');
     state.rechargeDraft = { amount: String(amount), method };
     walletLedger('充值订单', amount, `${method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
     addMessage('充值单已创建', `${amount.toFixed(2)} USDT 充值待确认。`, 'wallet');
     notify('充值单已创建，等待支付确认');
+    return route();
+  }
+  if (action === 'setRechargeMethod') {
+    state.rechargeDraft.method = el.dataset.method || 'alipay';
     return route();
   }
   if (action === 'simulateRecharge') {
