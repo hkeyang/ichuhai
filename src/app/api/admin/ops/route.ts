@@ -166,7 +166,35 @@ export async function POST(request: Request) {
         .bind(id, text(body.name, "新标签"), text(body.color, "#22c55e"), text(body.icon, "tag"), Number(body.sortOrder ?? 0), boolInt(body.enabled, true))
         .run();
       await writeAuditLog(db, request, { actorId: "admin", role: "admin" }, action, "tag", id, body);
-    } else if (action === "purchaseField.create") {
+    } else if (action === "category.update") {
+      const catId = text(body.id);
+      if (!catId) throw new HttpError(422, "category id is required");
+      const fields: string[] = [];
+      const binds: unknown[] = [];
+      if (body.name !== undefined) { fields.push("name = ?"); binds.push(text(body.name)); }
+      if (body.icon !== undefined) { fields.push("icon = ?"); binds.push(text(body.icon)); }
+      if (body.sortOrder !== undefined) { fields.push("sort_order = ?"); binds.push(Number(body.sortOrder ?? 0)); }
+      if (body.visible !== undefined) { fields.push("visible = ?"); binds.push(boolInt(body.visible, true)); }
+      if (!fields.length) throw new HttpError(422, "no fields to update");
+      fields.push("updated_at = datetime('now')");
+      binds.push(catId);
+      await db.prepare(`UPDATE categories SET ${fields.join(", ")} WHERE id = ? OR key = ?`).bind(...binds, catId).run();
+      await writeAuditLog(db, request, { actorId: "admin", role: "admin" }, action, "category", catId, body);
+    } else if (action === "tag.update") {
+      const tagId = text(body.id);
+      if (!tagId) throw new HttpError(422, "tag id is required");
+      const fields: string[] = [];
+      const binds: unknown[] = [];
+      if (body.name !== undefined) { fields.push("name = ?"); binds.push(text(body.name)); }
+      if (body.color !== undefined) { fields.push("color = ?"); binds.push(text(body.color)); }
+      if (body.icon !== undefined) { fields.push("icon = ?"); binds.push(text(body.icon)); }
+      if (body.sortOrder !== undefined) { fields.push("sort_order = ?"); binds.push(Number(body.sortOrder ?? 0)); }
+      if (body.enabled !== undefined) { fields.push("enabled = ?"); binds.push(boolInt(body.enabled, true)); }
+      if (!fields.length) throw new HttpError(422, "no fields to update");
+      fields.push("updated_at = datetime('now')");
+      binds.push(tagId);
+      await db.prepare(`UPDATE product_tags SET ${fields.join(", ")} WHERE id = ? OR name = ?`).bind(...binds, tagId).run();
+      await writeAuditLog(db, request, { actorId: "admin", role: "admin" }, action, "tag", tagId, body);
       const id = crypto.randomUUID();
       await db.prepare(`INSERT INTO purchase_fields
         (id, product_id, field_key, field_label, field_type, required, affects_sku, affects_price, affects_stock, show_in_summary, show_in_user_detail, show_in_admin_detail, placeholder, help_text, default_value, options_json, min_value, max_value, sort_order, visible, created_at, updated_at)
