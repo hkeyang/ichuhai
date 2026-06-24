@@ -6,6 +6,7 @@ import { ensureDatabaseReady } from "@/lib/api/bootstrap";
 import { parseBody } from "@/lib/api/body-parser";
 import { jsonResponse, optionsResponse } from "@/lib/api/cors";
 import { HttpError } from "@/lib/api/errors";
+import { formatSupportTicket } from "@/lib/api/formatters";
 import { writeNotification } from "@/lib/api/notifications";
 import type { OrderRow, SupportTicketRow } from "@/lib/api/types";
 
@@ -103,7 +104,7 @@ export async function POST(
       .bind(ticketId)
       .first<SupportTicketRow>();
 
-    return jsonResponse(ticket, 201, request, cloudflareEnv);
+    return jsonResponse(ticket ? formatSupportTicket(ticket) : null, 201, request, cloudflareEnv);
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);

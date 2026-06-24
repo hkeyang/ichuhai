@@ -10,6 +10,8 @@ import {
 } from "@/lib/seo/products";
 import Script from "next/script";
 
+const APP_ASSET_VERSION = "account-react-ui-20260624-2";
+
 export function JsonLd({ data, id }: { data: unknown; id: string }) {
   return (
     <script
@@ -21,7 +23,7 @@ export function JsonLd({ data, id }: { data: unknown; id: string }) {
 }
 
 export function InteractiveAppScript() {
-  return <Script src="/app.js?v=auth-reset-captcha-20260623" type="module" strategy="afterInteractive" />;
+  return <Script src={`/app.js?v=${APP_ASSET_VERSION}`} type="module" strategy="afterInteractive" />;
 }
 
 export function ToastRegion() {
@@ -37,7 +39,7 @@ export function SiteHeader() {
       <nav className="nav">
         <a href="/products">商品</a>
         <a href="/#why-us">保障</a>
-        <a href="/#/faq">FAQ</a>
+        <a href="/faq">FAQ</a>
       </nav>
     </header>
   );

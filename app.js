@@ -450,7 +450,7 @@ const state = {
   telegramDeeplink: null,       // { token, deeplink, deeplinkNative, expiresAt, startedAt, returnTo }
   telegramDeeplinkStatus: 'idle', // idle | issuing | waiting | error | completed
   telegramDeeplinkError: '',
-  telegramReturnTo: localStorage.getItem('telegramReturnTo') || '#/account',
+  telegramReturnTo: localStorage.getItem('telegramReturnTo') || '/account',
   noticeTab: 'basic',
   homeFaqActive: 0,
   detailImageIndex: 0,
@@ -1001,7 +1001,7 @@ function restoreTelegramPendingLogin() {
       deeplinkNative: pending.deeplinkNative,
       expiresAt: pending.expiresAt,
       startedAt: Number(pending.startedAt) || Date.now(),
-      returnTo: pending.returnTo || state.telegramReturnTo || '#/account'
+      returnTo: pending.returnTo || state.telegramReturnTo || '/account'
     };
     rememberTelegramReturnTo(state.telegramDeeplink.returnTo);
     state.telegramDeeplinkStatus = 'waiting';
@@ -1033,7 +1033,7 @@ async function telegramDeeplinkIssue({ openImmediately = true } = {}) {
       deeplinkNative: data.deeplinkNative,
       expiresAt: data.expiresAt,
       startedAt: Date.now(),
-      returnTo: state.telegramReturnTo || '#/account'
+      returnTo: state.telegramReturnTo || '/account'
     };
     persistTelegramPendingLogin();
     state.telegramDeeplinkStatus = 'waiting';

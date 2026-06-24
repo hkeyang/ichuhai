@@ -8,11 +8,31 @@ export interface MeOrder {
   orderId: string;
   orderNo: string;
   status: string;
+  telegramUsername?: string | null;
   email: string | null;
   amountUsdt: string;
+  fiatCurrency?: string | null;
+  fiatAmountSnapshot?: string | null;
+  exchangeRateSnapshot?: string | null;
+  paymentCurrency?: string | null;
+  paymentNetwork?: string | null;
+  paymentAddress?: string | null;
+  txHash?: string | null;
+  paidAt?: string | null;
+  deliveredAt?: string | null;
+  expiresAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
   productSnapshot: Record<string, unknown>;
   skuSnapshot: Record<string, unknown>;
+  delivery?: {
+    id: string;
+    method: string;
+    channel: string[];
+    maskedContent: string;
+    status: string;
+    createdAt: string;
+  } | null;
 }
 
 export function useMeOrders(token: string): AsyncState<MeOrder[]> {

@@ -13,7 +13,7 @@ export function SiteHeader() {
       <a className="brand" href="/" aria-label="ichuhai 首页">ichuhai</a>
       <nav className="nav">
         <a href="/products">商品</a>
-        <a href="/#/faq">FAQ</a>
+        <a href="/faq">FAQ</a>
       </nav>
       <div className="account-popover-wrap">
         {user ? (

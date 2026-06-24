@@ -9436,12 +9436,15 @@ body { background: #F5F7FF; }
 }
 
 .member-user h2::after {
-  content: "code@thebrownpig.org";
-  display: block;
-  margin-top: 2px;
+  content: none;
+}
+
+.member-email {
+  margin: -8px 0 0;
   color: #7180A0;
   font-size: 12px;
   font-weight: 700;
+  word-break: break-all;
 }
 
 .member-balance {

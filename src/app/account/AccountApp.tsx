@@ -9,16 +9,27 @@ import { WalletPanel } from "./panels/WalletPanel";
 import { SupportPanel } from "./panels/SupportPanel";
 import { ProfilePanel } from "./panels/ProfilePanel";
 import { HelpPanel } from "./panels/HelpPanel";
+import { LineIcon } from "./components/LineIcon";
 
-type SectionKey = "orders" | "wallet" | "support" | "profile" | "help";
+type SectionKey = "orders" | "wallet" | "walletLedger" | "support" | "supportDetail" | "profile" | "help";
 
-const SECTIONS: Array<{ key: SectionKey; label: string; desc: string }> = [
-  { key: "orders", label: "我的订单", desc: "查看和管理您的订单，追踪订单状态与售后进度。" },
-  { key: "wallet", label: "余额中心", desc: "管理 USDT 余额、充值记录与消费流水。" },
-  { key: "support", label: "售后服务", desc: "如需对订单或充值相关问题发起售后申请，欢迎随时与我们联系。" },
-  { key: "profile", label: "账号设置", desc: "管理您的账号与安全设置。" },
-  { key: "help", label: "帮助中心", desc: "查看购买、充值、TRC20 支付、发货和售后规则。" },
+const NAV_SECTIONS: Array<{ key: SectionKey; label: string; desc: string; icon: string }> = [
+  { key: "orders", label: "我的订单", desc: "查看和管理您的订单，追踪订单状态与售后进度。", icon: "receipt" },
+  { key: "wallet", label: "余额中心", desc: "管理 USDT 余额、充值记录、消费流水和组合支付。", icon: "card" },
+  { key: "support", label: "售后服务", desc: "如需对订单或充值相关问题发起售后申请，欢迎随时与我们联系。", icon: "headset" },
+  { key: "profile", label: "账号设置", desc: "管理您的账号与安全设置，保障账号安全与使用体验。", icon: "shield" },
+  { key: "help", label: "帮助中心", desc: "查看购买、充值、TRC20 支付、发货和售后规则。", icon: "more" },
 ];
+
+const SECTION_META: Record<SectionKey, { label: string; desc: string }> = {
+  orders: NAV_SECTIONS[0],
+  wallet: NAV_SECTIONS[1],
+  walletLedger: { label: "全部流水", desc: "查看账户全部余额流水、充值记录与消费记录。" },
+  support: NAV_SECTIONS[2],
+  supportDetail: { label: "售后详情", desc: "查看售后工单进度、问题描述与处理记录。" },
+  profile: NAV_SECTIONS[3],
+  help: NAV_SECTIONS[4],
+};
 
 function GuestView() {
   return (
@@ -43,7 +54,7 @@ function Toast({ msg }: { msg: string }) {
 function readInitialSection(): SectionKey {
   if (typeof window === "undefined") return "orders";
   const raw = new URLSearchParams(window.location.search).get("section");
-  return SECTIONS.some((s) => s.key === raw) ? (raw as SectionKey) : "orders";
+  return raw && raw in SECTION_META ? (raw as SectionKey) : "orders";
 }
 
 function AccountInner() {
@@ -108,7 +119,8 @@ function AccountInner() {
 
   const activeUser = user ?? profile.data;
   if (!activeUser) return null;
-  const meta = SECTIONS.find((s) => s.key === section)!;
+  const meta = SECTION_META[section];
+  const activeNav = section === "walletLedger" ? "wallet" : section === "supportDetail" ? "support" : section;
 
   return (
     <>
@@ -118,6 +130,7 @@ function AccountInner() {
           <aside className="member-sidebar">
             <div className="member-user">
               <h2>{activeUser.nickname || activeUser.email}</h2>
+              <p className="member-email">{activeUser.email}</p>
               <div className="member-balance">
                 <span>账户余额</span>
                 <b>{Number(activeUser.balanceUsdt || "0").toFixed(2)} USDT</b>
@@ -125,13 +138,14 @@ function AccountInner() {
               <button onClick={() => openSection("wallet")} type="button">充值</button>
             </div>
             <nav className="member-nav">
-              {SECTIONS.map((s) => (
+              {NAV_SECTIONS.map((s) => (
                 <button
                   key={s.key}
-                  className={s.key === section ? "active" : ""}
+                  className={s.key === activeNav ? "active" : ""}
                   onClick={() => openSection(s.key)}
                   type="button"
                 >
+                  <LineIcon name={s.icon} label={s.label} className="member-nav-icon" />
                   {s.label}
                 </button>
               ))}
@@ -144,8 +158,25 @@ function AccountInner() {
               <p>{meta.desc}</p>
             </header>
             {section === "orders" && <OrdersPanel token={token} />}
-            {section === "wallet" && <WalletPanel token={token} onToast={showToast} onBalanceChange={profile.reload} />}
-            {section === "support" && <SupportPanel />}
+            {(section === "wallet" || section === "walletLedger") && (
+              <WalletPanel
+                token={token}
+                view={section === "walletLedger" ? "ledger" : "dashboard"}
+                onOpenLedger={() => openSection("walletLedger")}
+                onToast={showToast}
+                onBalanceChange={profile.reload}
+              />
+            )}
+            {(section === "support" || section === "supportDetail") && (
+              <SupportPanel
+                token={token}
+                userName={activeUser.nickname || activeUser.email || "用户"}
+                view={section === "supportDetail" ? "detail" : "list"}
+                onOpenDetail={() => openSection("supportDetail")}
+                onBack={() => openSection("support")}
+                onToast={showToast}
+              />
+            )}
             {section === "profile" && <ProfilePanel user={activeUser} onUserChange={setUser} onToast={showToast} />}
             {section === "help" && <HelpPanel />}
           </section>

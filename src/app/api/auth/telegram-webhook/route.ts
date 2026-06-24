@@ -186,7 +186,7 @@ export async function POST(request: Request) {
       chatId,
       `✅ 登录已确认，请返回 <b>ichuhai.shop</b> 查看用户中心。`,
       {
-        inline_keyboard: [[{ text: "返回 ichuhai.shop", url: `${siteUrl}/#/account` }]],
+        inline_keyboard: [[{ text: "返回 ichuhai.shop", url: `${siteUrl}/account` }]],
       }
     );
 

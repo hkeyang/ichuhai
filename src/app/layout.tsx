@@ -40,7 +40,7 @@ export const metadata = {
   }
 };
 
-const bootScript = `(function(){var d=document.documentElement;d.classList.add('app-booting');setTimeout(function(){d.classList.remove('app-booting');},4000);})();`;
+const bootScript = `(function(){var d=document.documentElement;d.classList.add('app-booting');var h=location.hash||'';if(h.indexOf('#/')===0){var target=h.slice(1);if(location.search&&target.indexOf('?')<0)target+=location.search;location.replace(target);return;}if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(items){items.forEach(function(item){item.unregister();});}).catch(function(){});}setTimeout(function(){d.classList.remove('app-booting');},4000);})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
