@@ -10,11 +10,14 @@ import { writeAuditLog } from "@/lib/api/audit";
 import { writeNotification } from "@/lib/api/notifications";
 import { checkBlacklist } from "@/lib/api/blacklist";
 import { sendOrderCreatedEmail } from "@/lib/api/mailer";
+import { resolveUserId } from "@/lib/api/user-session";
+import { compareUsdt, createWalletLedger } from "@/lib/api/wallet";
 import {
   allocatePaymentAmount,
   buildProviderPayload,
   DEFAULT_PAYMENT_EXPIRY_MINUTES,
   isSupportedTronNetwork,
+  type PaymentAmountAllocation,
 } from "@/lib/api/usdt-trc20";
 import type { OrderRow, ProductRow, SkuRow, PaymentNetworkRow } from "@/lib/api/types";
 
@@ -43,6 +46,7 @@ interface OrderBody {
   telegramUsername?: unknown;
   email?: unknown;
   fiatCurrency?: unknown;
+  paymentMethod?: unknown;
 }
 
 export async function POST(request: Request) {
@@ -61,11 +65,27 @@ export async function POST(request: Request) {
     const rawTelegramUsername = String(body.telegramUsername ?? "").trim();
     const rawEmail = String(body.email ?? "").trim().toLowerCase();
     const rawFiatCurrency = String(body.fiatCurrency ?? "").trim().toUpperCase();
+    const paymentMethod = String(body.paymentMethod ?? "usdt_trc20").trim();
+    if (!["usdt_trc20", "balance"].includes(paymentMethod)) throw new HttpError(422, "paymentMethod is invalid");
+    const sessionUserId = await resolveUserId(request, cloudflareEnv);
+    const sessionUser = sessionUserId
+      ? await db
+          .prepare("SELECT id, email, telegram_username, nickname, balance_usdt, default_currency FROM users WHERE id = ?")
+          .bind(sessionUserId)
+          .first<{
+            id: string;
+            email: string | null;
+            telegram_username: string | null;
+            nickname: string | null;
+            balance_usdt: string | null;
+            default_currency: string;
+          }>()
+      : null;
 
     // 2. 基础字段非空校验
     if (!productId) throw new HttpError(422, "productId is required");
     if (!skuId) throw new HttpError(422, "skuId is required");
-    if (paymentNetworkCode !== "TRON") throw new HttpError(400, "only USDT TRC20 payments are supported");
+    if (paymentMethod !== "balance" && paymentNetworkCode !== "TRON") throw new HttpError(400, "only USDT TRC20 payments are supported");
 
     // 3. 查询 product（status='active'）
     const product = await db
@@ -86,22 +106,26 @@ export async function POST(request: Request) {
     if (sku.stock_status === "sold_out") throw new HttpError(409, "sku is sold out");
 
     // 5. 查询 payment_network（is_enabled=1）
-    const network = await db
-      .prepare(`SELECT * FROM payment_networks WHERE code = ? AND is_enabled = 1`)
-      .bind("TRON")
-      .first<PaymentNetworkRow>();
+    const network = paymentMethod === "balance"
+      ? null
+      : await db
+          .prepare(`SELECT * FROM payment_networks WHERE code = ? AND is_enabled = 1`)
+          .bind("TRON")
+          .first<PaymentNetworkRow>();
 
-    if (!isSupportedTronNetwork(network)) throw new HttpError(400, "TRON USDT payment network is not configured");
+    if (paymentMethod !== "balance" && !isSupportedTronNetwork(network)) throw new HttpError(400, "TRON USDT payment network is not configured");
 
     // 6. 校验 telegramUsername
-    if (!/^@?[a-zA-Z0-9_]{5,32}$/.test(rawTelegramUsername)) {
+    const accountTelegram = rawTelegramUsername || sessionUser?.telegram_username || "";
+    if (!sessionUser && !/^@?[a-zA-Z0-9_]{5,32}$/.test(accountTelegram)) {
       throw new HttpError(422, "invalid telegram username");
     }
 
     // 7. 校验 email
+    const accountEmail = (rawEmail || sessionUser?.email || "").trim().toLowerCase();
     if (
-      rawEmail.length > 254 ||
-      !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(rawEmail)
+      accountEmail.length > 254 ||
+      !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(accountEmail)
     ) {
       throw new HttpError(422, "invalid email");
     }
@@ -113,7 +137,7 @@ export async function POST(request: Request) {
       "";
     const blacklistHits = await checkBlacklist(db, {
       telegramUsername: rawTelegramUsername,
-      email: rawEmail,
+      email: accountEmail,
       ip: clientIp,
     });
     const blockingHit = blacklistHits.find(
@@ -128,7 +152,7 @@ export async function POST(request: Request) {
           "order.blocked_blacklist",
           "blacklist",
           blockingHit.id,
-          { kind: blockingHit.kind, value: blockingHit.value, effect: blockingHit.effect, email: rawEmail, telegramUsername: rawTelegramUsername }
+          { kind: blockingHit.kind, value: blockingHit.value, effect: blockingHit.effect, email: accountEmail, telegramUsername: accountTelegram }
         );
       } catch {
         // 审计失败不影响拦截
@@ -155,29 +179,42 @@ export async function POST(request: Request) {
 
     // 10. 计算金额
     const baseAmountUsdt = sku.price_usdt;
-    const reusablePaymentWindowStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const activeOrders = await db
-      .prepare(
-        `SELECT amount_usdt, status, expires_at, payment_network
-         FROM orders
-         WHERE payment_network = 'TRON'
-           AND status IN ('created','pending_payment','payment_confirming')
-           AND expires_at > ?`
-      )
-      .bind(reusablePaymentWindowStartedAt)
-      .all<Pick<OrderRow, "amount_usdt" | "status" | "expires_at" | "payment_network">>();
-    const paymentAmount = allocatePaymentAmount(baseAmountUsdt, activeOrders.results);
-    if (!paymentAmount) {
-      throw new HttpError(409, "当前同价订单较多，请稍后重试");
+    if (paymentMethod === "balance") {
+      if (!sessionUser) throw new HttpError(401, "余额支付需要登录");
+      if (compareUsdt(sessionUser.balance_usdt ?? "0", baseAmountUsdt) < 0) throw new HttpError(409, "账户余额不足");
+    }
+    let paymentAmount: PaymentAmountAllocation | null = {
+      amount: baseAmountUsdt,
+      baseAmount: baseAmountUsdt,
+      suffixUnits: 0,
+      suffix: "0",
+    };
+    if (paymentMethod !== "balance") {
+      const reusablePaymentWindowStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const activeOrders = await db
+        .prepare(
+          `SELECT amount_usdt, status, expires_at, payment_network
+           FROM orders
+           WHERE payment_network = 'TRON'
+             AND status IN ('created','pending_payment','payment_confirming')
+             AND expires_at > ?`
+        )
+        .bind(reusablePaymentWindowStartedAt)
+        .all<Pick<OrderRow, "amount_usdt" | "status" | "expires_at" | "payment_network">>();
+      paymentAmount = allocatePaymentAmount(baseAmountUsdt, activeOrders.results);
+      if (!paymentAmount) {
+        throw new HttpError(409, "当前同价订单较多，请稍后重试");
+      }
     }
     const amountUsdt = paymentAmount.amount;
     const fiatAmountSnapshot = (Number(amountUsdt) * rate).toFixed(2);
     const exchangeRateSnapshot = String(rate);
 
     // 11. 规范化 telegramUsername（确保以 @ 开头）
-    const telegramUsername = rawTelegramUsername.startsWith("@")
-      ? rawTelegramUsername
-      : `@${rawTelegramUsername}`;
+    const telegramSource = accountTelegram || (accountEmail ? accountEmail.split("@")[0] : "email_user");
+    const telegramUsername = telegramSource.startsWith("@")
+      ? telegramSource
+      : `@${telegramSource}`;
 
     // 12. 设置过期时间（15 分钟后）
     const expiresAt = new Date(Date.now() + DEFAULT_PAYMENT_EXPIRY_MINUTES * 60 * 1000).toISOString();
@@ -212,48 +249,74 @@ export async function POST(request: Request) {
       updatedAt: sku.updated_at,
     });
 
-    const paymentAddress = network.address;
+    const paymentAddress = paymentMethod === "balance" ? "WALLET_BALANCE" : network!.address;
     let paymentCurrency = "USDT";
-    const paymentNetwork = "TRON";
-    let paymentProvider: string | null = "usdt-trc20-direct";
+    const paymentNetwork = paymentMethod === "balance" ? "WALLET" : "TRON";
+    let paymentProvider: string | null = paymentMethod === "balance" ? "wallet-balance" : "usdt-trc20-direct";
     let providerPaymentId: string | null = null;
     let providerPaymentStatus: string | null = null;
     let providerPaymentUrl: string | null = null;
-    let providerPayload: Record<string, unknown> = buildProviderPayload(paymentAmount);
+    let providerPayload: Record<string, unknown> = paymentMethod === "balance"
+      ? { provider: "wallet-balance", paymentAmountUsdt: amountUsdt, balanceDebitUsdt: baseAmountUsdt }
+      : buildProviderPayload(paymentAmount);
 
     // 14. INSERT INTO orders
     await db
       .prepare(
         `INSERT INTO orders (
-          id, order_no, product_id, sku_id,
+          id, order_no, user_id, product_id, sku_id,
           product_snapshot, sku_snapshot,
           telegram_username, email,
           amount_usdt, fiat_currency, fiat_amount_snapshot, exchange_rate_snapshot,
           payment_currency, payment_network, payment_address,
-          status, expires_at,
+          status, payment_status, paid_at, expires_at,
           payment_provider, provider_payment_id, provider_payment_status, provider_payment_url, provider_payload_json,
           created_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
           ?, ?,
           ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
-          'pending_payment', ?,
+          ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           datetime('now'), datetime('now')
         )`
       )
       .bind(
-        orderId, orderNo, productId, skuId,
+        orderId, orderNo, sessionUser?.id ?? null, productId, skuId,
         productSnapshot, skuSnapshot,
-        telegramUsername, rawEmail,
+        telegramUsername, accountEmail,
         amountUsdt, fiatCurrency, fiatAmountSnapshot, exchangeRateSnapshot,
         paymentCurrency, paymentNetwork, paymentAddress,
+        paymentMethod === "balance" ? "paid" : "pending_payment",
+        paymentMethod === "balance" ? "paid" : "unpaid",
+        paymentMethod === "balance" ? now : null,
         expiresAt,
         paymentProvider, providerPaymentId, providerPaymentStatus, providerPaymentUrl, JSON.stringify(providerPayload)
       )
       .run();
+
+    if (paymentMethod === "balance" && sessionUser) {
+      try {
+        await createWalletLedger(db, {
+          userId: sessionUser.id,
+          type: "consume",
+          amountUsdt: `-${baseAmountUsdt}`,
+          method: "balance",
+          note: `订单 ${orderNo} 余额支付`,
+          referenceType: "order",
+          referenceId: orderId,
+          createdBy: "system",
+        });
+      } catch (error) {
+        await db
+          .prepare("UPDATE orders SET status = 'failed', payment_status = 'failed', admin_note = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(error instanceof Error ? error.message : "余额扣款失败", orderId)
+          .run();
+        throw error;
+      }
+    }
 
     // 命中 require_manual_review：订单照常创建，但标记风险备注，便于后台人工审核
     if (requiresManualReview) {
@@ -274,12 +337,13 @@ export async function POST(request: Request) {
     const orderRowForMail = {
       id: orderId,
       order_no: orderNo,
+      user_id: sessionUser?.id ?? null,
       product_id: productId,
       sku_id: skuId,
       product_snapshot: productSnapshot,
       sku_snapshot: skuSnapshot,
       telegram_username: telegramUsername,
-      email: rawEmail,
+      email: accountEmail,
       amount_usdt: amountUsdt,
       fiat_currency: fiatCurrency,
       fiat_amount_snapshot: fiatAmountSnapshot,
@@ -287,9 +351,9 @@ export async function POST(request: Request) {
       payment_currency: paymentCurrency,
       payment_network: paymentNetwork,
       payment_address: paymentAddress,
-      status: "pending_payment",
+      status: paymentMethod === "balance" ? "paid" : "pending_payment",
       tx_hash: null,
-      paid_at: null,
+      paid_at: paymentMethod === "balance" ? now : null,
       delivered_at: null,
       admin_note: null,
       expires_at: expiresAt,
@@ -362,7 +426,7 @@ export async function POST(request: Request) {
       {
         orderId,
         orderNo,
-        paymentUrl: `/pay/${orderId}`,
+        paymentUrl: paymentMethod === "balance" ? `/order/${orderId}/success` : `/pay/${orderId}`,
         paymentProvider,
         providerPaymentId,
       },

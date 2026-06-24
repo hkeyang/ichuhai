@@ -14,6 +14,51 @@ export async function OPTIONS(request: Request) {
   return optionsResponse(request, env as CloudflareEnv);
 }
 
+export async function GET(request: Request) {
+  const { env } = await getCloudflareContext();
+  const cloudflareEnv = env as CloudflareEnv;
+
+  try {
+    const userId = await resolveUserId(request, cloudflareEnv);
+    if (!userId) throw new HttpError(401, "unauthorized");
+
+    const db = cloudflareEnv.DB;
+    await ensureDatabaseReady(db);
+
+    const user = await db
+      .prepare("SELECT id, email, nickname, default_currency, balance_usdt FROM users WHERE id = ?")
+      .bind(userId)
+      .first<{
+        id: string;
+        email: string | null;
+        nickname: string | null;
+        default_currency: string;
+        balance_usdt: string | null;
+      }>();
+    if (!user) throw new HttpError(404, "user not found");
+
+    return jsonResponse(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          nickname: user.nickname,
+          defaultCurrency: user.default_currency,
+          balanceUsdt: user.balance_usdt ?? "0",
+        },
+      },
+      200,
+      request,
+      cloudflareEnv
+    );
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return jsonResponse({ error: error.message }, error.status, request, cloudflareEnv);
+    }
+    return jsonResponse({ error: "internal server error" }, 500, request, cloudflareEnv);
+  }
+}
+
 export async function PATCH(request: Request) {
   const { env } = await getCloudflareContext();
   const cloudflareEnv = env as CloudflareEnv;
@@ -30,9 +75,9 @@ export async function PATCH(request: Request) {
     await ensureDatabaseReady(db);
 
     const user = await db
-      .prepare("SELECT id, email, nickname, default_currency FROM users WHERE id = ?")
+      .prepare("SELECT id, email, nickname, default_currency, balance_usdt FROM users WHERE id = ?")
       .bind(userId)
-      .first<{ id: string; email: string | null; nickname: string | null; default_currency: string }>();
+      .first<{ id: string; email: string | null; nickname: string | null; default_currency: string; balance_usdt: string | null }>();
     if (!user) throw new HttpError(404, "user not found");
 
     await db
@@ -47,6 +92,7 @@ export async function PATCH(request: Request) {
           email: user.email,
           nickname,
           defaultCurrency: user.default_currency,
+          balanceUsdt: user.balance_usdt ?? "0",
         },
       },
       200,

@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
-CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE TABLE IF NOT EXISTS skus (
   id TEXT PRIMARY KEY,
   product_id TEXT NOT NULL REFERENCES products(id),
@@ -54,6 +53,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT,
   email_verified INTEGER NOT NULL DEFAULT 0,
   nickname TEXT,
+  balance_usdt TEXT NOT NULL DEFAULT '0',
   default_currency TEXT NOT NULL DEFAULT 'CNY',
   last_login_at TEXT NOT NULL DEFAULT (datetime('now')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -62,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   order_no TEXT NOT NULL UNIQUE,
+  user_id TEXT,
   product_id TEXT NOT NULL,
   sku_id TEXT NOT NULL,
   product_snapshot TEXT NOT NULL,
@@ -85,7 +86,6 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_tx_hash ON orders(tx_hash);
 CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
 CREATE INDEX IF NOT EXISTS idx_orders_telegram ON orders(telegram_username);
@@ -149,7 +149,21 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   order_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_inventory_sku ON inventory_items(sku_id, status);
+CREATE TABLE IF NOT EXISTS wallet_ledgers (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  amount_usdt TEXT NOT NULL,
+  balance_after TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'completed',
+  method TEXT,
+  note TEXT,
+  reference_type TEXT,
+  reference_id TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 const seedSql = `
@@ -188,12 +202,20 @@ INSERT OR IGNORE INTO exchange_rates (currency, rate) VALUES
 export async function ensureDatabaseReady(db: D1Database): Promise<void> {
   if (!bootstrapPromise) {
     bootstrapPromise = (async () => {
-      const statements = `${schemaSql}\n${seedSql}`
+      const schemaStatements = schemaSql
         .split(";")
         .map((statement) => statement.trim())
         .filter(Boolean);
-      for (let index = 0; index < statements.length; index += 20) {
-        await db.batch(statements.slice(index, index + 20).map((statement) => db.prepare(statement)));
+      for (let index = 0; index < schemaStatements.length; index += 20) {
+        await db.batch(schemaStatements.slice(index, index + 20).map((statement) => db.prepare(statement)));
+      }
+      await ensureBaseSchema(db);
+      const seedStatements = seedSql
+        .split(";")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      for (let index = 0; index < seedStatements.length; index += 20) {
+        await db.batch(seedStatements.slice(index, index + 20).map((statement) => db.prepare(statement)));
       }
       await ensureOperationalSchema(db);
     })().catch((error) => {
@@ -213,6 +235,30 @@ async function addColumn(db: D1Database, table: string, column: string, definiti
   if (!(await columnExists(db, table, column))) {
     await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
   }
+}
+
+async function ensureBaseSchema(db: D1Database): Promise<void> {
+  await addColumn(db, "products", "category_id", "TEXT NOT NULL DEFAULT 'more'");
+  await addColumn(db, "products", "status", "TEXT NOT NULL DEFAULT 'active'");
+  await addColumn(db, "products", "delivery_type", "TEXT NOT NULL DEFAULT 'manual'");
+  await addColumn(db, "products", "base_currency", "TEXT NOT NULL DEFAULT 'USDT'");
+  await addColumn(db, "products", "created_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
+  await addColumn(db, "products", "updated_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_products_status ON products(status)").run();
+  await addColumn(db, "skus", "stock_status", "TEXT NOT NULL DEFAULT 'in_stock'");
+  await addColumn(db, "skus", "stock_quantity", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "skus", "delivery_type", "TEXT NOT NULL DEFAULT 'manual'");
+  await addColumn(db, "skus", "is_default", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "skus", "is_recommended", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "skus", "created_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
+  await addColumn(db, "skus", "updated_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
+  await addColumn(db, "payment_networks", "is_enabled", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "payment_networks", "is_recommended", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn(db, "payment_networks", "confirmations", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "payment_networks", "warning_text", "TEXT");
+  await addColumn(db, "payment_networks", "created_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
+  await addColumn(db, "payment_networks", "updated_at", "TEXT NOT NULL DEFAULT (datetime('now'))");
 }
 
 async function ensureOperationalSchema(db: D1Database): Promise<void> {
@@ -477,6 +523,7 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "inventory_items", "locked_at", "TEXT");
   await addColumn(db, "inventory_items", "sold_at", "TEXT");
   await addColumn(db, "orders", "quantity", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "orders", "user_id", "TEXT");
   await addColumn(db, "orders", "payment_status", "TEXT NOT NULL DEFAULT 'unpaid'");
   await addColumn(db, "orders", "delivery_status", "TEXT NOT NULL DEFAULT 'undelivered'");
   await addColumn(db, "orders", "after_sale_status", "TEXT NOT NULL DEFAULT 'none'");
@@ -490,6 +537,33 @@ INSERT OR IGNORE INTO role_permissions (role, permissions_json) VALUES
   await addColumn(db, "deliveries", "encrypted_content", "TEXT");
   await addColumn(db, "deliveries", "status", "TEXT NOT NULL DEFAULT 'sent'");
   await addColumn(db, "deliveries", "failure_reason", "TEXT");
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_inventory_sku ON inventory_items(sku_id, status)").run();
+  await addColumn(db, "users", "balance_usdt", "TEXT NOT NULL DEFAULT '0'");
+  await db.prepare(`CREATE TABLE IF NOT EXISTS wallet_ledgers (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    amount_usdt TEXT NOT NULL,
+    balance_after TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'completed',
+    method TEXT,
+    note TEXT,
+    reference_type TEXT,
+    reference_id TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await addColumn(db, "wallet_ledgers", "status", "TEXT NOT NULL DEFAULT 'completed'");
+  await addColumn(db, "wallet_ledgers", "method", "TEXT");
+  await addColumn(db, "wallet_ledgers", "reference_type", "TEXT");
+  await addColumn(db, "wallet_ledgers", "reference_id", "TEXT");
+  await addColumn(db, "wallet_ledgers", "created_by", "TEXT");
+  await addColumn(db, "wallet_ledgers", "updated_at", "TEXT");
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_wallet_ledgers_user ON wallet_ledgers(user_id, created_at DESC)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_wallet_ledgers_status ON wallet_ledgers(status, created_at DESC)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_wallet_ledgers_reference ON wallet_ledgers(reference_type, reference_id)").run();
 
   await ensureUsersEmailSchema(db);
 
@@ -522,12 +596,13 @@ async function ensureUsersEmailSchema(db: D1Database): Promise<void> {
         password_hash TEXT,
         email_verified INTEGER NOT NULL DEFAULT 0,
         nickname TEXT,
+        balance_usdt TEXT NOT NULL DEFAULT '0',
         default_currency TEXT NOT NULL DEFAULT 'CNY',
         last_login_at TEXT NOT NULL DEFAULT (datetime('now')),
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )`,
-      `INSERT INTO users (id, telegram_id, telegram_username, default_currency, last_login_at, created_at)
-        SELECT id, telegram_id, telegram_username, default_currency, last_login_at, created_at
+      `INSERT INTO users (id, telegram_id, telegram_username, balance_usdt, default_currency, last_login_at, created_at)
+        SELECT id, telegram_id, telegram_username, '0', default_currency, last_login_at, created_at
         FROM users_legacy_email_migration`,
       "DROP TABLE users_legacy_email_migration",
       "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
@@ -544,5 +619,6 @@ async function ensureUsersEmailSchema(db: D1Database): Promise<void> {
   await addColumn(db, "users", "password_hash", "TEXT");
   await addColumn(db, "users", "email_verified", "INTEGER NOT NULL DEFAULT 0");
   await addColumn(db, "users", "nickname", "TEXT");
+  await addColumn(db, "users", "balance_usdt", "TEXT NOT NULL DEFAULT '0'");
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)").run();
 }

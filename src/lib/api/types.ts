@@ -59,6 +59,7 @@ export interface PaymentNetworkRow {
 export interface OrderRow {
   id: string;
   order_no: string;
+  user_id?: string | null;
   product_id: string;
   sku_id: string;
   product_snapshot: string; // JSON
@@ -94,11 +95,30 @@ export interface OrderRow {
 
 export interface UserRow {
   id: string;
-  telegram_id: string;
-  telegram_username: string;
+  telegram_id: string | null;
+  telegram_username: string | null;
+  email?: string | null;
+  nickname?: string | null;
+  balance_usdt?: string | null;
   default_currency: string;
   last_login_at: string;
   created_at: string;
+}
+
+export interface WalletLedgerRow {
+  id: string;
+  user_id: string;
+  type: string;
+  amount_usdt: string;
+  balance_after: string;
+  status: string;
+  method: string | null;
+  note: string | null;
+  reference_type: string | null;
+  reference_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string | null;
 }
 
 export interface DeliveryRow {

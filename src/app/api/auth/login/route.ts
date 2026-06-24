@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const user = await db
       .prepare(
-        "SELECT id, email, password_hash, email_verified, nickname, default_currency FROM users WHERE email = ?"
+        "SELECT id, email, password_hash, email_verified, nickname, default_currency, balance_usdt FROM users WHERE email = ?"
       )
       .bind(email)
       .first<{
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
         email_verified: number;
         nickname: string | null;
         default_currency: string;
+        balance_usdt: string | null;
       }>();
 
     // 统一报错文案，避免泄露邮箱是否注册
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
           nickname: user.nickname,
           authType: "email",
           defaultCurrency: user.default_currency,
+          balanceUsdt: user.balance_usdt ?? "0",
         },
       },
       200,

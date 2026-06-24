@@ -91,6 +91,7 @@ export function formatOrder(order: OrderRow) {
     id: order.id,
     orderId: order.id,
     orderNo: order.order_no,
+    userId: order.user_id ?? null,
     productId: order.product_id,
     skuId: order.sku_id,
     productSnapshot: parseJson(order.product_snapshot, {}),

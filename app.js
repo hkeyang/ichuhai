@@ -437,6 +437,7 @@ const state = {
     orders: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
     inventory: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
     transactions: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
+    wallet: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false },
     users: { items: [], total: 0, page: 1, pageSize: 20, loading: false, error: '', loaded: false }
   },
   adminDetail: { kind: '', id: '', loading: false, error: '', data: null },
@@ -1183,6 +1184,12 @@ function currentAppPath() {
 
 function navigate(target) {
   const path = normalizeRouteTarget(target);
+  // /account 已迁移为独立 React 路由：任何内部跳转都需真实加载（而非 SPA pushState），
+  // 否则会落到 app.js 的旧 account() 渲染，导致空白/不一致。
+  if (path === '/account' || path.startsWith('/account/')) {
+    window.location.assign(path);
+    return;
+  }
   if (currentAppPath() !== path || location.hash) {
     history.pushState(null, '', path);
   }
@@ -2714,25 +2721,22 @@ async function createOrder() {
   let serverOrder = null;
   const networkConfirm = document.querySelector('#networkConfirm');
   if (state.paymentMethod === 'usdt_trc20' && networkConfirm && !networkConfirm.checked) return notify('请先确认支付金额和钱包网络');
-  if (state.user.authType === 'email') {
-    const localOrder = createLocalOrder(item, sku);
-    if (!localOrder) return;
-    notify(localOrder.status === 'completed' ? '余额支付成功，订单已完成' : '订单已创建，请继续完成剩余支付');
-    navigate(localOrder.status === 'completed' ? `/order/${localOrder.id}/success` : `/pay/${localOrder.id}`);
-    return;
-  }
-  const accountUsername = state.telegramUsername || `@${state.user.username}`;
-  const accountEmail = state.email || `${state.user.username || state.user.id}@telegram.local`;
+  const accountUsername = state.telegramUsername || (state.user.username ? `@${state.user.username}` : '');
+  const accountEmail = state.email || state.user.email || `${state.user.username || state.user.id}@telegram.local`;
+  const headers = { 'content-type': 'application/json' };
+  const token = authToken();
+  if (token) headers.authorization = `Bearer ${token}`;
   try {
     const response = await fetch('/api/orders', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({
         productId: item.id,
         skuId: sku.id,
         telegramUsername: accountUsername,
         email: accountEmail,
         paymentNetwork: state.paymentNetwork,
+        paymentMethod: state.paymentMethod === 'balance' ? 'balance' : 'usdt_trc20',
         fiatCurrency: state.fiatCurrency
       })
     });
@@ -2750,7 +2754,8 @@ async function createOrder() {
     notify('订单已创建，但无法读取支付信息');
     return;
   }
-  navigate(`/pay/${order.id}`);
+  notify(order.status === 'paid' ? '余额支付成功' : '订单已创建，请继续完成支付');
+  navigate(order.status === 'paid' ? `/order/${order.id}/success` : `/pay/${order.id}`);
 }
 
 function orders() {
@@ -3823,19 +3828,19 @@ function accountSupportDetailPanel() {
 }
 
 function accountProfilePanel() {
-  return `<section class="account-settings-card">
-    <form class="account-password-form">
-      <label><span>昵称</span><input id="profileNickname" maxlength="20" value="${escapeHtml(userNickname())}" placeholder="请输入昵称" /></label>
-      <label><span>邮箱账号</span><input value="${escapeHtml(userEmail())}" disabled /></label>
-      <label><span>默认货币</span><select data-action="accountCurrency">${optionHtml(Object.keys(CURRENCIES).map((code) => ({ label: `${CURRENCIES[code].flag} ${code}`, value: code })), state.fiatCurrency)}</select></label>
-      <button class="settings-submit" data-action="saveAccountPrefs" type="button">保存账号资料</button>
-    </form>
-    ${accountNotificationsPanel()}
-    <form class="account-password-form">
-      <label><span>旧密码</span><div class="settings-password-field"><input id="oldPassword" type="password" placeholder="请输入旧密码" />${lineIcon('eye', '显示旧密码', 'settings-eye-icon')}</div></label>
-      <label><span>新密码</span><div class="settings-password-field"><input id="newPassword" type="password" placeholder="请输入新密码" />${lineIcon('eye', '显示新密码', 'settings-eye-icon')}</div></label>
-      <button class="settings-submit" data-action="changePassword" type="button">修改密码</button>
-    </form>
+  return `<section class="member-panel profile-form">
+    <div class="section-toolbar"><b>账号资料</b></div>
+    <label>昵称<input id="profileNickname" maxlength="20" value="${escapeHtml(userNickname())}" placeholder="请输入昵称" /></label>
+    <label>邮箱账号<input value="${escapeHtml(userEmail())}" disabled /></label>
+    <label>默认货币<select data-action="accountCurrency">${optionHtml(Object.keys(CURRENCIES).map((code) => ({ label: `${CURRENCIES[code].flag} ${code}`, value: code })), state.fiatCurrency)}</select></label>
+    <button class="primary small" data-action="saveAccountPrefs" type="button">保存账号资料</button>
+  </section>
+  ${accountNotificationsPanel()}
+  <section class="member-panel profile-form">
+    <div class="section-toolbar"><b>修改密码</b></div>
+    <label>旧密码<input id="oldPassword" type="password" placeholder="请输入旧密码" /></label>
+    <label>新密码<input id="newPassword" type="password" placeholder="请输入新密码" /></label>
+    <button class="primary small" data-action="changePassword" type="button">修改密码</button>
   </section>`;
 }
 
@@ -3937,25 +3942,14 @@ function account() {
   const userName = userNickname();
   const section = state.accountSection || 'orders';
   const sectionMeta = accountSectionMeta(section);
-  const isProfileSection = section === 'profile';
   shell(`
-    <section class="member-center ${isProfileSection ? 'settings-member-center' : ''}">
+    <section class="member-center">
       <aside class="member-sidebar">
-        ${isProfileSection ? `
-          <div class="member-user settings-user">
-            ${icon('discord')}
-            <h2>${escapeHtml(userName)}</h2>
-            <p>${escapeHtml(userEmail())}</p>
-            <em>ID： ${escapeHtml(state.user.id)}</em>
-            <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b><button data-action="selectAccountSection" data-section="wallet" type="button">充值</button></div>
-          </div>
-        ` : `
-          <div class="member-user">
-            <h2>${escapeHtml(userName)}</h2>
-            <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
-            <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
-          </div>
-        `}
+        <div class="member-user">
+          <h2>${escapeHtml(userName)}</h2>
+          <div class="member-balance"><span>账户余额</span><b>${Number(state.wallet.balance || 0).toFixed(2)} USDT</b></div>
+          <button data-action="selectAccountSection" data-section="wallet" type="button">充值</button>
+        </div>
         <nav class="member-nav">
           ${accountSections().map((item) => `<button class="${item.key === section || (item.key === 'wallet' && section === 'walletLedger') || (item.key === 'support' && section === 'supportDetail') ? 'active' : ''}" data-action="selectAccountSection" data-section="${item.key}" type="button">${lineIcon(item.icon, item.label, 'member-nav-icon')}${item.label}</button>`).join('')}
         </nav>
@@ -3964,7 +3958,7 @@ function account() {
 
       <section class="member-main">
         <header class="member-title">
-          <h1>${isProfileSection ? escapeHtml(sectionMeta.label) : `个人中心 / ${escapeHtml(sectionMeta.label)}`}</h1>
+          <h1>个人中心 / ${escapeHtml(sectionMeta.label)}</h1>
           <p>${escapeHtml(sectionMeta.desc)}</p>
         </header>
 
@@ -4059,7 +4053,7 @@ async function renderAdmin() {
   if (tab === 'dashboard') { await loadAdminDashboard(); await loadAdminPage('orders'); }
   else if (tab === 'orders') await loadAdminPage('orders');
   else if (tab === 'inventory') { await loadAdminPage('inventory'); if (currentAdminSubTab('inventory', 'list') === 'warning') await loadAdminDashboard(); }
-  else if (tab === 'recharge') await loadAdminPage('transactions');
+  else if (tab === 'recharge') await loadAdminPage('wallet');
   else if (tab === 'users') await loadAdminPage('users');
   const activeMeta = adminMenu().find((item) => item.key === tab) || adminMenu()[0];
   const globalFilters = adminFiltersFor('global');
@@ -4682,6 +4676,37 @@ const ADMIN_MODAL_HANDLERS = {
     notify(failed ? `批量更新完成，${failed} 个失败` : '批量更新完成');
     return renderAdmin();
   },
+  async walletConfirm(values, ctx) {
+    const response = await adminFetch('/api/admin/wallet', { method: 'POST', body: JSON.stringify({ action: 'confirm', ledgerId: ctx.id, note: values.note || '' }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(adminFriendlyError(data.error, response.status));
+    state.adminModal = null;
+    await loadAdminPage('wallet', { force: true });
+    notify('充值已确认入账');
+    return renderAdmin();
+  },
+  async walletReject(values, ctx) {
+    const response = await adminFetch('/api/admin/wallet', { method: 'POST', body: JSON.stringify({ action: 'reject', ledgerId: ctx.id, note: values.note || '充值未通过' }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(adminFriendlyError(data.error, response.status));
+    state.adminModal = null;
+    await loadAdminPage('wallet', { force: true });
+    notify('充值申请已驳回');
+    return renderAdmin();
+  },
+  async walletAdjust(values) {
+    const response = await adminFetch('/api/admin/wallet', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'adjust', userId: values.userId, amountUsdt: values.amountUsdt, type: values.type || 'adjust', method: 'manual', note: values.note })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return notify(adminFriendlyError(data.error, response.status));
+    state.adminModal = null;
+    await loadAdminPage('wallet', { force: true });
+    await loadAdminPage('users', { force: true });
+    notify('余额调整已完成');
+    return renderAdmin();
+  },
   async blacklistCreate(values) {
     const response = await adminFetch('/api/admin/ops', { method: 'POST', body: JSON.stringify({ action: 'blacklist.create', kind: values.kind, value: values.value, effect: values.effect, reason: values.reason, status: 'active' }) });
     const data = await response.json().catch(() => ({}));
@@ -4809,7 +4834,14 @@ function adminUserDetailPanel() {
   const hits = d.data.blacklistHits || [];
   const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
   const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
-  const recentLedger = adminUserLedgerRows(p.email, 5);
+  const recentLedger = (d.data.walletLedger || []).slice(0, 5).map((item) => ({
+    type: walletTypeLabel(item.type),
+    amount: Number(item.amountUsdt || 0),
+    source: item.note || item.referenceId || '-',
+    time: timeFrom(item.createdAt),
+    status: walletStatusLabel(item.status),
+    tone: walletStatusTone(item.status)
+  }));
   return `<div class="admin-drawer-backdrop">
     <div class="admin-drawer">
       <div class="admin-drawer-head"><div><h2>${escapeHtml(p.email)}</h2><span>${escapeHtml(p.telegramUsername || '')}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
@@ -4896,6 +4928,24 @@ function adminLedgerAmount(value) {
   const sign = n > 0 ? '+' : '';
   const cls = n < 0 ? 'negative' : 'positive';
   return `<b class="admin-ledger-amount ${cls}">${sign}${n.toFixed(2)} USDT</b>`;
+}
+
+function walletTypeLabel(type = '') {
+  return { recharge: '余额充值', consume: '订单扣款', refund: '订单退款', adjust: '后台调整' }[type] || type || '余额变动';
+}
+
+function walletStatusLabel(status = '') {
+  return { pending: '待确认', completed: '成功', failed: '失败' }[status] || status || '成功';
+}
+
+function walletStatusTone(status = '') {
+  if (status === 'pending') return 'warning';
+  if (status === 'failed') return 'danger';
+  return 'success';
+}
+
+function walletMethodLabel(method = '') {
+  return { usdt_trc20: 'USDT TRC20', alipay: '支付宝', balance: '余额', wallet: '余额', manual: '人工' }[method] || method;
 }
 
 function adminLedgerTone(item = {}) {
@@ -5416,23 +5466,25 @@ function adminContent(tab) {
     const sub = currentAdminSubTab(tab, 'orders');
     const tabs = ['orders|充值订单', 'ledger|余额流水'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const scope = adminFilterScope(tab, sub);
-    const filters = adminFiltersFor(scope);
-    const ledgerRows = accountWalletLedgerEntries().filter((item) => {
-      const q = String(filters.q || '').toLowerCase();
-      const isRecharge = item.type === '充值' || item.type === '充值订单' || item.type === '充值入账';
-      if (sub === 'orders' && !isRecharge) return false;
-      if (filters.method && !['全部方式', '全部'].includes(filters.method) && !String(item.method || item.detail || '').toLowerCase().includes(String(filters.method).toLowerCase())) return false;
-      if (filters.status && !['全部状态', '全部'].includes(filters.status) && String(item.status || '成功') !== filters.status) return false;
-      return !q || [item.type, item.method, item.detail, item.status].some((v) => String(v || '').toLowerCase().includes(q));
-    });
-    const body = `${adminToolbar([{ name: 'q', label: sub === 'orders' ? '搜索充值订单' : '搜索余额流水', placeholder: '订单号 / TxID / 类型 / 状态' }, { name: 'method', label: '支付方式', type: 'select', value: '全部方式', options: ['USDT','支付宝','余额'] }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: ['成功','待确认','失败'] }], '', scope)}
-      <div class="admin-panel">${adminTable([{ label: sub === 'orders' ? '充值单' : '流水类型' }, { label: '金额' }, { label: '方式 / 详情', width: '2fr' }, { label: '时间' }, { label: '状态' }], ledgerRows.map((item) => [
-        `<b>${escapeHtml(item.type)}</b>`,
-        `<b>${Number(item.amount || 0).toFixed(2)}</b> USDT`,
-        `${escapeHtml(item.method || '-')}<small>${escapeHtml(item.detail || '')}</small>`,
-        escapeHtml(item.time || '-'),
-        adminStatus(item.status || '成功', item.tone === 'warning' || item.status === '待确认' ? 'warning' : item.tone === 'danger' || item.status === '失败' ? 'danger' : 'success')
-      ]), { title: sub === 'orders' ? '暂无充值订单' : '暂无余额流水', desc: sub === 'orders' ? '用户创建充值单后会显示在这里。' : '充值、消费、退款和后台调整会沉淀为余额流水。' })}${adminPager(ledgerRows.length)}</div>`;
+    const slice = state.adminPages.wallet;
+    const rows = slice.items || [];
+    const typeOptions = [{label:'充值 recharge',value:'recharge'},{label:'订单扣款 consume',value:'consume'},{label:'退款 refund',value:'refund'},{label:'调整 adjust',value:'adjust'}];
+    const toolbarFields = sub === 'orders'
+      ? [{ name: 'q', label: '搜索充值订单', placeholder: '邮箱 / 昵称 / 备注 / 单号' }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: [{label:'待确认',value:'pending'},{label:'成功',value:'completed'},{label:'失败',value:'failed'}] }]
+      : [{ name: 'q', label: '搜索余额流水', placeholder: '邮箱 / 订单号 / 备注' }, { name: 'type', label: '类型', type: 'select', value: '全部类型', options: typeOptions }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: [{label:'待确认',value:'pending'},{label:'成功',value:'completed'},{label:'失败',value:'failed'}] }];
+    const rowActions = (item) => item.status === 'pending'
+      ? `<button data-action="adminWalletConfirm" data-id="${escapeHtml(item.id)}" type="button">确认入账</button><button class="danger-text" data-action="adminWalletReject" data-id="${escapeHtml(item.id)}" type="button">驳回</button>`
+      : `<button class="ghost" data-action="adminUserDetail" data-id="${escapeHtml(item.userId)}" type="button">用户</button>`;
+    const body = `${adminToolbar(toolbarFields, '<button class="primary small" data-action="adminWalletAdjust" type="button">手动调账</button>', scope)}
+      <div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取余额流水。</span></div>' : adminTable([{ label: sub === 'orders' ? '充值单' : '流水类型' }, { label: '用户' }, { label: '金额' }, { label: '方式 / 详情', width: '2fr' }, { label: '时间' }, { label: '状态' }, { label: '操作', width: '1.2fr' }], rows.map((item) => [
+        `<b>${escapeHtml(walletTypeLabel(item.type))}</b><small>${escapeHtml(item.referenceId || item.id)}</small>`,
+        `${escapeHtml(item.email || item.nickname || item.userId || '-')}<small>${escapeHtml(item.userId || '')}</small>`,
+        adminLedgerAmount(item.amountUsdt),
+        `${escapeHtml(walletMethodLabel(item.method) || '-')}<small>${escapeHtml(item.note || '')}</small>`,
+        timeFrom(item.createdAt),
+        adminStatus(walletStatusLabel(item.status), walletStatusTone(item.status)),
+        rowActions(item)
+      ]), { title: sub === 'orders' ? '暂无充值订单' : '暂无余额流水', desc: sub === 'orders' ? '用户创建充值单后会显示在这里。' : '充值、消费、退款和后台调整会沉淀为余额流水。' })}${adminPagerServer('wallet')}</div>`;
     return adminPage('充值流水', '只管理充值订单和用户余额变化，不混入商品订单支付处理。', body, { tabKey: 'recharge', tabs });
   }
   if (tab === 'payments') {
@@ -5887,6 +5939,7 @@ async function loadAdminPage(kind, { page, force } = {}) {
     orders: '/api/admin/orders',
     inventory: '/api/admin/inventory',
     transactions: '/api/admin/payment-transactions',
+    wallet: '/api/admin/wallet',
     users: '/api/admin/users'
   };
   const filters = adminPageFilters(kind);
@@ -5966,6 +6019,15 @@ function adminPageFilters(kind) {
       onlyExceptions: sub === 'exceptions' ? '1' : ''
     };
   }
+  if (kind === 'wallet') {
+    const sub = currentAdminSubTab('recharge', 'orders');
+    const f = adminFiltersFor(adminFilterScope('recharge', sub));
+    return {
+      q: f.q || '',
+      type: sub === 'orders' ? 'recharge' : (f.type && !['全部类型', '全部'].includes(f.type) ? f.type : ''),
+      status: f.status && !['全部状态', '全部'].includes(f.status) ? f.status : ''
+    };
+  }
   if (kind === 'users') {
     const f = adminFiltersFor('users');
     return { q: f.q || '' };
@@ -6014,7 +6076,7 @@ async function loadAdminDashboard(force = false) {
 // 筛选变更后，按当前 tab 重置到第 1 页并从服务端重新加载
 async function reloadAdminAfterFilter() {
   const tab = state.adminTab;
-  const map = { orders: 'orders', inventory: 'inventory', recharge: 'transactions', users: 'users' };
+  const map = { orders: 'orders', inventory: 'inventory', recharge: 'wallet', users: 'users' };
   const kind = map[tab];
   if (kind) {
     await loadAdminPage(kind, { page: 1, force: true });
@@ -6125,6 +6187,8 @@ document.addEventListener('click', (event) => {
   if (!href.startsWith('/')) return;
   const url = new URL(href, location.origin);
   if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+  // /account 已迁移为独立 React 路由，放行给浏览器真实导航
+  if (url.pathname === '/account' || url.pathname.startsWith('/account/')) return;
   event.preventDefault();
   history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`);
   route();
@@ -6155,10 +6219,12 @@ document.addEventListener('click', async (event) => {
   if (action === 'markMessagesRead') { state.messages = state.messages.map((message) => ({ ...message, read: true })); persist(); return route(); }
   if (action === 'toggleAccountMenu') { state.accountMenuOpen = !state.accountMenuOpen; persist(); return route(); }
   if (action === 'accountMenuSection') {
-    state.accountSection = el.dataset.section || 'orders';
+    const section = el.dataset.section || 'orders';
     state.accountMenuOpen = false;
     persist();
-    return navigate('/account');
+    // /account 已迁移为 React 路由，需真实导航（而非 pushState），并带上要打开的标签
+    window.location.assign('/account?section=' + encodeURIComponent(section));
+    return;
   }
   if (action === 'accountDemoAction') {
     return notify(el.dataset.message || '该功能将在真实数据接入后开放');
@@ -6629,6 +6695,42 @@ document.addEventListener('click', async (event) => {
     } catch (err) {
       return notify(err?.message || '重扫失败');
     }
+  }
+  if (action === 'adminWalletConfirm') {
+    return openAdminModal({
+      kind: 'walletConfirm',
+      title: '确认充值入账',
+      desc: '确认后会增加用户余额并写入余额流水和审计日志。',
+      submitLabel: '确认入账',
+      context: { id: el.dataset.id },
+      fields: [{ name: 'note', label: '备注', placeholder: '已核验到账' }]
+    });
+  }
+  if (action === 'adminWalletReject') {
+    return openAdminModal({
+      kind: 'walletReject',
+      title: '驳回充值申请',
+      desc: '驳回后该充值单会标记失败，不改变用户余额。',
+      danger: true,
+      submitLabel: '确认驳回',
+      context: { id: el.dataset.id },
+      fields: [{ name: 'note', label: '驳回原因', type: 'textarea', required: true, placeholder: '未到账 / 金额不符 / 用户取消' }]
+    });
+  }
+  if (action === 'adminWalletAdjust') {
+    return openAdminModal({
+      kind: 'walletAdjust',
+      title: '手动调整余额',
+      desc: '金额可为正或负。负数会扣减余额，余额不足时后端会拒绝。',
+      danger: true,
+      submitLabel: '确认调账',
+      fields: [
+        { name: 'userId', label: '用户 ID', required: true, placeholder: '从用户列表或详情复制 userId' },
+        { name: 'type', label: '类型', type: 'select', value: 'adjust', options: [{ label: '后台调整', value: 'adjust' }, { label: '退款', value: 'refund' }, { label: '充值', value: 'recharge' }] },
+        { name: 'amountUsdt', label: '金额 USDT', required: true, placeholder: '例如 10 或 -2.5' },
+        { name: 'note', label: '原因', type: 'textarea', required: true, placeholder: '客服补偿 / 退款 / 风控扣减等' }
+      ]
+    });
   }
   if (action === 'adminEditConfirmations') {
     return openAdminModal({

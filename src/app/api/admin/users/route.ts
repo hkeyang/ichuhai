@@ -1,5 +1,5 @@
 // src/app/api/admin/users/route.ts
-// GET /api/admin/users — 用户列表（按下单邮箱聚合，服务端筛选 + 分页，需 admin token）
+// GET /api/admin/users — 用户列表（users 表为主，聚合订单与余额，需 admin token）
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensureDatabaseReady } from "@/lib/api/bootstrap";
@@ -28,39 +28,50 @@ export async function GET(request: Request) {
     const where: string[] = [];
     const binds: unknown[] = [];
     if (q) {
-      where.push("(o.email LIKE ? OR o.telegram_username LIKE ?)");
+      where.push("(u.email LIKE ? OR u.telegram_username LIKE ? OR u.nickname LIKE ?)");
       const like = `%${q}%`;
-      binds.push(like, like);
+      binds.push(like, like, like);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const totalRow = await db
-      .prepare(`SELECT COUNT(*) AS total FROM (SELECT email FROM orders ${whereSql} GROUP BY email)`)
+      .prepare(`SELECT COUNT(*) AS total FROM users u ${whereSql}`)
       .bind(...binds)
       .first<{ total: number }>();
 
     const listResult = await db
       .prepare(
-        `SELECT o.email AS email,
-                MAX(o.telegram_username) AS telegramUsername,
-                COUNT(*) AS orderCount,
+        `SELECT u.id,
+                u.email,
+                u.telegram_username AS telegramUsername,
+                u.nickname,
+                u.balance_usdt AS balanceUsdt,
+                u.created_at AS createdAt,
+                u.last_login_at AS lastLoginAt,
+                COUNT(o.id) AS orderCount,
                 SUM(CASE WHEN o.status IN ('paid','delivering','completed') AND o.paid_at IS NOT NULL THEN CAST(o.amount_usdt AS REAL) ELSE 0 END) AS paidAmount,
                 SUM(CASE WHEN COALESCE(o.after_sale_status,'none') <> 'none' THEN 1 ELSE 0 END) AS afterSaleCount,
                 MAX(o.created_at) AS lastOrderAt
-         FROM orders o
+         FROM users u
+         LEFT JOIN orders o ON o.user_id = u.id OR (u.email IS NOT NULL AND LOWER(o.email) = LOWER(u.email))
          ${whereSql}
-         GROUP BY o.email
-         ORDER BY lastOrderAt DESC
+         GROUP BY u.id
+         ORDER BY COALESCE(lastOrderAt, u.created_at) DESC
          LIMIT ? OFFSET ?`
       )
       .bind(...binds, pagination.pageSize, pagination.offset)
       .all<{
+        id: string;
         email: string;
         telegramUsername: string | null;
+        nickname: string | null;
+        balanceUsdt: string | null;
+        createdAt: string;
+        lastLoginAt: string | null;
         orderCount: number;
         paidAmount: number;
         afterSaleCount: number;
-        lastOrderAt: string;
+        lastOrderAt: string | null;
       }>();
 
     // 命中黑名单的邮箱/telegram，用于标注风险状态
@@ -77,15 +88,20 @@ export async function GET(request: Request) {
 
     const items = listResult.results.map((row) => {
       const tg = String(row.telegramUsername ?? "").replace(/^@/, "").trim().toLowerCase();
-      const risk = blockedEmails.has(row.email.toLowerCase()) || (tg && blockedTelegrams.has(tg));
+      const email = row.email ?? "";
+      const risk = blockedEmails.has(email.toLowerCase()) || (tg && blockedTelegrams.has(tg));
       return {
-        id: row.email,
-        email: row.email,
+        id: row.id,
+        email,
         telegramUsername: row.telegramUsername,
+        nickname: row.nickname,
+        balanceUsdt: row.balanceUsdt ?? "0",
         orderCount: row.orderCount,
         paidAmountUsdt: Number(row.paidAmount ?? 0).toFixed(3),
         afterSaleCount: row.afterSaleCount,
         lastOrderAt: row.lastOrderAt,
+        createdAt: row.createdAt,
+        lastLoginAt: row.lastLoginAt,
         riskStatus: risk ? "blacklisted" : "normal",
       };
     });

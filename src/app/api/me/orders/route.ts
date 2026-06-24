@@ -77,7 +77,7 @@ export async function GET(request: Request) {
         : user.telegram_username;
       matchValues.push(username, `@${username}`);
     }
-    const conditions: string[] = [];
+    const conditions: string[] = ["user_id = ?"];
     if (matchValues.length) {
       conditions.push(`telegram_username IN (${matchValues.map(() => "?").join(",")})`);
     }
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       return jsonResponse({ orders: [] }, 200, request, cloudflareEnv);
     }
 
-    const bindValues = [...matchValues, ...(user.email ? [user.email] : [])];
+    const bindValues = [user.id, ...matchValues, ...(user.email ? [user.email] : [])];
     const result = await db
       .prepare(
         `SELECT * FROM orders

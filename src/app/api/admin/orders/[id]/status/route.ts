@@ -9,6 +9,7 @@ import { HttpError } from "@/lib/api/errors";
 import { verifyAdminSessionToken } from "@/lib/api/admin-session";
 import { writeAuditLog } from "@/lib/api/audit";
 import { formatOrder } from "@/lib/api/formatters";
+import { createWalletLedger } from "@/lib/api/wallet";
 import type { OrderRow } from "@/lib/api/types";
 
 const ALLOWED_STATUSES = new Set([
@@ -78,6 +79,28 @@ export async function PATCH(
         )
         .bind(newStatus, id)
         .run();
+    }
+
+    if (newStatus === "refunded" && oldStatus !== "refunded") {
+      const userId = order.user_id;
+      if (userId) {
+        const existingRefund = await db
+          .prepare("SELECT id FROM wallet_ledgers WHERE reference_type = 'order_refund' AND reference_id = ? AND status = 'completed' LIMIT 1")
+          .bind(id)
+          .first<{ id: string }>();
+        if (!existingRefund) {
+          await createWalletLedger(db, {
+            userId,
+            type: "refund",
+            amountUsdt: order.amount_usdt,
+            method: "wallet",
+            note: adminNote || `订单 ${order.order_no} 退款入余额`,
+            referenceType: "order_refund",
+            referenceId: id,
+            createdBy: "admin",
+          });
+        }
+      }
     }
 
     await writeAuditLog(
