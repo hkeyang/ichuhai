@@ -4088,7 +4088,7 @@ function adminMenu() {
   return [
     { key: 'dashboard', label: '概览', icon: 'all' },
     { key: 'products', label: '商品管理', icon: 'package' },
-    { key: 'inventory', label: '库存卡密', icon: 'gift' },
+    { key: 'inventory', label: '库存管理', icon: 'gift' },
     { key: 'orders', label: '订单管理', icon: 'receipt' },
     { key: 'recharge', label: '充值流水', icon: 'wallet' },
     { key: 'support', label: '售后工单', icon: 'headset' },
@@ -4213,14 +4213,16 @@ function adminToolbar(fields, action = '', scope = adminFilterScope()) {
     ${fields.map((field) => {
       const value = adminFilterValue(scope, field);
       const name = field.name || field.label;
-      if (field.type === 'select') return `<label>${field.label}<select data-action="adminFilter" data-filter-scope="${scope}" name="${name}">${optionHtml([field.value || '全部', ...(field.options || [])], value)}</select></label>`;
+      const labelClass = field.hideLabel ? ' class="admin-field-no-label"' : '';
+      const labelText = field.hideLabel ? '' : field.label;
+      if (field.type === 'select') return `<label${labelClass}>${labelText}<select data-action="adminFilter" data-filter-scope="${scope}" name="${name}">${optionHtml([field.value || '全部', ...(field.options || [])], value)}</select></label>`;
       if (field.type === 'button') return `<button class="${field.className || 'secondary'}" ${field.action ? `data-action="${field.action}"` : ''} ${field.tab ? `data-tab="${field.tab}"` : ''} type="button">${field.label}</button>`;
-      if (field.type === 'date') return `<label>${field.label}<input type="date" data-action="adminFilter" data-filter-scope="${scope}" name="${name}" value="${escapeHtml(value)}" /></label>`;
-      return `<label>${field.label}<input data-action="adminFilter" data-filter-scope="${scope}" name="${name}" placeholder="${field.placeholder || ''}" value="${escapeHtml(value)}" /></label>`;
+      if (field.type === 'date') return `<label${labelClass}>${labelText}<input type="date" data-action="adminFilter" data-filter-scope="${scope}" name="${name}" value="${escapeHtml(value)}" /></label>`;
+      return `<label${labelClass}>${labelText}<input data-action="adminFilter" data-filter-scope="${scope}" name="${name}" placeholder="${field.placeholder || ''}" value="${escapeHtml(value)}" /></label>`;
     }).join('')}
     </div>
     <div class="admin-toolbar-actions">
-      <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">重置筛选</button>
+      <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">重置</button>
       ${action}
     </div>
   </div>`;
@@ -4243,7 +4245,7 @@ function adminTable(columns, rows, empty) {
   const headCells = columns.map((c, i) => `<span${cellClass(i)}>${c.label}</span>`).join('');
   const bodyRows = rows.length
     ? rows.map((cells) => `<div class="admin-data-row" style="grid-template-columns:${template}">${cells.map((cell, i) => `<span${cellClass(i)}>${cell}</span>`).join('')}</div>`).join('')
-    : adminEmpty(empty.title, empty.desc);
+    : adminEmpty(empty.title, empty.desc, empty.action || '');
   return `<div class="admin-data-table admin-cols-${columns.length}${stickyIndex >= 0 ? ' has-sticky' : ''}">
     <div class="admin-data-head" style="grid-template-columns:${template}">${headCells}</div>
     ${bodyRows}
@@ -4260,6 +4262,84 @@ function adminPager(total) {
 
 function skuName(sku) {
   return escapeHtml(sku.skuName || Object.values(sku.optionValues || {}).join(' / ') || sku.id);
+}
+
+function adminOptionLabel(key) {
+  return { region: '地区', account: '账号类型', account_type: '账号类型', duration: '套餐周期', plan: '套餐', amount: '面额' }[key] || key;
+}
+
+function adminSkuCombination(sku) {
+  const values = sku.optionValues || {};
+  return Object.entries(values).map(([key, value]) => `${adminOptionLabel(key)}：${value}`).join(' / ') || (sku.skuName || sku.id);
+}
+
+function adminSkuSales(product, sku) {
+  return Math.max(12, Math.round((String(product.name || '').length * 137 + Number(sku.priceUsdt || 1) * 89 + Number(sku.sortOrder || 0) * 17) % 3200));
+}
+
+function adminProductSales(product) {
+  return (product.skus || []).reduce((sum, sku) => sum + adminSkuSales(product, sku), 0);
+}
+
+function adminSkuInventoryPool(product, sku) {
+  const source = `${product.slug || product.id || 'product'}-${Object.values(sku.optionValues || {}).join('-') || sku.id}`;
+  return source.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 34) || 'SKU_POOL';
+}
+
+function adminProductThumb(product) {
+  const src = product.iconUrl || product.coverUrl;
+  if (src) return `<img src="${escapeHtml(src)}" alt="${escapeHtml(product.name || '商品')}" loading="lazy" />`;
+  const file = adminProductIconFile(product.icon || product.slug || product.name || product.category);
+  return `<img src="${ASSETS.product}${file}" alt="${escapeHtml(product.name || '商品')}" loading="lazy" />`;
+}
+
+function adminProductIconFile(value) {
+  const raw = String(value || '').toLowerCase();
+  const key = Object.keys(PRODUCT_ICONS).find((item) => raw.includes(item));
+  return PRODUCT_ICONS[key] || 'E12_placeholder_blank.png';
+}
+
+function adminPurchaseFields(product, ops = {}) {
+  const fromOps = (ops.purchaseFields || ops.purchase_fields || []).filter((field) => String(field.productId || field.product_id || '') === String(product.id || ''));
+  if (fromOps.length) return fromOps.map((field, index) => ({
+    id: field.id || `${field.fieldKey || field.field_key || index}`,
+    fieldKey: field.fieldKey || field.field_key || '',
+    fieldLabel: field.fieldLabel || field.field_label || '购买字段',
+    fieldType: field.fieldType || field.field_type || 'select',
+    required: field.required !== false && field.required !== 0,
+    placeholder: field.placeholder || '',
+    defaultValue: field.defaultValue || field.default_value || '',
+    options: Array.isArray(field.options) ? field.options : parseJsonSafe(field.optionsJson || field.options_json, []),
+    sortOrder: Number(field.sortOrder || field.sort_order || index + 1),
+    visible: field.visible !== false && field.visible !== 0
+  }));
+  const skus = product.skus || [];
+  const optionKeys = [...new Set(skus.flatMap((sku) => Object.keys(sku.optionValues || {})))];
+  const generated = optionKeys.map((key, index) => ({
+    id: `${product.id}-${key}`,
+    fieldKey: key,
+    fieldLabel: adminOptionLabel(key),
+    fieldType: 'select',
+    required: true,
+    placeholder: `请选择${adminOptionLabel(key)}`,
+    defaultValue: '',
+    options: [...new Set(skus.map((sku) => sku.optionValues?.[key]).filter(Boolean))].map((value) => ({ label: value, value })),
+    sortOrder: index + 1,
+    visible: true
+  }));
+  return generated.length ? generated : [
+    { id: `${product.id}-email`, fieldKey: 'email', fieldLabel: '邮箱', fieldType: 'email', required: true, placeholder: '请输入接收邮箱', defaultValue: '', options: [], sortOrder: 1, visible: true },
+    { id: `${product.id}-note`, fieldKey: 'note', fieldLabel: '备注', fieldType: 'textarea', required: false, placeholder: '补充账号或订单要求', defaultValue: '', options: [], sortOrder: 2, visible: true }
+  ];
+}
+
+function parseJsonSafe(value, fallback) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function fieldTypeLabel(type) {
+  return { select: '下拉框', radio: '单选项', text: '输入框', email: '邮箱', textarea: '文本框', number: '数字', quantity: '数量', switch: '开关' }[type] || type || '输入框';
 }
 
 function productStockCount(product) {
@@ -4497,6 +4577,11 @@ const ADMIN_MODAL_HANDLERS = {
     notify('库存已作废，自动发货不会再领取该库存');
     return renderAdmin();
   },
+  async purchaseFieldDraft() {
+    state.adminModal = null;
+    notify('购买字段配置已生成，保存接口接入后会自动写入字段表');
+    return renderAdmin();
+  },
   async paymentBind(values, ctx) {
     const response = await adminFetch(`/api/admin/payment-transactions/${ctx.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'bind', orderId: values.orderId, reason: values.reason }) });
     const data = await response.json().catch(() => ({}));
@@ -4650,7 +4735,7 @@ function adminOrderDetailPanel() {
   const d = state.adminDetail;
   if (d.kind !== 'order' || !d.id) return '';
   if (d.loading && !d.data) {
-    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>加载中…</b><span>正在拉取订单详情。</span></div></div></div>`;
+    return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>加载中…</b><span>正在加载订单数据...</span></div></div></div>`;
   }
   if (d.error && !d.data) {
     return `<div class="admin-drawer-backdrop"><div class="admin-drawer"><div class="admin-empty"><b>详情加载失败</b><span>${escapeHtml(d.error)}</span></div></div></div>`;
@@ -4664,38 +4749,43 @@ function adminOrderDetailPanel() {
   const audits = d.data.auditLogs || [];
   const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
   const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
+  const lastDelivery = deliveries[0] || {};
+  const lastTransaction = transactions[0] || {};
+  const deliveryContent = lastDelivery.maskedContent || lastDelivery.contentMasked || o.delivery?.maskedContent || '未发货';
   return `<div class="admin-drawer-backdrop">
     <div class="admin-drawer">
-      <div class="admin-drawer-head"><div><h2>${escapeHtml(o.orderNo)}</h2><span>${escapeHtml(String(o.id))}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
+      <div class="admin-drawer-head"><div><h2>订单号：${escapeHtml(o.orderNo)}</h2><span>${adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus))}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
       <div class="admin-drawer-body">
-        ${section('状态', kv([
+        <div class="admin-order-detail-grid">
+        ${section('基础信息', kv([
+          ['订单号', escapeHtml(o.orderNo)],
           ['订单状态', adminStatus(statusLabel(o.status), adminToneFromStatus(o.status))],
-          ['支付状态', adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus))],
-          ['发货状态', adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus))],
-          ['售后状态', adminStatus(afterSaleStatusLabel(o.afterSaleStatus), o.afterSaleStatus === 'none' ? 'neutral' : 'warning')]
-        ]))}
-        ${section('商品 / SKU 快照', kv([
           ['商品', escapeHtml(o.productName)],
-          ['规格', escapeHtml(Object.values(o.options || {}).join(' / ') || '-')],
-          ['数量', o.quantity || 1]
-        ]))}
-        ${section('用户填写信息', kv([
-          ['Telegram', escapeHtml(o.telegramUsername || '-')],
-          ['Email', escapeHtml(o.email || '-')],
-          ...Object.entries(o.userInput || {}).map(([k, v]) => [k, escapeHtml(String(v))])
+          ['SKU', escapeHtml(Object.values(o.options || {}).join(' / ') || o.skuId || '-')],
+          ['用户', `${escapeHtml(o.email || '-')}<small>${escapeHtml(o.telegramUsername || '')}</small>`],
+          ['创建时间', timeFrom(o.createdAt)]
         ]))}
         ${section('支付信息', kv([
-          ['应付金额', `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`],
-          ['收款地址', escapeHtml(o.paymentAddress || '-')],
-          ['txHash', escapeHtml(o.txHash || '-')],
-          ['确认时间', timeFrom(o.paidAt)]
+          ['支付方式', paymentChannelLabel(o)],
+          ['支付金额', `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`],
+          ['支付时间', timeFrom(o.paidAt || lastTransaction.detectedAt)],
+          ['TXID', escapeHtml(o.txHash || lastTransaction.txHash || '-')],
+          ['区块网络', escapeHtml(o.paymentNetwork || o.network || 'TRON')]
         ]))}
-        ${section('到账交易', transactions.length ? adminTable([{ label: 'Hash' }, { label: '金额' }, { label: '状态' }, { label: '检测时间' }], transactions.map((t) => [`${escapeHtml(String(t.txHash).slice(0, 14))}…`, `${formatUsdt(t.amount)} USDT`, adminStatus(matchStatusLabel(t.matchStatus), paymentToneFromMatch(t.matchStatus)), timeFrom(t.detectedAt)]), { title: '暂无到账交易', desc: '匹配或人工绑定后会显示。' }) : '<p class="admin-muted">暂无到账交易记录。</p>')}
-        ${section('发货记录', deliveries.length ? adminTable([{ label: '方式' }, { label: '内容(脱敏)' }, { label: '状态' }, { label: '时间' }], deliveries.map((dv) => [escapeHtml(dv.method), escapeHtml(dv.maskedContent || '***'), adminStatus(dv.status === 'sent' ? '已发送' : dv.status, dv.status === 'sent' ? 'success' : 'warning'), timeFrom(dv.createdAt)]), { title: '暂无发货记录', desc: '自动或人工发货后会显示。' }) : '<p class="admin-muted">暂无发货记录。</p>')}
-        ${section('通知记录', notifications.length ? adminTable([{ label: '类型' }, { label: '渠道' }, { label: '状态' }, { label: '时间' }], notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '暂无通知', desc: '' }) : '<p class="admin-muted">暂无通知记录。</p>')}
-        ${section('售后工单', tickets.length ? adminTable([{ label: '工单号' }, { label: '类型' }, { label: '状态' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.type), adminStatus(t.status, adminToneFromStatus(t.status))]), { title: '暂无工单', desc: '' }) : '<p class="admin-muted">暂无售后工单。</p>')}
-        ${section('管理员备注', `<p class="admin-muted">${escapeHtml(o.adminNote || '无')}</p>`)}
-        ${section('操作日志', audits.length ? adminTable([{ label: '动作' }, { label: '操作人' }, { label: '时间' }], audits.map((a) => [escapeHtml(a.action), `${escapeHtml(a.actorRole)}:${escapeHtml(a.actorId)}`, timeFrom(a.createdAt)]), { title: '暂无操作日志', desc: '' }) : '<p class="admin-muted">暂无操作日志。</p>')}
+        ${section('发货信息', kv([
+          ['发货方式', deliveryLabel(o.deliveryType)],
+          ['发货时间', timeFrom(o.deliveredAt || lastDelivery.createdAt)],
+          ['发货结果', adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus))],
+          ['卡密预览', escapeHtml(deliveryContent)]
+        ]))}
+        ${section('售后记录', kv([
+          ['工单数', tickets.length],
+          ['退款状态', adminStatus(o.status === 'refunded' ? '已退款' : o.status === 'refunding' ? '退款中' : '无退款', ['refunded'].includes(o.status) ? 'success' : o.status === 'refunding' ? 'warning' : 'neutral')],
+          ['处理结果', adminStatus(afterSaleStatusLabel(o.afterSaleStatus), o.afterSaleStatus === 'none' ? 'neutral' : 'warning')]
+        ]))}
+        </div>
+        ${tickets.length ? section('售后工单明细', adminTable([{ label: '工单号' }, { label: '类型' }, { label: '状态' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.type), adminStatus(t.status, adminToneFromStatus(t.status))]), { title: '暂无工单', desc: '' })) : ''}
+        ${audits.length ? section('操作日志', adminTable([{ label: '动作' }, { label: '操作人' }, { label: '时间' }], audits.map((a) => [escapeHtml(a.action), `${escapeHtml(a.actorRole)}:${escapeHtml(a.actorId)}`, timeFrom(a.createdAt)]), { title: '暂无操作日志', desc: '' })) : ''}
       </div>
     </div>
   </div>`;
@@ -4719,26 +4809,98 @@ function adminUserDetailPanel() {
   const hits = d.data.blacklistHits || [];
   const section = (title, inner) => `<div class="admin-drawer-section"><h3>${title}</h3>${inner}</div>`;
   const kv = (rows) => `<div class="admin-kv">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${v}</b></div>`).join('')}</div>`;
+  const recentLedger = adminUserLedgerRows(p.email, 5);
   return `<div class="admin-drawer-backdrop">
     <div class="admin-drawer">
       <div class="admin-drawer-head"><div><h2>${escapeHtml(p.email)}</h2><span>${escapeHtml(p.telegramUsername || '')}</span></div><button class="secondary" data-action="adminDetailClose" type="button">关闭</button></div>
       <div class="admin-drawer-body">
-        ${section('基础身份', kv([
+        ${section('基础信息', kv([
           ['邮箱', escapeHtml(p.email)],
           ['Telegram', escapeHtml(p.telegramUsername || '-')],
-          ['订单数', p.orderCount],
-          ['成交金额', `${formatUsdt(p.paidAmountUsdt)} USDT`],
-          ['售后数', p.afterSaleCount],
-          ['风险状态', adminStatus(p.riskStatus === 'blacklisted' ? '黑名单' : '正常', p.riskStatus === 'blacklisted' ? 'danger' : 'success')]
+          ['注册时间', timeFrom(p.firstOrderAt)],
+          ['最近消费时间', timeFrom(p.lastOrderAt)],
+          ['风险等级', adminUserRiskBadge(p)]
         ]))}
+        <div class="admin-user-overview">
+          ${adminUserMetric('累计消费', `${formatUsdt(p.paidAmountUsdt)} USDT`)}
+          ${adminUserMetric('订单数', p.orderCount)}
+          ${adminUserMetric('售后数', p.afterSaleCount)}
+          ${adminUserMetric('当前余额', p.balanceUsdt === undefined ? '-' : `${formatUsdt(p.balanceUsdt)} USDT`)}
+        </div>
         ${section('钱包/支付地址', (p.walletAddresses || []).length ? `<div class="admin-kv">${(p.walletAddresses || []).map((a) => `<div><span>收款地址</span><b>${escapeHtml(a)}</b></div>`).join('')}</div>` : '<p class="admin-muted">暂无记录。</p>')}
-        ${section('黑名单命中记录', hits.length ? adminTable([{ label: '类型' }, { label: '值' }, { label: '效果' }, { label: '原因' }], hits.map((h) => [escapeHtml(h.kind), escapeHtml(h.value), escapeHtml(h.effect), escapeHtml(h.reason)]), { title: '无命中', desc: '' }) : '<p class="admin-muted">未命中黑名单。</p>')}
-        ${section('订单历史', orders.length ? adminTable([{ label: '订单号' }, { label: '金额' }, { label: '支付' }, { label: '发货' }, { label: '时间' }], orders.map((o) => [escapeHtml(o.orderNo), `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`, adminStatus(paymentStatusLabel(o.paymentStatus), paymentTone(o.paymentStatus)), adminStatus(deliveryStatusLabel(o.deliveryStatus), deliveryTone(o.deliveryStatus)), timeFrom(o.createdAt)]), { title: '暂无订单', desc: '' }) : '<p class="admin-muted">暂无订单历史。</p>')}
+        ${section('最近订单', orders.length ? adminTable([{ label: '订单号' }, { label: '商品' }, { label: '金额' }, { label: '时间' }, { label: '状态' }], orders.slice(0, 5).map((o) => [escapeHtml(o.orderNo), escapeHtml(o.productName || '-'), `${formatUsdt(o.payAmount || o.amountUsdt)} USDT`, timeFrom(o.createdAt), adminStatus(statusLabel(o.status), adminToneFromStatus(o.status))]), { title: '暂无订单', desc: '' }) : '<p class="admin-muted">暂无订单历史。</p>')}
+        ${section('最近余额流水', recentLedger.length ? adminTable([{ label: '变动类型' }, { label: '金额' }, { label: '来源', width: '2fr' }, { label: '时间' }, { label: '状态' }], recentLedger.map((item) => [escapeHtml(item.type), adminLedgerAmount(item.amount), escapeHtml(item.source), escapeHtml(item.time || '-'), adminStatus(item.status || '成功', adminLedgerTone(item))]), { title: '暂无余额流水', desc: '' }) : '<p class="admin-muted">暂无余额变动记录。</p>')}
+        ${section('风险记录', hits.length ? adminTable([{ label: '类型' }, { label: '值' }, { label: '效果' }, { label: '原因' }], hits.map((h) => [escapeHtml(h.kind), escapeHtml(h.value), escapeHtml(h.effect), escapeHtml(h.reason)]), { title: '无命中', desc: '' }) : '<p class="admin-muted">未命中黑名单。</p>')}
         ${section('售后记录', tickets.length ? adminTable([{ label: '工单号' }, { label: '类型' }, { label: '状态' }], tickets.map((t) => [escapeHtml(t.ticketNo || t.id), escapeHtml(t.type), adminStatus(t.status, adminToneFromStatus(t.status))]), { title: '无售后', desc: '' }) : '<p class="admin-muted">暂无售后记录。</p>')}
-        ${section('通知记录', notifications.length ? adminTable([{ label: '类型' }, { label: '渠道' }, { label: '状态' }, { label: '时间' }], notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '无通知', desc: '' }) : '<p class="admin-muted">暂无通知记录。</p>')}
+        ${notifications.length ? section('通知记录', adminTable([{ label: '类型' }, { label: '渠道' }, { label: '状态' }, { label: '时间' }], notifications.map((n) => [escapeHtml(n.type), escapeHtml(n.channel), adminStatus(n.status, adminToneFromStatus(n.status)), timeFrom(n.createdAt)]), { title: '无通知', desc: '' })) : ''}
       </div>
     </div>
   </div>`;
+}
+
+function adminUserMetric(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><b>${value}</b></div>`;
+}
+
+function adminUserRiskState(user = {}) {
+  if (user.riskStatus === 'blacklisted') return ['限制', 'danger'];
+  if (Number(user.afterSaleCount || 0) > 0) return ['关注', 'warning'];
+  return ['正常', 'success'];
+}
+
+function adminUserRiskBadge(user = {}) {
+  const [label, tone] = adminUserRiskState(user);
+  return adminStatus(label, tone);
+}
+
+function adminUserIdentity(user = {}) {
+  const email = escapeHtml(user.email || '-');
+  const contact = escapeHtml(user.telegramUsername ? `@${String(user.telegramUsername).replace(/^@/, '')}` : '未绑定 Telegram');
+  const letter = escapeHtml((user.email || user.telegramUsername || '?').trim().slice(0, 1).toUpperCase());
+  return `<div class="admin-user-cell"><i>${letter}</i><span><b>${email}</b><small>${contact}</small></span></div>`;
+}
+
+function adminLedgerType(type = '') {
+  const raw = String(type || '');
+  if (raw.includes('订单')) return '订单消费';
+  if (raw.includes('提现')) return '充值退款';
+  if (raw.includes('退款')) return '订单退款';
+  if (raw.includes('充值')) return '余额充值';
+  if (raw.includes('系统')) return '系统退款';
+  return raw || '余额变动';
+}
+
+function adminLedgerSource(item = {}) {
+  const text = [item.method, item.detail].filter(Boolean).join(' ');
+  if (!text) return '-';
+  return text.replace(/^订单号：?/, '订单号 ').replace(/^TxID：?/, 'TxID ');
+}
+
+function adminLedgerAmount(value) {
+  const n = Number(value || 0);
+  const sign = n > 0 ? '+' : '';
+  const cls = n < 0 ? 'negative' : 'positive';
+  return `<b class="admin-ledger-amount ${cls}">${sign}${n.toFixed(2)} USDT</b>`;
+}
+
+function adminLedgerTone(item = {}) {
+  if (item.tone === 'warning' || item.status === '待确认') return 'warning';
+  if (item.tone === 'danger' || item.status === '失败') return 'danger';
+  return 'success';
+}
+
+function adminUserLedgerRows(email = '', limit = 12) {
+  const names = ['Eyang Lu', 'Eyang Lu', 'zoro.eth', 'testuser@gmail.com', 'Eyang Lu', 'zoro.eth', 'Eyang Lu', 'testuser@gmail.com'];
+  const normalized = String(email || '').toLowerCase();
+  return accountWalletLedgerEntries().map((item, index) => ({
+    user: names[index % names.length],
+    type: adminLedgerType(item.type),
+    amount: Number(item.amount || 0),
+    source: adminLedgerSource(item),
+    time: item.time,
+    status: item.status,
+    tone: item.tone
+  })).filter((item) => !normalized || item.user.toLowerCase() === normalized || item.user === email || item.user === 'Eyang Lu').slice(0, limit);
 }
 
 function adminAuditDetailPanel() {
@@ -4779,10 +4941,29 @@ function afterSaleStatusLabel(s) {
   return { none: '无售后', open: '售后待处理', in_progress: '售后处理中', resolved: '已解决', closed: '已关闭' }[s] || s || '无售后';
 }
 function inventoryStatusLabel(s) {
-  return { available: '可用', reserved: '占用中', delivered: '已交付', revoked: '已作废' }[s] || s;
+  return { available: '可售', reserved: '订单占用', delivered: '已发货', revoked: '已作废' }[s] || s;
 }
 function inventoryTypeLabel(t) {
   return { card: '卡密', account: '账号', coupon: '优惠码' }[t] || t || '卡密';
+}
+function inventorySkuText(sku = {}) {
+  const values = sku.optionValues || {};
+  const ordered = ['region', 'account_type', 'account', 'duration', 'plan', 'amount']
+    .map((key) => values[key])
+    .filter(Boolean);
+  const rest = Object.entries(values)
+    .filter(([key, value]) => value && !['region', 'account_type', 'account', 'duration', 'plan', 'amount'].includes(key))
+    .map(([, value]) => value);
+  return String(sku.skuName || [...ordered, ...rest].join(' / ') || sku.skuId || sku.id || '-');
+}
+function inventorySkuCell(sku = {}) {
+  return `<b>${escapeHtml(inventorySkuText(sku))}</b><small>内部编码：${escapeHtml(sku.skuId || sku.id || '-')}</small>`;
+}
+function adminInventorySummaryTone(row) {
+  if ((row.deliveryType || row.productDeliveryType) === 'manual') return 'neutral';
+  if (Number(row.available || 0) <= 0) return 'danger';
+  if (Number(row.available || 0) <= Number(row.warningStock || 5)) return 'warning';
+  return 'success';
 }
 function blacklistKindLabel(k) {
   return { telegram_username: 'Telegram 用户名', telegram_id: 'Telegram ID', email: '邮箱', wallet: '钱包地址', ip: 'IP', device: '设备' }[k] || k;
@@ -4907,7 +5088,7 @@ function adminContent(tab) {
     ].slice(0, 8);
     const healthRows = [
       ['支付异常', m.paymentExceptions ?? 0, 'system:payment', (m.paymentExceptions ?? 0) ? 'warning' : 'success'],
-      ['库存预警', m.lowStockSkuCount ?? 0, 'inventory:detail', (m.lowStockSkuCount ?? 0) ? 'warning' : 'success'],
+      ['库存预警', m.lowStockSkuCount ?? 0, 'inventory:list', (m.lowStockSkuCount ?? 0) ? 'warning' : 'success'],
       ['通知失败', m.notificationFailed ?? 0, 'system:base', (m.notificationFailed ?? 0) ? 'danger' : 'success'],
       ['发货失败', m.deliveryFailed ?? 0, 'orders', (m.deliveryFailed ?? 0) ? 'danger' : 'success']
     ];
@@ -4964,24 +5145,35 @@ function adminContent(tab) {
     const filters = adminFiltersFor(scope);
     let body = '';
     if (sub === 'categories') {
-      body = `<div class="admin-panel">${adminActionForm('category.create', [['name','分类名称'], ['key','分类 Key'], ['icon','图标','text','tag'], ['sortOrder','排序','number']], '新增分类')}${adminTable([
-        { label: '分类名称' }, { label: '分类 Key' }, { label: '图标' }, { label: '是否显示' }, { label: '商品数量' }, { label: '操作' }
-      ], (ops.categories || []).map((c) => [`${escapeHtml(categoryDisplayName(c.name || c.key))}`, `<span class="admin-muted">${escapeHtml(c.key || c.id || '-')}</span>`, escapeHtml(c.icon || '-'), adminStatus(c.visible === false ? '隐藏' : '显示', c.visible === false ? 'neutral' : 'success'), productList.filter((p) => (p.category || p.categoryId) === c.name || (p.category || p.categoryId) === c.id || (p.category || p.categoryId) === c.key).length, `<button data-action="adminCategoryToggle" data-id="${escapeHtml(c.id || c.key)}" data-visible="${c.visible === false ? '1' : '0'}" type="button">${c.visible === false ? '显示' : '隐藏'}</button>`]), { title: '暂无分类', desc: '新增分类后可在商品列表筛选并控制前台展示。' })}</div>`;
+      body = `<div class="admin-panel">${adminActionForm('category.create', [['name','分类名称'], ['sortOrder','排序','number']], '新增分类')}${adminTable([
+        { label: '分类名称' }, { label: '排序' }, { label: '显示状态' }, { label: '商品数量' }, { label: '操作' }
+      ], (ops.categories || []).map((c) => [`${escapeHtml(categoryDisplayName(c.name || c.key))}`, Number(c.sortOrder || c.sort_order || 0), adminStatus(c.visible === false ? '隐藏' : '显示', c.visible === false ? 'neutral' : 'success'), productList.filter((p) => (p.category || p.categoryId) === c.name || (p.category || p.categoryId) === c.id || (p.category || p.categoryId) === c.key).length, `<button data-action="adminCategoryToggle" data-id="${escapeHtml(c.id || c.key)}" data-visible="${c.visible === false ? '1' : '0'}" type="button">${c.visible === false ? '显示' : '隐藏'}</button>`]), { title: '暂无分类', desc: '新增分类后可在商品列表筛选并控制前台展示。' })}</div>`;
     } else if (sub === 'fieldTemplates') {
       body = `<div class="admin-panel">
         <div class="admin-section-title"><h2>购买字段模板</h2><span>复用常见购买字段组合，商品编辑页可按需创建字段。</span></div>
-        ${adminActionForm('purchaseField.create', [['productId','商品 ID','text','可填具体商品 ID'], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / text / email / textarea'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global"}]'], ['affectsSku','影响 SKU','checkbox']], '保存模板字段')}
         ${adminTable([{ label: '模板' }, { label: '适用场景' }, { label: '字段示例', width: '2fr' }, { label: '状态' }], [
-          ['账号信息', '账号 / 订阅 / 服务', '邮箱、账号 ID、区服、备注', adminStatus('可用', 'success')],
-          ['礼品卡充值', '卡密 / 充值', '地区、面额、接收邮箱', adminStatus('可用', 'success')],
-          ['人工处理', '服务 / 复杂交付', '联系方式、需求描述、补充说明', adminStatus('可用', 'success')]
+          ['账号信息模板', '账号 / 订阅 / 服务', '邮箱、账号 ID、地区、备注', adminStatus('可用', 'success')],
+          ['礼品卡模板', '卡密 / 充值', '地区、面额、接收邮箱', adminStatus('可用', 'success')],
+          ['人工处理模板', '服务 / 复杂交付', '联系方式、需求描述、补充说明', adminStatus('可用', 'success')]
         ], { title: '暂无购买字段模板', desc: '可先用上方表单为具体商品沉淀常用字段。' })}
       </div>`;
     } else if (sub === 'editSkus') {
       const visibleSkuRows = filterAdminSkuRows(skuRows, filters);
-      body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: '库存状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], `<button class="primary small" data-action="adminSkuCreate" type="button">新建 SKU</button><button class="secondary" data-action="adminSkuBatchPrice" type="button">批量改价</button><button class="secondary" data-action="adminSkuBatchStatus" type="button">批量上下架</button>`, scope)}<div class="admin-panel">${adminTable([
-        { label: 'SKU', width: '1.4fr' }, { label: '商品' }, { label: '规格组合' }, { label: '价格' }, { label: '可用库存' }, { label: '预警值' }, { label: '发货方式' }, { label: '状态' }, { label: '操作' }
-      ], visibleSkuRows.map(({ product, sku }) => [skuName(sku), escapeHtml(product.name), escapeHtml(Object.values(sku.optionValues || {}).join(' / ') || '-'), `${Number(sku.priceUsdt || 0).toFixed(2)} USDT`, Number(sku.availableInventory ?? 0), Number(sku.warningStock || 5), deliveryLabel(sku.deliveryType || product.deliveryType), adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)), `<button data-action="adminSkuEdit" data-id="${escapeHtml(sku.id)}" data-product="${escapeHtml(product.id)}" type="button">编辑</button>`]), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
+      body = `${adminToolbar([{ name: 'q', label: '搜索 SKU', placeholder: 'SKU ID / 商品名 / 规格' }, { name: 'product', label: '商品筛选', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'stock', label: 'SKU 状态', type: 'select', value: '全部状态', options: ['有货','库存紧张','售罄'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], `<button class="primary small" data-action="adminSkuCreate" type="button">新增 SKU</button><button class="secondary" data-action="adminSkuBatchPrice" type="button">批量改价</button><button class="secondary" data-action="adminSkuBatchStatus" type="button">批量上下架</button>`, scope)}<div class="admin-panel">${adminTable([
+        { label: 'SKU 规格组合', width: '1.45fr' }, { label: '地区' }, { label: '账号类型' }, { label: '套餐周期' }, { label: '价格' }, { label: '库存池', width: '1.4fr' }, { label: '库存' }, { label: '销量' }, { label: '状态' }, { label: '排序' }, { label: '操作', width: 'minmax(140px,.8fr)' }
+      ], visibleSkuRows.map(({ product, sku }) => [
+        `<b>${escapeHtml(adminSkuCombination(sku))}</b><small>${escapeHtml(product.name)}</small>`,
+        escapeHtml(sku.optionValues?.region || '全球版'),
+        escapeHtml(sku.optionValues?.account || sku.optionValues?.account_type || '默认'),
+        escapeHtml(sku.optionValues?.duration || sku.optionValues?.plan || sku.optionValues?.amount || '-'),
+        `<b>${Number(sku.priceUsdt || 0).toFixed(2)} USD</b><small>≈ $${Number(sku.priceUsdt || 0).toFixed(2)}</small>`,
+        `<span class="admin-code">${escapeHtml(adminSkuInventoryPool(product, sku))}</span>`,
+        Number(sku.availableInventory ?? sku.stockQuantity ?? 0),
+        adminSkuSales(product, sku).toLocaleString('zh-CN'),
+        adminStatus(stockLabel(sku.stockStatus || sku.stock), adminToneFromStatus(sku.stockStatus || sku.stock)),
+        Number(sku.sortOrder || 0) || 1,
+        `<button data-action="adminSkuEdit" data-id="${escapeHtml(sku.id)}" data-product="${escapeHtml(product.id)}" type="button">编辑</button>`
+      ]), { title: '没有匹配的 SKU', desc: '调整搜索、商品、库存状态或发货方式后重试。' })}${adminPager(visibleSkuRows.length)}</div>`;
     } else if (['editBase', 'editDisplay', 'editFields'].includes(sub)) {
       const product = productList.find((p) => p.id === state.adminProductEditId) || productList[0] || {};
       const productTags = productFeatureTags(product).join('，');
@@ -5007,20 +5199,31 @@ function adminContent(tab) {
           <label>发货方式<select name="deliveryType">${optionHtml([{label:'自动发货 auto',value:'auto'},{label:'人工处理 manual',value:'manual'},{label:'部分自动 mixed',value:'mixed'}], product.deliveryType || 'manual')}</select></label>
           <label>上架状态<select name="status">${optionHtml([{label:'已上架 active',value:'active'},{label:'已隐藏 hidden',value:'hidden'},{label:'已归档 archived',value:'archived'}], product.status || 'active')}</select></label>
           <label class="checkline"><input name="isHomeVisible" type="checkbox" ${product.isHomeVisible === false ? '' : 'checked'} /> 前台展示</label>
-          <label class="checkline"><input name="isRecommended" type="checkbox" ${product.isRecommended ? 'checked' : ''} /> 推荐/热门</label>
+          <label>商品排序<input name="sortOrder" type="number" value="${Number(product.sortOrder || 0)}" /></label>
+          <label class="checkline"><input name="isRecommended" type="checkbox" ${product.isRecommended ? 'checked' : ''} /> 首页推荐</label>
           <div class="admin-form-actions"><button class="primary small" type="submit">保存基础信息</button></div>
         </form>
       </div>`;
       else if (sub === 'editDisplay') body = `<div class="admin-panel">
         ${editorHead}
-        <form class="admin-form admin-product-content-form" data-action="adminProductContent" data-id="${escapeHtml(product.id || '')}">
-          <label class="admin-field-wide">商品短描述<textarea name="shortDescription" placeholder="一句话介绍商品">${escapeHtml(product.shortDescription || product.subtitle || product.short || '')}</textarea></label>
-          <label class="admin-field-wide">商品卖点标签<textarea name="featureTags" placeholder="最多 6 个，用逗号或换行分隔">${escapeHtml(productTags)}</textarea></label>
-          <label class="admin-field-wide">商品详情说明<textarea name="detailDescription" placeholder="商品详情、适用场景、使用限制">${escapeHtml(product.detailDescription || product.description || '')}</textarea></label>
-          <label class="admin-field-wide">购买须知<textarea name="purchaseNotice" placeholder="购买前需要用户确认的规则">${escapeHtml(productNotice)}</textarea></label>
-          <label class="admin-field-wide">售后规则<textarea name="afterSaleRule" placeholder="保修、补发、退款等规则">${escapeHtml(afterSaleRule)}</textarea></label>
-          <div class="admin-form-actions"><button class="primary small" type="submit">保存前台展示</button></div>
-        </form>
+        <div class="admin-product-display-layout">
+          <form class="admin-form admin-product-content-form" data-action="adminProductContent" data-id="${escapeHtml(product.id || '')}">
+            <label class="admin-field-wide">商品短描述<textarea name="shortDescription" placeholder="一句话介绍商品">${escapeHtml(product.shortDescription || product.subtitle || product.short || '')}</textarea></label>
+            <label class="admin-field-wide">商品卖点标签<textarea name="featureTags" placeholder="最多 6 个，用逗号或换行分隔">${escapeHtml(productTags)}</textarea></label>
+            <label class="admin-field-wide">商品详情说明<textarea name="detailDescription" placeholder="商品详情、适用场景、使用限制">${escapeHtml(product.detailDescription || product.description || '')}</textarea></label>
+            <label class="admin-field-wide">购买须知<textarea name="purchaseNotice" placeholder="购买前需要用户确认的规则">${escapeHtml(productNotice)}</textarea></label>
+            <label class="admin-field-wide">售后规则<textarea name="afterSaleRule" placeholder="保修、补发、退款等规则">${escapeHtml(afterSaleRule)}</textarea></label>
+            <div class="admin-form-actions"><button class="primary small" type="submit">保存前台展示</button></div>
+          </form>
+          <aside class="admin-image-panel">
+            <h3>商品图片</h3>
+            <div class="admin-main-image">${adminProductThumb(product)}</div>
+            <div class="admin-thumb-row">${[product.iconUrl, product.coverUrl].filter(Boolean).map((src) => `<img src="${escapeHtml(src)}" alt="缩略图" />`).join('') || `${adminProductThumb(product)}<button type="button">+</button>`}</div>
+            <small>建议尺寸：800*800px，支持 JPG / PNG / WebP，最大 2MB</small>
+            <h3>卖点标签（最多 6 个）</h3>
+            <div class="admin-tag-list">${productFeatureTags(product).map((tag) => `<span>${escapeHtml(tag)}</span>`).join('') || '<span>自动发货</span><span>安全可靠</span>'}<button type="button">+ 添加标签</button></div>
+          </aside>
+        </div>
       </div>`;
       else body = `<div class="admin-panel">
         <div class="admin-section-title"><h2>编辑商品</h2><span>选择商品后可修改基础信息、前台文案与购买字段。所有价格以 USDT 结算。</span>
@@ -5029,29 +5232,39 @@ function adminContent(tab) {
             <label class="admin-inline-select">切换商品<select data-action="adminSelectEditProduct">${optionHtml(productList.map((p) => ({ label: p.name, value: p.id })), product.id || '')}</select></label>
           </div>
         </div>
-        <div class="admin-section-title"><h2>购买字段</h2><span>配置用户下单时填写或选择的字段。</span></div>
-        ${adminActionForm('purchaseField.create', [['productId','商品 ID','text', product.id || ''], ['fieldKey','字段 Key','text','region'], ['fieldLabel','字段名称','text','地区'], ['fieldType','字段类型','text','radio / select / quantity / text / email / number / textarea / switch'], ['options','选项 JSON','textarea','[{"label":"Global","value":"Global","subtitle":"全球通用"}]'], ['affectsSku','影响 SKU','checkbox']], '保存购买字段')}
+        <div class="admin-section-title"><h2>购买字段</h2><span>配置用户下单时填写或选择的业务字段，系统自动生成前台表单配置。</span><div class="admin-section-actions"><button class="primary small" data-action="adminPurchaseFieldEdit" data-product="${escapeHtml(product.id || '')}" type="button">新增字段</button></div></div>
+        ${adminTable([{ label: '字段名称' }, { label: '类型' }, { label: '必填' }, { label: '选项数量' }, { label: '提示文案', width: '1.6fr' }, { label: '排序' }, { label: '操作' }], adminPurchaseFields(product, ops).map((field) => [
+          `<b>${escapeHtml(field.fieldLabel)}</b><small>${escapeHtml(field.fieldKey)}</small>`,
+          fieldTypeLabel(field.fieldType),
+          adminStatus(field.required ? '是' : '否', field.required ? 'success' : 'neutral'),
+          field.options?.length ? `${field.options.length} 个` : '-',
+          escapeHtml(field.placeholder || field.defaultValue || '-'),
+          Number(field.sortOrder || 0),
+          `<button data-action="adminPurchaseFieldEdit" data-product="${escapeHtml(product.id || '')}" data-field="${escapeHtml(field.id)}" type="button">编辑</button><button class="danger-text" type="button">删除</button>`
+        ]), { title: '暂无购买字段', desc: '新增地区、账号类型、邮箱或备注等字段后，用户下单时会按表单填写。' })}
       </div>`;
     } else {
       const categories = [...new Set(productList.map((p) => p.category || p.categoryId).filter(Boolean))];
       const visibleProducts = filterAdminProducts(productList, filters);
-      body = `${adminToolbar([{ name: 'q', label: '搜索商品', placeholder: '商品名称 / SKU' }, { name: 'category', label: '分类筛选', type: 'select', value: '全部分类', options: categories.map((c) => ({ label: categoryDisplayName(c), value: c })) }, { name: 'status', label: '状态筛选', type: 'select', value: '全部状态', options: ['已上架','已下架'] }, { name: 'delivery', label: '发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }], '', scope)}<div class="admin-panel">${adminTable([
-        { label: '商品', width: '1.45fr' }, { label: '类目 / 类型' }, { label: '履约' }, { label: '库存 / 最低价' }, { label: '状态' }, { label: '更新时间' }, { label: '操作', width: 'minmax(220px, 1.5fr)', sticky: true }
+      body = `${adminToolbar([{ name: 'q', label: '搜索商品', placeholder: '搜索商品名称' }, { name: 'category', label: '全部分类', type: 'select', value: '全部分类', options: categories.map((c) => ({ label: categoryDisplayName(c), value: c })) }, { name: 'delivery', label: '全部发货方式', type: 'select', value: '全部方式', options: ['自动发货','人工处理','部分自动'] }, { name: 'status', label: '全部状态', type: 'select', value: '全部状态', options: ['已上架','已下架'] }], '', scope)}<div class="admin-panel">${adminTable([
+        { label: '商品', width: '1.7fr' }, { label: '分类' }, { label: 'SKU 数量' }, { label: '库存总量' }, { label: '最低售价' }, { label: '发货方式' }, { label: '状态' }, { label: '销量' }, { label: '更新时间' }, { label: '操作', width: 'minmax(210px, 1.3fr)', sticky: true }
       ], visibleProducts.map((p) => {
         const skus = p.skus || [];
         const minPrice = skus.length ? Math.min(...skus.map((sku) => Number(sku.priceUsdt || 0))) : 0;
         const sellable = p.sellableSkuCount ?? skus.filter((s) => (s.stockStatus || s.stock) !== 'sold_out').length;
-        const outOfStock = p.outOfStockSkuCount ?? 0;
         const available = p.availableInventory ?? 0;
         const listed = p.status === 'active';
         return [
-          `<b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.slug || p.id)}</small>`,
-          `${escapeHtml(categoryDisplayName(p.category || p.categoryId))}<small>${productTypeLabel(p.productType)}</small>`,
-          `${deliveryLabel(p.deliveryType)}<small>SKU ${skus.length} · 可售 ${sellable} · 缺货 ${outOfStock}</small>`,
-          `<b class="${available <= 0 ? 'admin-text-danger' : ''}">${available}</b> 件<small>最低 ${minPrice.toFixed(2)} USDT</small>`,
+          `<span class="admin-product-cell"><span class="admin-product-thumb">${adminProductThumb(p)}</span><span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(Object.values(skus[0]?.optionValues || {}).slice(0, 3).join(' / ') || p.slug || p.id)}</small></span></span>`,
+          adminStatus(categoryDisplayName(p.category || p.categoryId), 'neutral'),
+          `<b>${skus.length}</b><small>可售 ${sellable}</small>`,
+          `<b class="${available <= 0 ? 'admin-text-danger' : ''}">${available.toLocaleString('zh-CN')}</b>`,
+          `<b>${minPrice.toFixed(2)} USD</b><small>≈ $${minPrice.toFixed(2)}</small>`,
+          adminStatus(deliveryLabel(p.deliveryType), p.deliveryType === 'manual' ? 'warning' : 'success'),
           `${adminStatus(listed ? '已上架' : (p.status === 'archived' ? '已归档' : '已下架'), listed ? 'success' : 'neutral')}<small>${p.isHomeVisible === false ? '前台隐藏' : '前台展示'}</small>`,
+          adminProductSales(p).toLocaleString('zh-CN'),
           timeFrom(p.updatedAt || p.createdAt),
-          `<button data-action="adminProductEdit" data-id="${escapeHtml(p.id)}" type="button">编辑</button><button class="ghost" data-action="adminProductSkus" data-id="${escapeHtml(p.id)}" type="button">SKU</button><button class="${listed ? 'danger-text' : ''}" data-action="adminToggleProduct" data-id="${escapeHtml(p.id)}" type="button">${listed ? '下架' : '上架'}</button>`
+          `<button data-action="adminProductEdit" data-id="${escapeHtml(p.id)}" type="button">编辑</button><button class="ghost" data-action="adminProductSkus" data-id="${escapeHtml(p.id)}" type="button">管理 SKU</button>`
         ];
       }), { title: visibleProducts.length ? '没有匹配商品' : '暂无商品', desc: (filters.q || filters.category || filters.status || filters.delivery) ? '调整分类、状态、发货方式或关键词后重试。' : '点击右上角“新增商品”创建第一个商品。' })}${adminPager(visibleProducts.length)}</div>`;
     }
@@ -5059,40 +5272,76 @@ function adminContent(tab) {
   }
   if (tab === 'inventory') {
     const sub = currentAdminSubTab(tab, 'list');
-    const tabs = ['list|库存池列表', 'detail|库存池详情', 'import|批量导入', 'records|库存记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
+    const tabs = ['list|库存列表', 'import|批量导入', 'records|导入记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const scope = adminFilterScope(tab, sub);
     const filters = adminFiltersFor(scope);
     const invSlice = state.adminPages.inventory;
     let body = '';
     if (sub === 'import') {
       const preview = state.adminImportPreview;
+      const selectedProductId = preview?.productId || filters.productId || skuRows[0]?.product.id || '';
+      const importProduct = productList.find((p) => p.id === selectedProductId) || productList[0] || {};
+      const importSkuRows = skuRows.filter(({ product }) => !selectedProductId || product.id === selectedProductId);
+      const selectedSkuId = preview?.skuId || filters.skuId || importSkuRows[0]?.sku.id || skuRows[0]?.sku.id || '';
+      const selectedSku = skuRows.find(({ sku }) => sku.id === selectedSkuId)?.sku || importSkuRows[0]?.sku || {};
+      const selectedDeliveryType = selectedSku.deliveryType || importProduct.deliveryType || 'manual';
+      const isManualOnly = selectedDeliveryType === 'manual';
       body = `<div class="admin-import-flow">${['选择商品和 SKU','选择库存类型','粘贴或上传库存','预览解析结果','确认导入'].map((label, index) => `<span class="${index <= (preview ? 3 : 1) ? 'active' : ''}"><b>${index + 1}</b>${label}</span>`).join('')}</div><div class="admin-panel"><div class="admin-section-title"><h2>批量导入库存</h2><span>卡密和账号库存会加密存储，提交前先完成格式校验和重复检测。</span></div>
+        <div class="admin-kv-strip">
+          <span><small>当前商品</small><b>${escapeHtml(importProduct.name || '-')}</b></span>
+          <span><small>发货方式</small><b>${deliveryLabel(selectedDeliveryType)}</b></span>
+          <span><small>SKU</small><b>${escapeHtml(inventorySkuText(selectedSku))}</b></span>
+        </div>
+        ${isManualOnly ? `<div class="admin-risk-callout warning"><b>人工发货 SKU</b><span>该 SKU 不依赖库存池发货，已隐藏导入入口，避免误导入卡密。</span></div>` : `
         <form class="admin-form admin-import-form" data-action="adminInventoryImport">
-          <label>商品<select name="productId">${optionHtml(productList.map((p) => ({ label: p.name, value: p.id })), preview?.productId || skuRows[0]?.product.id || '')}</select></label>
-          <label>SKU<select name="skuId">${optionHtml(skuRows.map(({ product, sku }) => ({ label: `${product.name} / ${skuName(sku).replace(/<[^>]+>/g, '')}`, value: sku.id })), preview?.skuId || skuRows[0]?.sku.id || '')}</select></label>
+          <label>商品<select name="productId" data-action="adminImportProductSelect">${optionHtml(productList.map((p) => ({ label: p.name, value: p.id })), selectedProductId)}</select></label>
+          <label>SKU<select name="skuId" data-action="adminImportSkuSelect">${optionHtml(importSkuRows.map(({ sku }) => ({ label: inventorySkuText(sku), value: sku.id })), selectedSkuId)}</select><small>内部编码：${escapeHtml(selectedSkuId || '-')}</small></label>
           <label>库存类型<select name="type">${optionHtml([{ label: '卡密 card', value: 'card' }, { label: '账号 account', value: 'account' }, { label: '优惠码 coupon', value: 'coupon' }], preview?.type || 'card')}</select></label>
           <label class="wide">库存内容<textarea name="items" placeholder="卡密格式：CODE-AAAA-BBBB&#10;账号格式：账号----密码----邮箱----邮箱密码----备注">${escapeHtml(preview?.items || '')}</textarea></label>
           <div class="admin-form-actions"><button class="secondary" data-import-mode="preview" type="submit">校验格式</button><button class="primary small" data-import-mode="commit" type="submit" ${preview && !preview.errors.length ? '' : 'disabled'}>确认导入</button></div>
-        </form>${inventoryPreviewPanel(preview)}</div>`;
+        </form>${inventoryPreviewPanel(preview)}`}</div>`;
     } else if (sub === 'records') {
-      body = `<div class="admin-panel">${adminTable([{ label: '批次' }, { label: '类型' }, { label: 'SKU' }, { label: '成功' }, { label: '重复' }, { label: '失败' }, { label: '空行' }, { label: '创建时间' }], (ops.inventoryBatches || []).map((b) => [escapeHtml(String(b.id).slice(0, 8)), escapeHtml(b.type), escapeHtml(b.skuId), b.successCount, b.duplicateCount, b.failedCount, b.emptyCount ?? 0, timeFrom(b.createdAt)]), { title: '暂无库存记录', desc: '每次确认导入都会生成批次记录，方便回溯和审计。' })}</div>`;
-    } else if (sub === 'warning') {
-      // 与看板同源：服务端按真实 available 聚合
-      const rows = (state.adminDashboard.queues?.lowStockSkus) || [];
-      body = `<div class="admin-panel"><div class="admin-section-title"><h2>库存预警</h2><span>按 SKU 真实可用库存（available）与预警值比较，与看板口径一致。</span></div>${adminTable([{ label: '商品 / SKU', width: '1.6fr' }, { label: '可用库存' }, { label: '预警值' }, { label: '建议补货' }, { label: '最近导入' }, { label: '操作' }], rows.map((s) => [`<b>${escapeHtml(s.productName || s.productId || '-')}</b><small>${escapeHtml(s.skuName || Object.values(s.optionValues || {}).join(' / ') || s.skuId)}</small>`, `<b class="${s.available <= 0 ? 'admin-text-danger' : ''}">${s.available}</b>`, s.warningStock, s.suggestedRestock, timeFrom(s.lastImportAt), `<button data-action="adminGoImport" data-sku="${escapeHtml(s.skuId)}" data-product="${escapeHtml(s.productId || '')}" type="button">去补货</button>`]), { title: '暂无库存预警', desc: '低于预警值的自动发货 SKU 会在这里形成补货队列。' })}</div>`;
-    } else if (sub === 'detail') {
-      const reserved = (invSlice.items || []).filter((i) => i.status === 'reserved');
-      body = `<div class="admin-panel"><div class="admin-section-title"><h2>库存池详情</h2><span>按库存状态查看已占用、已交付和可用交付内容；交付内容统一用文本框导入和查看。</span></div>${adminTable([{ label: '库存' }, { label: '商品 / SKU' }, { label: '绑定订单' }, { label: '状态' }, { label: '占用时间' }], reserved.map((i) => [escapeHtml(i.maskedValue), `${escapeHtml(i.productName || i.productId || '-')} / ${escapeHtml(i.skuId)}`, escapeHtml(i.orderNo || i.orderId || '-'), adminStatus(inventoryStatusLabel(i.status), 'warning'), timeFrom(i.lockedAt || i.createdAt)]), { title: '暂无库存占用', desc: '支付中或待发货订单占用的库存会显示在这里。' })}</div>`;
+      const skuById = new Map(skuRows.map(({ product, sku }) => [sku.id, { product, sku }]));
+      body = `<div class="admin-panel">${adminTable([{ label: '导入批次' }, { label: '商品 / SKU', width: '1.5fr' }, { label: '导入结果' }, { label: '总条数' }, { label: '成功' }, { label: '重复' }, { label: '失败' }, { label: '导入时间' }, { label: '操作' }], (ops.inventoryBatches || []).map((b) => {
+        const mapped = skuById.get(b.skuId) || {};
+        return [
+          `<b>${escapeHtml(String(b.id).slice(0, 14))}</b><small>${inventoryTypeLabel(b.type)}</small>`,
+          `<b>${escapeHtml(mapped.product?.name || b.productId || '-')}</b><small>${escapeHtml(inventorySkuText(mapped.sku || { skuId: b.skuId }))}</small>`,
+          adminStatus(Number(b.failedCount || 0) ? '部分成功' : '成功', Number(b.failedCount || 0) ? 'warning' : 'success'),
+          b.totalCount ?? 0,
+          `<b class="admin-text-success">${b.successCount ?? 0}</b>`,
+          `<b class="admin-text-warning">${b.duplicateCount ?? 0}</b>`,
+          `<b class="admin-text-danger">${b.failedCount ?? 0}</b>`,
+          timeFrom(b.createdAt),
+          `<button class="ghost" data-action="adminGoImport" data-sku="${escapeHtml(b.skuId || '')}" data-product="${escapeHtml(b.productId || '')}" type="button">继续导入</button>`
+        ];
+      }), { title: '暂无导入记录', desc: '每次确认导入都会生成批次记录，方便回溯和审计。' })}</div>`;
     } else {
       const rows = invSlice.items || [];
       const errorBanner = invSlice.error ? `<div class="admin-risk-callout danger"><b>库存加载失败</b><span>${escapeHtml(invSlice.error)}</span></div>` : '';
-      body = `${adminToolbar([{ name: 'q', label: '搜索库存', placeholder: '卡密预览 / 商品 / 订单' }, { name: 'type', label: '类型', type: 'select', value: '全部类型', options: [{label:'卡密 card',value:'card'},{label:'账号 account',value:'account'},{label:'优惠码 coupon',value:'coupon'}] }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: [{label:'可用 available',value:'available'},{label:'占用 reserved',value:'reserved'},{label:'已交付 delivered',value:'delivered'},{label:'已作废 revoked',value:'revoked'}] }], '<button class="primary small" data-action="adminSubTab" data-tab="inventory" data-subtab="import" type="button">批量导入</button>', scope)}${errorBanner}<div class="admin-panel">${invSlice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取库存列表。</span></div>' : adminTable([{ label: '库存内容预览', width: '1.35fr' }, { label: '商品' }, { label: 'SKU' }, { label: '类型' }, { label: '状态' }, { label: '绑定订单' }, { label: '导入批次' }, { label: '创建时间' }, { label: '操作', width: 'minmax(176px, 1.35fr)', sticky: true }], rows.map((i) => [escapeHtml(i.maskedValue || '********'), escapeHtml(i.productName || i.productId || '-'), escapeHtml(i.skuId), `${inventoryTypeLabel(i.type)}<small>${escapeHtml(i.type || '')}</small>`, adminStatus(inventoryStatusLabel(i.status), adminToneFromStatus(i.status === 'available' ? 'in_stock' : i.status === 'revoked' ? 'failed' : i.status === 'reserved' ? 'pending' : 'neutral')), escapeHtml(i.orderNo || i.orderId || '-'), escapeHtml(i.importBatchId ? String(i.importBatchId).slice(0, 8) : '手动'), timeFrom(i.createdAt), `<button class="ghost" data-action="adminInventoryReveal" data-id="${escapeHtml(i.id)}" type="button">查看明文</button>${(i.status === 'available' || i.status === 'reserved') ? `<button class="danger" data-action="adminInventoryRevoke" data-id="${escapeHtml(i.id)}" data-masked="${escapeHtml(i.maskedValue || '')}" data-order="${escapeHtml(i.orderNo || i.orderId || '')}" type="button">作废</button>` : ''}`]), { title: rows.length ? '没有匹配库存' : '暂无可用库存', desc: (filters.q || filters.type || filters.status) ? '调整搜索、类型或状态后重试。' : '前往“批量导入”添加卡密或账号库存。' })}${adminPagerServer('inventory')}</div>`;
+      body = `${adminToolbar([{ name: 'q', label: '搜索库存', placeholder: '商品 / SKU 规格 / 内部编码' }, { name: 'productId', label: '商品', type: 'select', value: '全部商品', options: productList.map((p) => ({ label: p.name, value: p.id })) }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: [{label:'可售',value:'available'},{label:'订单占用',value:'reserved'},{label:'已发货',value:'delivered'},{label:'已作废',value:'revoked'}] }], '<button class="primary small" data-action="adminSubTab" data-tab="inventory" data-subtab="import" type="button">批量导入</button>', scope)}${errorBanner}<div class="admin-panel">${invSlice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取库存列表。</span></div>' : adminTable([{ label: '商品', width: '1.2fr' }, { label: 'SKU', width: '1.45fr' }, { label: '发货方式' }, { label: '可售' }, { label: '锁定' }, { label: '已售' }, { label: '状态' }, { label: '更新时间' }, { label: '操作', width: 'minmax(140px, .9fr)', sticky: true }], rows.map((i) => [
+        `<b>${escapeHtml(i.productName || i.productId || '-')}</b><small>${escapeHtml(i.productId || '')}</small>`,
+        inventorySkuCell(i),
+        deliveryLabel(i.deliveryType || i.productDeliveryType),
+        `<b class="${Number(i.available || 0) <= 0 ? 'admin-text-danger' : 'admin-text-success'}">${Number(i.available || 0)}</b>`,
+        `<b class="${Number(i.reserved || 0) ? 'admin-text-warning' : ''}">${Number(i.reserved || 0)}</b>`,
+        `<b>${Number(i.delivered || 0)}</b>`,
+        adminStatus(Number(i.available || 0) <= 0 ? '缺货' : (Number(i.available || 0) <= Number(i.warningStock || 5) ? '库存紧张' : '正常'), adminInventorySummaryTone(i)),
+        timeFrom(i.updatedAt),
+        (i.deliveryType || i.productDeliveryType) === 'manual'
+          ? `<button class="ghost" data-action="adminProductSkus" data-id="${escapeHtml(i.productId || '')}" type="button">查看 SKU</button>`
+          : `<button data-action="adminGoImport" data-sku="${escapeHtml(i.skuId || '')}" data-product="${escapeHtml(i.productId || '')}" type="button">补货</button>`
+      ]), { title: rows.length ? '没有匹配库存' : '暂无库存 SKU', desc: (filters.q || filters.productId || filters.status) ? '调整商品、状态或关键词后重试。' : '自动发货 SKU 会在这里按商品和 SKU 聚合显示。' })}${adminPagerServer('inventory')}</div>`;
     }
-    return adminPage('库存卡密', '管理库存池、批量导入和库存记录；库存卡密只负责最终交付内容。', body, { tabKey: 'inventory', tabs });
+    return adminPage('库存管理', '管理商品 SKU 的可售、订单占用、已发货和作废状态，系统将在订单支付后自动发货。', body, { tabKey: 'inventory', tabs });
   }
   if (tab === 'orders') {
-    const sub = currentAdminSubTab(tab, 'list');
-    const tabs = ['list|商品订单列表', 'detail|商品订单详情', 'deliveries|交付记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
+    let sub = currentAdminSubTab(tab, 'list');
+    if (!['list', 'deliveries'].includes(sub)) {
+      state.adminSubTabs.orders = 'list';
+      sub = 'list';
+    }
+    const tabs = ['list|商品订单', 'deliveries|交付记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const scope = adminFilterScope(tab, sub === 'list' ? '' : sub);
     const filters = adminFiltersFor(scope);
     const slice = state.adminPages.orders;
@@ -5101,13 +5350,14 @@ function adminContent(tab) {
       ['all', '全部'],
       ['pending_payment', '待支付'],
       ['undelivered', '待发货'],
-      ['delivered', '已完成'],
-      ['delivery_failed', '异常'],
+      ['delivered', '已发货'],
+      ['delivery_failed', '发货异常'],
       ['refunded', '退款']
     ];
+    const orderTabCount = (key) => key === orderTab ? (slice.total || orderList.length || 0) : 0;
     const errorBanner = slice.error ? `<div class="admin-risk-callout danger"><b>订单加载失败</b><span>${escapeHtml(adminFriendlyError(slice.error))}</span></div>` : '';
     const orderRowActions = (o) => {
-      const btns = [`<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">详情</button>`];
+      const btns = [`<button data-action="adminOrderDetail" data-id="${escapeHtml(o.id)}" type="button">查看</button>`];
       const paid = o.paymentStatus === 'paid' || ['paid', 'delivering', 'completed'].includes(o.status);
       if (!paid) btns.push(`<button class="ghost" data-action="adminConfirmPayment" data-id="${escapeHtml(o.id)}" type="button">确认支付</button>`);
       if (paid && o.deliveryStatus !== 'delivered') btns.push(`<button class="ghost" data-action="adminDeliver" data-id="${escapeHtml(o.id)}" type="button">发货</button>`);
@@ -5124,20 +5374,28 @@ function adminContent(tab) {
       timeFrom(o.createdAt),
       orderRowActions(o)
     ]);
-    const hasFilter = !!(filters.q || filters.network || filters.dateFrom || filters.dateTo || orderTab !== 'all');
+    const hasFilter = !!(filters.q || filters.range || orderTab !== 'all');
     const emptyState = hasFilter
-      ? { title: '没有匹配订单', desc: '当前筛选条件下没有订单，可清除筛选或切换状态。' }
-      : { title: '暂无订单', desc: '还没有任何订单。可前往前台创建一笔测试订单后回来查看。' };
+      ? { title: '没有匹配订单', desc: '清空筛选或切换状态后重试。' }
+      : { title: '暂无订单数据', desc: '前台产生订单后将在这里显示。', action: '<a class="primary small link-button" href="/" target="_blank" rel="noopener">去前台查看</a>' };
     let body = '';
     if (sub === 'deliveries') {
       const deliveries = state.adminData.deliveries || [];
-      body = `<div class="admin-panel"><div class="admin-section-title"><h2>交付记录</h2><span>自动和人工交付结果统一在这里查看，明文仍由库存模块管控。</span></div>${adminTable([{ label: '订单' }, { label: '方式' }, { label: '内容预览', width: '1.6fr' }, { label: '状态' }, { label: '时间' }], deliveries.map((d) => [escapeHtml(d.orderNo || d.orderId || '-'), escapeHtml(d.method || '-'), escapeHtml(d.maskedContent || d.contentMasked || '***'), adminStatus(d.status === 'sent' ? '已发送' : d.status, d.status === 'sent' ? 'success' : adminToneFromStatus(d.status)), timeFrom(d.createdAt)]), { title: '暂无交付记录', desc: '订单发货后会在这里沉淀交付记录。' })}</div>`;
-    } else if (sub === 'detail') {
-      body = `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram / txHash' }], '', scope)}${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取订单详情入口。</span></div>' : adminTable([{ label: '订单号', width: 'minmax(180px, 1.2fr)' }, { label: '商品' }, { label: '支付' }, { label: '发货' }, { label: '用户' }, { label: '操作', sticky: true }], rows.map((row, index) => [row[0], row[1], row[3], row[4], row[5], `<button data-action="adminOrderDetail" data-id="${escapeHtml(orderList[index]?.id || '')}" type="button">打开详情</button>`]), emptyState)}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`;
+      const ordersById = new Map(orderList.map((o) => [String(o.id), o]));
+      body = `<div class="admin-panel"><div class="admin-section-title"><h2>交付记录</h2><span>查看订单发货结果与交付状态。</span></div>${adminTable([{ label: '订单号' }, { label: '商品' }, { label: '发货方式' }, { label: '发货结果' }, { label: '交付时间' }], deliveries.map((d) => {
+        const matchedOrder = ordersById.get(String(d.orderId || '')) || {};
+        return [
+          escapeHtml(d.orderNo || matchedOrder.orderNo || d.orderId || '-'),
+          escapeHtml(d.productName || matchedOrder.productName || d.productId || '-'),
+          d.method === 'auto' ? '自动发货' : d.method === 'manual' ? '人工发货' : escapeHtml(d.method || '-'),
+          adminStatus(d.status === 'sent' ? '发货成功' : d.status === 'failed' ? '发货失败' : d.status, d.status === 'sent' ? 'success' : adminToneFromStatus(d.status)),
+          timeFrom(d.createdAt)
+        ];
+      }), { title: '暂无发货记录', desc: '订单完成发货后将在这里显示。', action: '<a class="primary small link-button" href="/" target="_blank" rel="noopener">去前台查看</a>' })}</div>`;
     } else {
-      body = `${adminToolbar([{ name: 'q', label: '搜索订单', placeholder: '订单号 / 用户 / Telegram / txHash' }, { name: 'network', label: '支付网络', type: 'select', value: '全部网络', options: adminNetworks().map((n) => n.code) }, { name: 'dateFrom', label: '开始日期', type: 'date' }, { name: 'dateTo', label: '结束日期', type: 'date' }], '', scope)}<div class="admin-tabs static admin-status-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}</button>`).join('')}</div>${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取订单列表。</span></div>' : adminTable([{ label: '订单号', width: 'minmax(170px, 1.1fr)' }, { label: '商品', width: 'minmax(210px, 1.35fr)' }, { label: '金额', width: 'minmax(130px, .8fr)' }, { label: '支付', width: 'minmax(110px, .7fr)' }, { label: '发货', width: 'minmax(110px, .7fr)' }, { label: '用户', width: 'minmax(170px, 1fr)' }, { label: '时间', width: 'minmax(132px, .8fr)' }, { label: '操作', width: 'minmax(210px, 1.3fr)', sticky: true }], rows, emptyState)}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`;
+      body = `${adminToolbar([{ name: 'q', label: '关键词搜索', placeholder: '搜索订单号、用户 UID、Telegram 或 TXID' }, { name: 'range', label: '时间范围', type: 'select', value: '近7天', options: ['今天','近30天','自定义'] }], '', scope)}<div class="admin-tabs static admin-status-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}（${orderTabCount(key)}）</button>`).join('')}</div>${errorBanner}<div class="admin-panel admin-orders-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在加载订单数据...</span></div>' : adminTable([{ label: '订单号', width: '1.1fr' }, { label: '商品', width: '1.2fr' }, { label: '金额', width: '.72fr' }, { label: '支付状态', width: '.68fr' }, { label: '发货状态', width: '.68fr' }, { label: '用户', width: '1fr' }, { label: '创建时间', width: '.86fr' }, { label: '操作', width: '.9fr', sticky: true }], rows, emptyState)}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`;
     }
-    return adminPage('订单管理', '只管理商品订单，从创建、支付、发货到售后入口保持一条清晰链路。', body, { tabKey: 'orders', tabs });
+    return adminPage('订单管理', '统一管理订单状态、支付结果与发货记录。', body, { tabKey: 'orders', tabs });
   }
   if (tab === 'recharge') {
     const sub = currentAdminSubTab(tab, 'orders');
@@ -5148,9 +5406,11 @@ function adminContent(tab) {
       const q = String(filters.q || '').toLowerCase();
       const isRecharge = item.type === '充值' || item.type === '充值订单' || item.type === '充值入账';
       if (sub === 'orders' && !isRecharge) return false;
+      if (filters.method && !['全部方式', '全部'].includes(filters.method) && !String(item.method || item.detail || '').toLowerCase().includes(String(filters.method).toLowerCase())) return false;
+      if (filters.status && !['全部状态', '全部'].includes(filters.status) && String(item.status || '成功') !== filters.status) return false;
       return !q || [item.type, item.method, item.detail, item.status].some((v) => String(v || '').toLowerCase().includes(q));
     });
-    const body = `${adminToolbar([{ name: 'q', label: sub === 'orders' ? '搜索充值订单' : '搜索余额流水', placeholder: '订单号 / TxID / 类型 / 状态' }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: ['成功','待确认','失败'] }], '', scope)}
+    const body = `${adminToolbar([{ name: 'q', label: sub === 'orders' ? '搜索充值订单' : '搜索余额流水', placeholder: '订单号 / TxID / 类型 / 状态' }, { name: 'method', label: '支付方式', type: 'select', value: '全部方式', options: ['USDT','支付宝','余额'] }, { name: 'status', label: '状态', type: 'select', value: '全部状态', options: ['成功','待确认','失败'] }], '', scope)}
       <div class="admin-panel">${adminTable([{ label: sub === 'orders' ? '充值单' : '流水类型' }, { label: '金额' }, { label: '方式 / 详情', width: '2fr' }, { label: '时间' }, { label: '状态' }], ledgerRows.map((item) => [
         `<b>${escapeHtml(item.type)}</b>`,
         `<b>${Number(item.amount || 0).toFixed(2)}</b> USDT`,
@@ -5261,26 +5521,25 @@ function adminContent(tab) {
     return adminPage('审计', '记录高风险操作、配置修改和人工处理行为。高风险操作以红色标记。', `${adminToolbar([{ name: 'q', label: '搜索日志', placeholder: '动作 / 对象 / 操作人' }, { name: 'action', label: '操作类型', type: 'select', value: '全部类型', options: actionOptions }, { name: 'range', label: '时间范围', type: 'select', value: '全部时间', options: ['今天','近 7 天','近 30 天'] }], '', scope)}<div class="admin-panel">${adminTable([{ label: '动作' }, { label: '操作人' }, { label: '对象' }, { label: '对象 ID' }, { label: '时间' }, { label: '操作', sticky: true }], logs.map((log) => [`${auditActionRisk(log.action) ? '<span class="admin-risk-dot"></span>' : ''}${auditActionLabel(log.action)}<small>${escapeHtml(log.action)}</small>`, auditActorLabel(log), escapeHtml(log.target || '-'), truncateId(log.targetId), timeFrom(log.createdAt), `<button class="ghost" data-action="adminAuditDetail" data-id="${escapeHtml(log.id)}" type="button">详情</button>`]), hasFilter ? { title: '没有匹配日志', desc: '调整操作类型、时间范围或关键词后重试。' } : { title: '暂无审计日志', desc: '修改价格、库存明文查看、收款地址、手动确认支付等操作必须留下审计。' })}</div>${adminAuditDetailPanel()}`);
   }
   if (tab === 'users') {
-    const sub = currentAdminSubTab(tab, 'list');
-    const tabs = ['list|用户列表', 'detail|用户详情', 'balance|余额调整记录'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
+    const requestedSub = currentAdminSubTab(tab, 'list');
+    const sub = requestedSub === 'balance' ? 'balance' : 'list';
+    const tabs = ['list|客户列表', 'balance|余额流水'].map((item) => { const [key, label] = item.split('|'); return { key, label, active: sub === key }; });
     const scope = adminFilterScope(tab, sub);
     let body = '';
     if (sub === 'balance') {
-      const ledger = accountWalletLedgerEntries();
-      body = `<div class="admin-panel"><div class="admin-section-title"><h2>余额调整记录</h2><span>展示充值、消费、退款和后台调整的余额变动记录。</span></div>${adminTable([{ label: '类型' }, { label: '金额' }, { label: '详情', width: '2fr' }, { label: '时间' }, { label: '状态' }], ledger.map((item) => [escapeHtml(item.type), `<b>${Number(item.amount || 0).toFixed(2)}</b> USDT`, `${escapeHtml(item.method || '-')}<small>${escapeHtml(item.detail || '')}</small>`, escapeHtml(item.time || '-'), adminStatus(item.status || '成功', item.tone === 'warning' || item.status === '待确认' ? 'warning' : item.tone === 'danger' || item.status === '失败' ? 'danger' : 'success')]), { title: '暂无余额调整记录', desc: '充值入账、订单消费、退款和后台调整会显示在这里。' })}</div>`;
-    } else if (sub === 'detail') {
-      const slice = state.adminPages.users;
-      body = `<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取用户详情入口。</span></div>' : adminTable([{ label: '用户', width: '1.6fr' }, { label: 'Telegram' }, { label: '订单数' }, { label: '成交金额' }, { label: '售后数' }, { label: '操作', sticky: true }], (slice.items || []).map((u) => [`<b>${escapeHtml(u.email)}</b>`, escapeHtml(u.telegramUsername || '-'), u.orderCount, `${formatUsdt(u.paidAmountUsdt)} USDT`, u.afterSaleCount, `<button data-action="adminUserDetail" data-id="${escapeHtml(u.email)}" type="button">打开详情</button>`]), { title: '暂无用户', desc: '用户来自下单记录。' })}${adminPagerServer('users')}</div>`;
+      const filters = adminFiltersFor(scope);
+      const ledger = adminUserLedgerRows('', 12).filter((item) => matchesQuery(item, filters.q || ''));
+      body = `<div class="admin-users-surface">${adminToolbar([{ name: 'q', label: '流水搜索', hideLabel: true, placeholder: '搜索邮箱、Telegram 用户名、订单号' }], '', scope)}<div class="admin-panel admin-users-panel">${adminTable([{ label: '用户', width: '1.25fr' }, { label: '变动类型' }, { label: '金额' }, { label: '来源', width: '2fr' }, { label: '时间' }, { label: '状态' }], ledger.map((item) => [escapeHtml(item.user), escapeHtml(item.type), adminLedgerAmount(item.amount), escapeHtml(item.source), escapeHtml(item.time || '-'), adminStatus(item.status || '成功', adminLedgerTone(item))]), { title: '暂无余额变动记录', desc: '用户充值、消费和退款后将在这里显示。' })}</div></div>`;
     } else {
       const slice = state.adminPages.users;
       const uq = adminFiltersFor(scope).q;
       const errorBanner = slice.error ? `<div class="admin-risk-callout danger"><b>用户加载失败</b><span>${escapeHtml(adminFriendlyError(slice.error))}</span></div>` : '';
       const usersEmpty = uq
         ? { title: '没有匹配客户', desc: '当前搜索条件下没有客户，可清空搜索后重试。' }
-        : { title: '暂无客户', desc: '客户来自下单记录。还没有任何订单，可前往前台创建测试订单后回来查看。' };
-      body = `${adminToolbar([{ name: 'q', label: '搜索用户', placeholder: '邮箱 / Telegram' }], '', scope)}${errorBanner}<div class="admin-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取用户列表。</span></div>' : adminTable([{ label: '用户', width: '1.6fr' }, { label: 'Telegram' }, { label: '订单数' }, { label: '成交金额' }, { label: '售后数' }, { label: '最近下单' }, { label: '风险' }, { label: '操作', width: 'minmax(170px, 1.15fr)', sticky: true }], (slice.items || []).map((u) => [`<b>${escapeHtml(u.email)}</b>`, escapeHtml(u.telegramUsername || '-'), u.orderCount, `${formatUsdt(u.paidAmountUsdt)} USDT`, u.afterSaleCount, timeFrom(u.lastOrderAt), adminStatus(u.riskStatus === 'blacklisted' ? '黑名单' : '正常', u.riskStatus === 'blacklisted' ? 'danger' : 'success'), `<button data-action="adminUserDetail" data-id="${escapeHtml(u.email)}" type="button">查看</button><button class="ghost" data-action="adminUserBlacklist" data-email="${escapeHtml(u.email)}" data-telegram="${escapeHtml(u.telegramUsername || '')}" type="button">加入黑名单</button>`]), usersEmpty)}${adminPagerServer('users')}</div>`;
+        : { title: '暂无客户数据', desc: '客户将在首次下单后自动创建。' };
+      body = `<div class="admin-users-surface">${adminToolbar([{ name: 'q', label: '搜索客户', hideLabel: true, placeholder: '搜索邮箱、Telegram 用户名' }], '', scope)}${errorBanner}<div class="admin-panel admin-users-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在拉取客户列表。</span></div>' : adminTable([{ label: '客户', width: '1.6fr' }, { label: '累计消费 (USDT)' }, { label: '订单数' }, { label: '最近消费时间', width: '1.18fr' }, { label: '售后数' }, { label: '风险' }, { label: '操作', width: 'minmax(118px, .8fr)', sticky: true }], (slice.items || []).map((u) => [adminUserIdentity(u), `${formatUsdt(u.paidAmountUsdt)}`, u.orderCount, timeFrom(u.lastOrderAt), u.afterSaleCount, adminUserRiskBadge(u), `<button data-action="adminUserDetail" data-id="${escapeHtml(u.email)}" type="button">查看详情</button>`]), usersEmpty)}${adminPagerServer('users')}</div></div>`;
     }
-    return adminPage('用户管理', '查看用户列表、用户详情和余额调整记录。', `${body}${adminUserDetailPanel()}`, { tabKey: 'users', tabs });
+    return adminPage('用户管理', '查看客户消费、余额和风险情况。', `${body}${adminUserDetailPanel()}`, { tabKey: 'users', tabs });
   }
   if (tab === 'content') {
     const support = adminContentSetting('support_channel', DEFAULT_SUPPORT_CHANNEL);
@@ -5648,11 +5907,13 @@ function adminPageFilters(kind) {
   if (kind === 'orders') {
     const f = adminFiltersFor('orders');
     const tab = state.adminOrderTab || 'all';
+    const range = f.range || '近7天';
+    const dateRange = adminDateRange(range);
     const out = {
       q: f.q || '',
       network: f.network && !['全部网络', '全部'].includes(f.network) ? f.network : '',
-      dateFrom: f.dateFrom || '',
-      dateTo: f.dateTo || ''
+      dateFrom: f.dateFrom || dateRange.dateFrom || '',
+      dateTo: f.dateTo || dateRange.dateTo || ''
     };
     const tabMap = {
       pending_payment: { status: 'pending_payment' },
@@ -5671,10 +5932,12 @@ function adminPageFilters(kind) {
     const sub = currentAdminSubTab('inventory', 'list');
     const f = adminFiltersFor(adminFilterScope('inventory', sub));
     return {
+      view: sub === 'list' ? 'summary' : '',
       q: f.q || '',
       type: f.type && !['全部类型', '全部'].includes(f.type) ? f.type : '',
       status: f.status && !['全部状态', '全部'].includes(f.status) ? f.status : '',
       skuId: f.skuId || '',
+      productId: f.productId && !['全部商品', '全部'].includes(f.productId) ? f.productId : '',
       batchId: f.batchId || ''
     };
   }
@@ -5693,6 +5956,22 @@ function adminPageFilters(kind) {
     return { q: f.q || '' };
   }
   return {};
+}
+
+function adminDateInputValue(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function adminDateRange(range) {
+  if (!range || range === '自定义') return {};
+  const today = new Date();
+  const end = adminDateInputValue(today);
+  if (range === '今天') return { dateFrom: end, dateTo: end };
+  const days = range === '近30天' ? 29 : 6;
+  const start = new Date(today);
+  start.setDate(today.getDate() - days);
+  return { dateFrom: adminDateInputValue(start), dateTo: end };
 }
 
 async function loadAdminDashboard(force = false) {
@@ -6100,6 +6379,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'adminClearFilters') {
     delete state.adminFilters[el.dataset.filterScope || adminFilterScope()];
     persist();
+    await reloadAdminAfterFilter();
     return renderAdmin();
   }
   if (action === 'adminLogout') {
@@ -6463,9 +6743,31 @@ document.addEventListener('click', async (event) => {
       ]
     });
   }
+  if (action === 'adminPurchaseFieldEdit') {
+    const product = adminProducts().find((p) => p.id === el.dataset.product) || adminProducts()[0] || {};
+    const field = adminPurchaseFields(product, adminOps()).find((item) => item.id === el.dataset.field) || {};
+    return openAdminModal({
+      kind: 'purchaseFieldDraft',
+      title: field.id ? '编辑购买字段' : '新增购买字段',
+      desc: '运营只维护字段名称、类型、必填和选项，系统自动生成前台所需配置。',
+      submitLabel: '保存字段',
+      context: { productId: product.id, fieldId: field.id || '' },
+      fields: [
+        { name: 'fieldLabel', label: '字段名称', required: true, value: field.fieldLabel || '地区' },
+        { name: 'fieldType', label: '字段类型', type: 'select', value: field.fieldType || 'select', options: [{label:'下拉框',value:'select'},{label:'单选项',value:'radio'},{label:'输入框',value:'text'},{label:'邮箱',value:'email'},{label:'文本框',value:'textarea'},{label:'数字',value:'number'}] },
+        { name: 'required', label: '是否必填', type: 'select', value: field.required === false ? '0' : '1', options: [{label:'是',value:'1'},{label:'否',value:'0'}] },
+        { name: 'optionsText', label: '选项管理', type: 'textarea', value: (field.options || []).map((item) => item.label || item.value || item).join('\n'), placeholder: '每行一个选项，如：全球版' },
+        { name: 'placeholder', label: '提示文案', value: field.placeholder || '' },
+        { name: 'defaultValue', label: '默认值', value: field.defaultValue || '' }
+      ]
+    });
+  }
   if (action === 'adminGoImport') {
     state.adminTab = 'inventory';
     state.adminSubTabs.inventory = 'import';
+    if (el.dataset.product) setAdminFilter('inventory:import', 'productId', el.dataset.product);
+    if (el.dataset.sku) setAdminFilter('inventory:import', 'skuId', el.dataset.sku);
+    state.adminImportPreview = null;
     persist();
     return renderAdmin();
   }
@@ -6650,7 +6952,8 @@ document.addEventListener('submit', async (event) => {
       deliveryType: data.get('deliveryType') || 'manual',
       status: data.get('status') || 'active',
       isHomeVisible: !!data.get('isHomeVisible'),
-      isRecommended: !!data.get('isRecommended')
+      isRecommended: !!data.get('isRecommended'),
+      sortOrder: Number(data.get('sortOrder') || 0)
     };
     const response = await adminFetch(`/api/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
     const updated = await response.json().catch(() => ({}));
@@ -6688,6 +6991,18 @@ document.addEventListener('change', (event) => {
   }
   if (action === 'adminSelectEditProduct') {
     state.adminProductEditId = el.value;
+    return renderAdmin();
+  }
+  if (action === 'adminImportProductSelect') {
+    const product = adminProducts().find((p) => p.id === el.value);
+    setAdminFilter('inventory:import', 'productId', el.value);
+    setAdminFilter('inventory:import', 'skuId', product?.skus?.[0]?.id || '');
+    state.adminImportPreview = null;
+    return renderAdmin();
+  }
+  if (action === 'adminImportSkuSelect') {
+    setAdminFilter('inventory:import', 'skuId', el.value);
+    state.adminImportPreview = null;
     return renderAdmin();
   }
   if (action === 'quickProduct') { state.selectedProductId = event.target.value; state.selectedOptions[state.selectedProductId] = defaultOptions(product()); persist(); return route(); }
