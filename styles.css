@@ -17080,6 +17080,7 @@ button.danger-text {
 .admin-toolbar-actions {
   margin-left: auto;
   min-width: max-content;
+  transform: translateY(-16px);
 }
 
 .admin-toolbar-actions button,
@@ -17176,6 +17177,7 @@ button.danger-text {
     width: 100%;
     min-width: 0;
     margin-left: 0;
+    transform: none;
   }
 
   .admin-toolbar-actions button,
@@ -18752,7 +18754,7 @@ body {
 }
 
 .admin-page .admin-content:has(.admin-orders-view) {
-  max-width: 780px;
+  max-width: none;
   margin: 0 auto 0 0;
   gap: 12px;
   padding: 18px 20px 30px;
@@ -18799,12 +18801,12 @@ body {
   padding: 12px;
   border-radius: 8px !important;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: stretch;
 }
 
 .admin-orders-view .admin-toolbar-fields {
-  flex: 0 1 560px;
-  max-width: 560px;
+  flex: 1 1 auto;
+  max-width: none;
   gap: 14px;
 }
 
@@ -18824,6 +18826,7 @@ body {
 
 .admin-orders-view .admin-toolbar-actions {
   align-self: end;
+  padding-top: 4px;
 }
 
 .admin-orders-view .admin-toolbar-actions button {
@@ -19072,6 +19075,10 @@ body {
 
 .admin-users-surface .admin-toolbar-actions button {
   min-width: 72px;
+}
+
+.admin-users-surface .admin-toolbar-actions {
+  transform: translateY(-8px);
 }
 
 .admin-users-panel {
@@ -19463,7 +19470,7 @@ body {
   }
 
   .admin-page .admin-content:has(.admin-orders-view) {
-    max-width: 780px;
+    max-width: none;
     padding: 18px 14px 28px;
   }
 }
