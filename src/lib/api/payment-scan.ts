@@ -5,11 +5,13 @@ import { writeAuditLog } from "./audit";
 import {
   amountToUnits,
   DEFAULT_PAYMENT_GRACE_MINUTES,
+  DEFAULT_PAYMENT_EXPIRY_MINUTES,
   fetchTronUsdtTransfers,
   normalizeTronAddress,
   transactionIsInPaymentWindow,
 } from "./usdt-trc20";
-import type { OrderRow, PaymentNetworkRow } from "./types";
+import { completePendingWalletLedger } from "./wallet";
+import type { OrderRow, PaymentNetworkRow, WalletLedgerRow } from "./types";
 
 function estimatedConfirmations(blockTimestamp: number): number {
   if (!Number.isFinite(blockTimestamp) || blockTimestamp <= 0) return 0;
@@ -20,11 +22,16 @@ function sqlDate(value: number): string {
   return new Date(value).toISOString();
 }
 
+function parseD1Utc(value: string) {
+  return new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`).getTime();
+}
+
 export interface ScanResult {
   checked: number;
   matched: number;
   exceptions: number;
   matchedOrderIds: string[];
+  matchedWalletLedgerIds?: string[];
   scannedTransfers?: number;
   requiredConfirmations?: number;
   provider: string;
@@ -42,7 +49,7 @@ export async function scanTronPayments(
     .prepare("SELECT * FROM payment_networks WHERE code = 'TRON' AND is_enabled = 1 LIMIT 1")
     .first<PaymentNetworkRow>();
   if (!network) {
-    return { checked: 0, matched: 0, exceptions: 0, matchedOrderIds: [], provider: "trongrid", error: "TRON payment network is not configured" };
+    return { checked: 0, matched: 0, exceptions: 0, matchedOrderIds: [], matchedWalletLedgerIds: [], provider: "trongrid", error: "TRON payment network is not configured" };
   }
 
   const scanWindowStartedAt = new Date(Date.now() - DEFAULT_PAYMENT_GRACE_MINUTES * 60 * 1000).toISOString();
@@ -57,16 +64,33 @@ export async function scanTronPayments(
     )
     .bind(scanWindowStartedAt)
     .all<OrderRow>();
+  const activeLedgers = await db
+    .prepare(
+      `SELECT *
+       FROM wallet_ledgers
+       WHERE type = 'recharge'
+         AND status = 'pending'
+         AND method = 'usdt_trc20'
+         AND datetime(created_at, '+${DEFAULT_PAYMENT_EXPIRY_MINUTES} minutes') > datetime('now')
+       ORDER BY created_at ASC
+       LIMIT 50`
+    )
+    .all<WalletLedgerRow>();
 
   let matched = 0;
   const matchedOrderIds: string[] = [];
+  const matchedWalletLedgerIds: string[] = [];
   let exceptions = 0;
 
-  if (!results.length) {
-    return { checked: 0, matched, exceptions, matchedOrderIds, provider: "trongrid" };
+  if (!results.length && !activeLedgers.results.length) {
+    return { checked: 0, matched, exceptions, matchedOrderIds, matchedWalletLedgerIds, provider: "trongrid" };
   }
 
-  const minCreatedAt = Math.min(...results.map((order) => new Date(order.created_at).getTime()));
+  const createdTimes = [
+    ...results.map((order) => new Date(order.created_at).getTime()),
+    ...activeLedgers.results.map((ledger) => parseD1Utc(ledger.created_at)),
+  ];
+  const minCreatedAt = Math.min(...createdTimes);
   const tronEnv = env as CloudflareEnv & { TRON_GRID_API_KEY?: string; Trongrid?: string };
   const tronGridApiKey = tronEnv.TRON_GRID_API_KEY || tronEnv.Trongrid || "";
   let transfers: Awaited<ReturnType<typeof fetchTronUsdtTransfers>>;
@@ -87,6 +111,7 @@ export async function scanTronPayments(
       matched,
       exceptions: results.length,
       matchedOrderIds,
+      matchedWalletLedgerIds,
       provider: "trongrid",
       error: error instanceof Error ? error.message : "TronGrid request failed",
     };
@@ -106,16 +131,27 @@ export async function scanTronPayments(
     const toAddressMatches = normalizeTronAddress(transfer.toAddress) === normalizeTronAddress(network.address);
     if (!toAddressMatches) continue;
 
-    const exactCandidates = results.filter((order) =>
+    const exactOrderCandidates = results.filter((order) =>
       amountToUnits(order.amount_usdt) === amountUnits &&
       transactionIsInPaymentWindow(order, transfer.blockTimestamp) &&
       normalizeTronAddress(order.payment_address) === normalizeTronAddress(network.address)
     );
+    const exactLedgerCandidates = activeLedgers.results.filter((ledger) => {
+      const createdAt = parseD1Utc(ledger.created_at);
+      const expiresAt = createdAt + DEFAULT_PAYMENT_EXPIRY_MINUTES * 60 * 1000;
+      return (
+        amountToUnits(ledger.amount_usdt) === amountUnits &&
+        transfer.blockTimestamp >= createdAt &&
+        transfer.blockTimestamp <= expiresAt
+      );
+    });
+    const exactCandidateCount = exactOrderCandidates.length + exactLedgerCandidates.length;
 
     let matchStatus = "unmatched";
     let exceptionType: string | null = null;
-    let note = "未匹配到有效订单";
+    let note = "未匹配到有效订单或充值单";
     let matchedOrder: OrderRow | null = null;
+    let matchedLedger: WalletLedgerRow | null = null;
 
     if (!isReusable) {
       matchStatus = "duplicate";
@@ -125,14 +161,15 @@ export async function scanTronPayments(
       matchStatus = "confirming";
       exceptionType = "confirming";
       note = `等待 ${requiredConfirmations} 次确认`;
-    } else if (exactCandidates.length === 1) {
+    } else if (exactCandidateCount === 1) {
       matchStatus = "matched";
       note = "精确金额自动匹配";
-      matchedOrder = exactCandidates[0];
-    } else if (exactCandidates.length > 1) {
+      matchedOrder = exactOrderCandidates[0] ?? null;
+      matchedLedger = matchedOrder ? null : exactLedgerCandidates[0];
+    } else if (exactCandidateCount > 1) {
       matchStatus = "exception";
       exceptionType = "amount_collision";
-      note = "同一精确金额命中多个订单，需要人工核验";
+      note = "同一精确金额命中多个订单或充值单，需要人工核验";
     } else {
       const windowCandidates = results.filter((order) =>
         transactionIsInPaymentWindow(order, transfer.blockTimestamp) &&
@@ -180,7 +217,7 @@ export async function scanTronPayments(
         transfer.amount,
         Math.min(confirmations, requiredConfirmations),
         matchedOrder?.id ?? null,
-        matchedOrder?.order_no ?? null,
+        matchedOrder?.order_no ?? (matchedLedger ? `CZ${matchedLedger.id.slice(0, 8).toUpperCase()}` : null),
         matchStatus,
         exceptionType,
         matchStatus === "matched" ? sqlDate(transfer.blockTimestamp) : null,
@@ -188,33 +225,49 @@ export async function scanTronPayments(
       )
       .run();
 
-    if (!matchedOrder || matchStatus !== "matched") {
+    if ((!matchedOrder && !matchedLedger) || matchStatus !== "matched") {
       if (matchStatus === "exception") exceptions += 1;
       continue;
     }
 
     matched += 1;
-    matchedOrderIds.push(matchedOrder.id);
     usedTxHashes.add(transfer.txHash);
-    await db
-      .prepare(
-        "UPDATE orders SET status = 'paid', payment_status = 'paid', tx_hash = ?, paid_at = COALESCE(paid_at, datetime('now')), updated_at = datetime('now') WHERE id = ? AND status IN ('pending_payment','payment_confirming')"
-      )
-      .bind(transfer.txHash, matchedOrder.id)
-      .run();
-    await writeAuditLog(db, request, { actorId: actor.actorId, role: actor.role }, "payment_listener.match", "order", matchedOrder.id, {
-      txHash: transfer.txHash,
-      network: matchedOrder.payment_network,
-      amount: transfer.amount,
-      confirmations,
-    });
+    if (matchedOrder) {
+      matchedOrderIds.push(matchedOrder.id);
+      await db
+        .prepare(
+          "UPDATE orders SET status = 'paid', payment_status = 'paid', tx_hash = ?, paid_at = COALESCE(paid_at, datetime('now')), updated_at = datetime('now') WHERE id = ? AND status IN ('pending_payment','payment_confirming')"
+        )
+        .bind(transfer.txHash, matchedOrder.id)
+        .run();
+      await writeAuditLog(db, request, { actorId: actor.actorId, role: actor.role }, "payment_listener.match", "order", matchedOrder.id, {
+        txHash: transfer.txHash,
+        network: matchedOrder.payment_network,
+        amount: transfer.amount,
+        confirmations,
+      });
+    } else if (matchedLedger) {
+      matchedWalletLedgerIds.push(matchedLedger.id);
+      await completePendingWalletLedger(db, matchedLedger.id, actor.actorId);
+      await db
+        .prepare("UPDATE wallet_ledgers SET note = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind(`USDT-TRC20 自动入账：${transfer.txHash}`, matchedLedger.id)
+        .run();
+      await writeAuditLog(db, request, { actorId: actor.actorId, role: actor.role }, "payment_listener.wallet_match", "wallet_ledger", matchedLedger.id, {
+        txHash: transfer.txHash,
+        network: "TRON",
+        amount: transfer.amount,
+        confirmations,
+      });
+    }
   }
 
   return {
-    checked: results.length,
+    checked: results.length + activeLedgers.results.length,
     matched,
     exceptions,
     matchedOrderIds,
+    matchedWalletLedgerIds,
     scannedTransfers: transfers.length,
     requiredConfirmations,
     provider: "trongrid",

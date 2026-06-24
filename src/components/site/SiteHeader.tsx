@@ -6,7 +6,7 @@ import { useSession } from "@/lib/session/SessionContext";
 export function SiteHeader() {
   const { user, logout } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
-  const name = user?.nickname || user?.email?.split("@")[0] || "用户";
+  const name = user?.email?.split("@")[0] || user?.nickname || "member";
 
   return (
     <header className="topbar">

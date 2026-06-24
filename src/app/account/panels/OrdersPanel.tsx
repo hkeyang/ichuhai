@@ -166,18 +166,24 @@ export function OrdersPanel({ token }: { token: string }) {
           <span>至</span>
           <input aria-label="结束日期" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
         </label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">全部状态</option>
-          <option value="paying">待支付</option>
-          <option value="processing">处理中</option>
-          <option value="done">已完成</option>
-          <option value="issue">异常/售后</option>
-        </select>
-        <select value={sort} onChange={(event) => setSort(event.target.value)}>
-          <option value="newest">最新下单</option>
-          <option value="amount_desc">金额从高到低</option>
-          <option value="amount_asc">金额从低到高</option>
-        </select>
+        <span className="select-shell member-select">
+          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+            <option value="">全部状态</option>
+            <option value="paying">待支付</option>
+            <option value="processing">处理中</option>
+            <option value="done">已完成</option>
+            <option value="issue">异常/售后</option>
+          </select>
+          <LineIcon name="chevron" label="展开状态" className="select-chevron" />
+        </span>
+        <span className="select-shell member-select">
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="newest">最新下单</option>
+            <option value="amount_desc">金额从高到低</option>
+            <option value="amount_asc">金额从低到高</option>
+          </select>
+          <LineIcon name="chevron" label="展开排序" className="select-chevron" />
+        </span>
         <button onClick={() => exportOrders(rows)} type="button">导出订单</button>
         <button onClick={reload} type="button">同步订单</button>
       </section>
@@ -199,7 +205,9 @@ export function OrdersPanel({ token }: { token: string }) {
                   <i className={isIssue ? "warning" : "success"}>{statusLabel(order.status)}</i>
                   <strong>{Number(order.amountUsdt || 0).toFixed(2)} USDT<small>{order.paymentCurrency || "USDT"}</small></strong>
                   <button className="detail-button" onClick={() => setExpanded(isOpen ? "" : order.orderId)} type="button">查看详情</button>
-                  <button className="order-chevron" onClick={() => setExpanded(isOpen ? "" : order.orderId)} type="button">⌄</button>
+                  <button className="order-chevron" onClick={() => setExpanded(isOpen ? "" : order.orderId)} type="button">
+                    <LineIcon name="chevron" label="展开订单" className="order-chevron-icon" />
+                  </button>
                 </div>
                 {isOpen && (
                   <section className="expanded-detail">
@@ -245,8 +253,15 @@ export function OrdersPanel({ token }: { token: string }) {
       </section>
       <section className="member-pagination">
         <span>共 {rows.length} 条订单</span>
-        <div><button disabled type="button">‹</button><button className="active" disabled type="button">1</button><button disabled type="button">›</button></div>
-        <select disabled><option>当前全部显示</option></select>
+        <div>
+          <button disabled type="button"><LineIcon name="chevron-left" label="上一页" className="pager-icon" /></button>
+          <button className="active" disabled type="button">1</button>
+          <button disabled type="button"><LineIcon name="chevron-right" label="下一页" className="pager-icon" /></button>
+        </div>
+        <span className="select-shell member-select pagination-size">
+          <select disabled><option>当前全部显示</option></select>
+          <LineIcon name="chevron" label="每页数量" className="select-chevron" />
+        </span>
       </section>
     </>
   );

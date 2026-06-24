@@ -31,6 +31,19 @@ const SECTION_META: Record<SectionKey, { label: string; desc: string }> = {
   help: NAV_SECTIONS[4],
 };
 
+function emailPrefix(email?: string | null) {
+  return String(email || "").split("@")[0] || "member";
+}
+
+function sixDigitUserId(seed?: string | null) {
+  const source = String(seed || "ichuhai-member");
+  let hash = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+  }
+  return String(100000 + (hash % 900000));
+}
+
 function GuestView() {
   return (
     <section className="account-console account-console-guest">
@@ -121,6 +134,8 @@ function AccountInner() {
   if (!activeUser) return null;
   const meta = SECTION_META[section];
   const activeNav = section === "walletLedger" ? "wallet" : section === "supportDetail" ? "support" : section;
+  const displayName = emailPrefix(activeUser.email);
+  const memberNo = sixDigitUserId(activeUser.id || activeUser.email);
 
   return (
     <>
@@ -129,13 +144,16 @@ function AccountInner() {
         <section className="member-center">
           <aside className="member-sidebar">
             <div className="member-user">
-              <h2>{activeUser.nickname || activeUser.email}</h2>
+              <h2>{displayName}</h2>
               <p className="member-email">{activeUser.email}</p>
+              <p className="member-id">用户ID {memberNo}</p>
               <div className="member-balance">
                 <span>账户余额</span>
-                <b>{Number(activeUser.balanceUsdt || "0").toFixed(2)} USDT</b>
+                <div>
+                  <b>{Number(activeUser.balanceUsdt || "0").toFixed(2)} USDT</b>
+                  <button onClick={() => openSection("wallet")} type="button">充值</button>
+                </div>
               </div>
-              <button onClick={() => openSection("wallet")} type="button">充值</button>
             </div>
             <nav className="member-nav">
               {NAV_SECTIONS.map((s) => (
@@ -170,7 +188,7 @@ function AccountInner() {
             {(section === "support" || section === "supportDetail") && (
               <SupportPanel
                 token={token}
-                userName={activeUser.nickname || activeUser.email || "用户"}
+                userName={displayName}
                 view={section === "supportDetail" ? "detail" : "list"}
                 onOpenDetail={() => openSection("supportDetail")}
                 onBack={() => openSection("support")}

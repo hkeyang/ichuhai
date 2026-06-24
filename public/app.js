@@ -81,6 +81,8 @@ const LINE_ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   'check-circle': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
   refund: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   headset: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2Z"/><path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2Z"/><path d="M13 21h3a3 3 0 0 0 3-3"/>',
   'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.6 8.8a1.4 1.4 0 0 1-.8 0C7.5 20.5 4 18 4 13V5.5a1.2 1.2 0 0 1 .7-1.1l6.8-2.9a1.2 1.2 0 0 1 1 0l6.8 2.9a1.2 1.2 0 0 1 .7 1.1z"/><path d="m9 12 2 2 4-4"/>',
   bell: '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/>',
@@ -837,6 +839,56 @@ async function loadServerOrder(orderId) {
     const order = normalizeServerOrder(await response.json());
     if (order) saveOrder(order);
     return order;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeWalletRechargePayment(payload) {
+  const payment = payload?.payment || {};
+  const ledger = payload?.ledger || {};
+  const id = payment.id || ledger.id;
+  if (!id) return null;
+  const amountUsdt = Number(payment.amountUsdt ?? payment.payAmount ?? ledger.amountUsdt ?? 0);
+  const providerPayload = parseMaybeJson(payment.providerPayload, {});
+  return {
+    id: `wallet-${id}`,
+    walletLedgerId: id,
+    kind: 'walletRecharge',
+    orderNo: payment.orderNo || `CZ${String(id).slice(0, 8).toUpperCase()}`,
+    productName: '余额充值',
+    options: { network: 'USDT-TRC20' },
+    telegramUsername: '',
+    email: userEmail(),
+    amountUsdt,
+    fiatCurrency: payment.fiatCurrency || 'USD',
+    fiatAmount: `${amountUsdt.toFixed(2)} USD`,
+    paymentNetwork: payment.paymentNetwork || 'TRON',
+    paymentAddress: payment.paymentAddress,
+    paymentProvider: payment.paymentProvider || 'usdt-trc20-direct',
+    providerPayload,
+    payAmount: Number(payment.payAmount ?? amountUsdt),
+    payCurrency: 'USDT',
+    status: payment.status || ledger.status || 'pending_payment',
+    paymentStatus: payment.paymentStatus || 'unpaid',
+    deliveryStatus: 'wallet',
+    createdAt: payment.createdAt || ledger.createdAt,
+    expiresAt: paymentExpiryMs(payment.expiresAt, payment.createdAt || ledger.createdAt),
+    updatedAt: payment.updatedAt || ledger.updatedAt,
+    events: [],
+    raw: payload
+  };
+}
+
+async function loadWalletRechargePayment(payId) {
+  const ledgerId = String(payId || '').replace(/^wallet-/, '');
+  if (!ledgerId || !authToken()) return null;
+  try {
+    const response = await fetch(`/api/me/balance/recharges/${encodeURIComponent(ledgerId)}/payment`, {
+      headers: { authorization: `Bearer ${authToken()}` }
+    });
+    if (!response.ok) return null;
+    return normalizeWalletRechargePayment(await response.json());
   } catch {
     return null;
   }
@@ -2974,7 +3026,8 @@ function demoOrder() {
 }
 
 async function pay(id) {
-  const order = (await loadServerOrder(id)) || findExactOrder(id);
+  const isWalletRecharge = String(id || '').startsWith('wallet-');
+  const order = isWalletRecharge ? (await loadWalletRechargePayment(id)) : ((await loadServerOrder(id)) || findExactOrder(id));
   if (!order) return checkout();
   const paymentAmountValue = Number(order.payAmount || order.amountUsdt).toFixed(3);
   const paymentAmountText = `${paymentAmountValue} USDT`;
@@ -2984,8 +3037,8 @@ async function pay(id) {
     <section class="pay-waiting-layout">
       ${payStatusHero(order, paymentAmountText, expiresAt)}
       <section class="glass panel pay-info">
-        <h3>订单信息</h3>
-        ${[['订单号', order.orderNo + ' ⧉'], ['商品', `${order.productName}  ${Object.values(order.options || {}).join(' / ')}`], ['创建时间', timeFrom(order.createdAt)]].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
+        <h3>${isWalletRecharge ? '充值信息' : '订单信息'}</h3>
+        ${[[isWalletRecharge ? '充值单号' : '订单号', order.orderNo + ' ⧉'], [isWalletRecharge ? '充值项目' : '商品', `${order.productName}  ${Object.values(order.options || {}).join(' / ')}`], ['创建时间', timeFrom(order.createdAt)]].map(([a, b]) => `<div class="pay-row"><span>${a}</span><b>${b}</b></div>`).join('')}
       </section>
       <section class="glass panel qr-panel">
         <div class="qr-panel-title">
@@ -3009,7 +3062,7 @@ async function pay(id) {
           </div>
         </div>
         <div class="pay-flow-line">${paymentInstructionSteps()}</div>
-        <p class="pay-auto-note">${lineIcon('clock', '自动确认', 'pay-note-icon')} 付款完成后无需点击按钮，系统链上校验成功后会自动跳转到订单详情。</p>
+        <p class="pay-auto-note">${lineIcon('clock', '自动确认', 'pay-note-icon')} 付款完成后无需点击按钮，系统链上校验成功后会自动${isWalletRecharge ? '入账并回到余额中心' : '跳转到订单详情'}。</p>
       </section>
       <section class="glass panel support"><b>遇到问题？联系在线客服 ${SUPPORT_TELEGRAM_HANDLE}</b><a href="${SUPPORT_TELEGRAM_URL}" target="_blank" rel="noopener">联系客服</a></section>
     </section>
@@ -3048,6 +3101,20 @@ function stopPaymentStatusPolling() {
 async function checkPaymentStatus(orderId, { silent = false } = {}) {
   if (!orderId) return;
   try {
+    if (String(orderId).startsWith('wallet-')) {
+      const recharge = await loadWalletRechargePayment(orderId);
+      if (!recharge) return;
+      updatePayStatusUi(recharge.status);
+      const paidStatuses = new Set(['paid', 'completed']);
+      if (paidStatuses.has(recharge.status) || recharge.paymentStatus === 'paid') {
+        stopPaymentStatusPolling();
+        notify('充值已入账，正在回到余额中心');
+        navigate('/account?section=wallet');
+      } else if (recharge.status === 'failed' && !silent) {
+        notify('充值支付失败，请重新发起充值');
+      }
+      return;
+    }
     const response = await fetch(`/api/orders/${orderId}/status`);
     if (!response.ok) return;
     const status = await response.json();
@@ -3630,16 +3697,15 @@ function accountWalletPanel() {
     </section>
     <form class="wallet-recharge-card">
       <h3>充值</h3>
-      <label>充值金额<div class="wallet-amount-field"><input id="rechargeAmount" type="number" min="1" step="0.01" value="100" /><b>USDT</b></div></label>
+      <label>充值金额<div class="wallet-amount-field"><input id="rechargeAmount" type="number" min="1" step="1" value="${escapeHtml(state.rechargeDraft.amount || '10')}" /><b>USDT</b><div class="wallet-amount-stepper"><button data-action="rechargeAmountPlus" type="button">${lineIcon('plus', '增加 1 USDT', 'amount-step-icon')}</button><button data-action="rechargeAmountMinus" type="button">${lineIcon('minus', '减少 1 USDT', 'amount-step-icon')}</button></div></div></label>
       <div class="wallet-method-block">
         <span>充值方式</span>
         <div class="wallet-methods">
-          ${walletPaymentMethod('alipay', '支付宝', '即时到账，推荐使用', true)}
-          ${walletPaymentMethod('usdt_trc20', 'USDT-TRC20', '链上转账，低手续费', false)}
+          ${walletPaymentMethod('usdt_trc20', 'USDT-TRC20', '扫码转账，链上确认后自动入账', true)}
         </div>
       </div>
       <button class="wallet-submit" data-action="createRecharge" type="button">立即充值</button>
-      <small>${lineIcon('warning', '提示', 'wallet-note-icon')} 选择支付方式，系统会按实时汇率结算人民币支付金额。</small>
+      <small>${lineIcon('warning', '提示', 'wallet-note-icon')} 最低 1 USDT 起充，金额按 1 USDT 递增；支付页会显示 TRC20 收款二维码。</small>
     </form>
     <section class="wallet-ledger-card">
       <div class="wallet-section-head"><h2>余额流水</h2><button data-action="selectAccountSection" data-section="walletLedger" type="button">查看全部 ${lineIcon('chevron', '查看全部', 'wallet-link-icon')}</button></div>
@@ -3651,7 +3717,7 @@ function accountWalletPanel() {
 function walletPaymentMethod(value, title, desc, active) {
   const checked = state.rechargeDraft.method === value || (!state.rechargeDraft.method && active);
   return `<button class="${checked ? 'active' : ''}" data-action="setRechargeMethod" data-method="${escapeHtml(value)}" type="button">
-    <i>${value === 'alipay' ? '支' : ''}</i>
+    <i>${value === 'usdt_trc20' ? lineIcon('wallet', 'USDT', 'wallet-method-icon') : '支'}</i>
     <span><b>${escapeHtml(title)}</b><small>${escapeHtml(desc)}</small></span>
   </button>`;
 }
@@ -3696,7 +3762,7 @@ function walletLedgerTable(rows, options = {}) {
 function accountWalletLedgerPanel() {
   return `<section class="wallet-all-page">
     <section class="wallet-ledger-filter">
-      <label>${lineIcon('search', '搜索', 'filter-icon')}<input placeholder="搜索订单号 / TxID / 备注" /></label>
+      <label>${lineIcon('search', '搜索', 'filter-icon')}<input placeholder="订单号 / TxID / 备注" /></label>
       <label class="date-range">${lineIcon('calendar', '日期', 'filter-icon')}<input placeholder="开始日期" /><span>-</span><input placeholder="结束日期" />${lineIcon('calendar', '日期', 'filter-icon')}</label>
       <select><option>全部类型</option><option>充值</option><option>订单支付</option><option>退款</option></select>
       <select><option>全部状态</option><option>成功</option><option>待确认</option><option>已完成</option></select>
@@ -6272,18 +6338,41 @@ document.addEventListener('click', async (event) => {
     return route();
   }
   if (action === 'createRecharge') {
-    const amount = Number(document.querySelector('#rechargeAmount')?.value || 0);
-    const method = state.rechargeDraft.method || 'alipay';
-    if (!amount || amount <= 0) return notify('请输入有效充值金额');
-    state.rechargeDraft = { amount: String(amount), method };
-    walletLedger('充值订单', amount, `${method === 'alipay' ? '支付宝' : 'USDT TRC20'} 充值待确认`, 'pending');
-    addMessage('充值单已创建', `${amount.toFixed(2)} USDT 充值待确认。`, 'wallet');
-    notify('充值单已创建，等待支付确认');
-    return route();
+    if (!authToken()) {
+      state.loginReturnTo = '/account?section=wallet';
+      persist();
+      notify('请先登录后充值');
+      return navigate('/login');
+    }
+    const amount = Math.max(1, Math.floor(Number(document.querySelector('#rechargeAmount')?.value || 0)));
+    if (!amount || amount < 1) return notify('充值金额最低 1 USDT');
+    state.rechargeDraft = { amount: String(amount), method: 'usdt_trc20' };
+    try {
+      const response = await fetch('/api/me/balance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${authToken()}` },
+        body: JSON.stringify({ amountUsdt: String(amount), method: 'usdt_trc20' })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '充值单创建失败');
+      addMessage('充值单已创建', `${Number(result.ledger?.amountUsdt || amount).toFixed(3)} USDT 待支付。`, 'wallet');
+      notify('充值单已创建，正在打开支付页面');
+      return navigate(result.payment?.paymentUrl || `/pay/wallet-${result.ledger.id}`);
+    } catch (e) {
+      return notify(e?.message || '充值单创建失败');
+    }
   }
   if (action === 'setRechargeMethod') {
     state.rechargeDraft.method = el.dataset.method || 'alipay';
     return route();
+  }
+  if (action === 'rechargeAmountPlus' || action === 'rechargeAmountMinus') {
+    const input = document.querySelector('#rechargeAmount');
+    const next = Math.max(1, Math.floor(Number(input?.value || state.rechargeDraft.amount || 1)) + (action === 'rechargeAmountPlus' ? 1 : -1));
+    state.rechargeDraft.amount = String(next);
+    if (input) input.value = String(next);
+    persist();
+    return;
   }
   if (action === 'simulateRecharge') {
     const amount = Number(state.rechargeDraft.amount || 20);

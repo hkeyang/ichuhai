@@ -6,6 +6,8 @@ const ICONS: Record<string, string> = {
   calendar: "M8 3v4m8-4v4M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
   check: "m5 12 4 4L19 6",
   chevron: "m9 18 6-6-6-6",
+  "chevron-left": "m15 18-6-6 6-6",
+  "chevron-right": "m9 18 6-6-6-6",
   clock: "M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   copy: "M8 8h10v12H8zM6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1",
   download: "M12 3v12m0 0 4-4m-4 4-4-4M4 21h16",
@@ -17,6 +19,9 @@ const ICONS: Record<string, string> = {
   refund: "M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-3",
   search: "M21 21l-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z",
   shield: "M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Zm-3 9 2 2 4-5",
+  plus: "M12 5v14M5 12h14",
+  minus: "M5 12h14",
+  usdt: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-5 6h10M9 9c0 1.2 1.3 2 3 2s3 .8 3 2-1.3 2-3 2-3-.8-3-2m3-7v10",
   warning: "M12 9v4m0 4h.01M10.3 4.6 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0Z",
 };
 

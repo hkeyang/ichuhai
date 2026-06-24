@@ -218,17 +218,23 @@ export function SupportPanel({
         <h3>发起售后申请</h3>
         <label>
           <span><i>*</i> 关联订单</span>
-          <select value={selectedOrderId} onChange={(event) => setSelectedOrderId(event.target.value)}>
-            <option value="">请选择关联订单</option>
-            {orders.map((order) => <option value={order.orderId} key={order.orderId}>{order.orderNo} · {productName(order)}</option>)}
-          </select>
+          <span className="select-shell member-select">
+            <select value={selectedOrderId} onChange={(event) => setSelectedOrderId(event.target.value)}>
+              <option value="">请选择关联订单</option>
+              {orders.map((order) => <option value={order.orderId} key={order.orderId}>{order.orderNo} · {productName(order)}</option>)}
+            </select>
+            <LineIcon name="chevron" label="展开订单" className="select-chevron" />
+          </span>
         </label>
         <label>
           <span><i>*</i> 问题类型</span>
-          <select value={issueType} onChange={(event) => setIssueType(event.target.value)}>
-            <option value="">请选择问题类型</option>
-            {ISSUE_TYPES.map((item) => <option value={item} key={item}>{item}</option>)}
-          </select>
+          <span className="select-shell member-select">
+            <select value={issueType} onChange={(event) => setIssueType(event.target.value)}>
+              <option value="">请选择问题类型</option>
+              {ISSUE_TYPES.map((item) => <option value={item} key={item}>{item}</option>)}
+            </select>
+            <LineIcon name="chevron" label="展开问题类型" className="select-chevron" />
+          </span>
         </label>
         <label className="support-desc">
           <span><i>*</i> 问题描述</span>
@@ -263,8 +269,15 @@ export function SupportPanel({
         </div>
         <section className="support-table-foot">
           <span>共 {tickets.length} 条</span>
-          <div><button disabled type="button">‹</button><button className="active" disabled type="button">1</button><button disabled type="button">›</button></div>
-          <select disabled><option>10 条/页</option></select>
+          <div>
+            <button disabled type="button"><LineIcon name="chevron-left" label="上一页" className="pager-icon" /></button>
+            <button className="active" disabled type="button">1</button>
+            <button disabled type="button"><LineIcon name="chevron-right" label="下一页" className="pager-icon" /></button>
+          </div>
+          <span className="select-shell member-select pagination-size">
+            <select disabled><option>10 条/页</option></select>
+            <LineIcon name="chevron" label="每页数量" className="select-chevron" />
+          </span>
         </section>
       </section>
     </section>

@@ -18007,6 +18007,368 @@ body {
   }
 }
 
+/* ===== Account center final consolidation 2026-06-24 ===== */
+body:has(.member-page) .topbar {
+  top: 0;
+  width: 100%;
+  height: 64px;
+  margin: 0;
+  padding: 0 32px;
+  border: 0;
+  border-bottom: 1px solid #E7ECF5;
+  border-radius: 0;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 8px 24px rgba(40, 60, 120, .05);
+}
+
+body:has(.member-page) .topbar .brand {
+  min-width: 150px;
+  color: #0F1B3D;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+body:has(.member-page) .topbar .nav {
+  flex: 1;
+  justify-content: center;
+  gap: 48px;
+}
+
+body:has(.member-page) .topbar .nav a {
+  color: #111B3D;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+body:has(.member-page) .topbar .account-trigger {
+  min-width: 150px;
+  justify-content: center;
+  border-radius: 0;
+  border-color: #E7ECF5;
+  box-shadow: none;
+}
+
+.member-page {
+  background: #F6F8FC;
+}
+
+.member-center {
+  max-width: 1320px;
+  gap: 32px;
+}
+
+.member-sidebar {
+  width: 232px;
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgba(26, 42, 86, .06);
+}
+
+.member-user {
+  gap: 10px;
+  padding: 2px 6px 22px;
+}
+
+.member-email,
+.member-id {
+  margin: 0;
+  color: #6B7894;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.member-id {
+  color: #405070;
+}
+
+.member-balance {
+  gap: 8px;
+}
+
+.member-balance > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.member-balance b {
+  min-width: 0;
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.member-balance button {
+  width: auto;
+  min-width: 62px;
+  height: 34px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 8px;
+}
+
+.member-nav button,
+.member-logout,
+.detail-button,
+.wallet-section-head button,
+.support-record-row button {
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.member-nav button:hover,
+.detail-button:hover,
+.support-record-row button:hover {
+  background: #F6F7FF;
+  border-color: #C9D1EA;
+}
+
+.member-page input,
+.member-page select,
+.member-page textarea {
+  border-color: #DDE4F0;
+  border-radius: 8px;
+  color: #14213F;
+  background-color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.member-page input:focus,
+.member-page select:focus,
+.member-page textarea:focus,
+.member-select:focus-within select {
+  border-color: #635BFF;
+  box-shadow: 0 0 0 3px rgba(99, 91, 255, .12);
+}
+
+.member-select {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.member-select select {
+  width: 100%;
+  height: 100%;
+  min-height: 40px;
+  padding: 0 38px 0 14px;
+  appearance: none;
+}
+
+.member-select .select-chevron {
+  right: 12px;
+  width: 16px;
+  height: 16px;
+  color: #66738C;
+}
+
+.member-select:focus-within .select-chevron {
+  color: #635BFF;
+}
+
+.order-filter-bar {
+  grid-template-columns: minmax(180px, 1.2fr) minmax(180px, .95fr) minmax(132px, .68fr) minmax(132px, .68fr) minmax(112px, .55fr) minmax(112px, .55fr);
+  gap: 12px;
+}
+
+.order-filter-bar label,
+.order-filter-bar button,
+.order-filter-bar .member-select {
+  height: 42px;
+}
+
+.order-filter-bar .date-range {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.order-filter-bar .date-range input {
+  min-width: 0;
+}
+
+.account-empty {
+  min-height: 116px;
+  padding: 28px;
+  border: 1px dashed #D6DEEF;
+  border-radius: 12px;
+  background: #FBFCFF;
+}
+
+.member-order-list .account-empty {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.order-chevron-icon {
+  width: 18px;
+  height: 18px;
+  transition: transform .16s ease;
+}
+
+.member-order-row.is-expanded .order-chevron-icon {
+  transform: rotate(180deg);
+}
+
+.pager-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.member-pagination {
+  grid-template-columns: 1fr auto minmax(160px, 240px);
+}
+
+.member-pagination button {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.member-pagination .pagination-size {
+  justify-self: end;
+  width: 100%;
+  height: 36px;
+}
+
+.wallet-amount-field {
+  grid-template-columns: minmax(0, 1fr) auto 58px;
+  height: 46px;
+  padding-right: 4px;
+}
+
+.wallet-amount-field input {
+  height: 44px;
+}
+
+.wallet-amount-stepper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.wallet-amount-stepper button {
+  width: 26px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #DDE4F0;
+  border-radius: 7px;
+  color: #405070;
+  background: #F8FAFD;
+}
+
+.wallet-amount-stepper button:hover {
+  border-color: #C9D1EA;
+  background: #FFFFFF;
+}
+
+.amount-step-icon,
+.wallet-method-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.wallet-methods {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.wallet-methods button {
+  height: 66px;
+}
+
+.wallet-methods button i,
+.wallet-methods button.active i {
+  border: 0;
+  color: #FFFFFF;
+  background: #26A17B;
+}
+
+.wallet-ledger-row em.warning,
+.wallet-ledger-row em.success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-ledger-filter {
+  grid-template-columns: minmax(170px, 1.1fr) minmax(200px, 1.12fr) minmax(118px, .62fr) minmax(118px, .62fr) minmax(118px, .62fr) minmax(112px, .56fr);
+  gap: 10px;
+  padding: 20px 22px;
+}
+
+.wallet-ledger-filter .member-select,
+.wallet-ledger-filter button,
+.wallet-ledger-filter label {
+  height: 44px;
+}
+
+.wallet-ledger-filter .member-select select {
+  min-height: 44px;
+}
+
+.support-apply-card .member-select {
+  height: 42px;
+}
+
+.support-table-foot .member-select {
+  width: 126px;
+  height: 36px;
+}
+
+.support-table-foot button {
+  display: grid;
+  place-items: center;
+}
+
+.profile-form {
+  max-width: 560px;
+}
+
+@media (max-width: 1180px) {
+  .order-filter-bar,
+  .wallet-ledger-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-pagination,
+  .support-table-foot {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .member-pagination .pagination-size,
+  .support-table-foot .member-select {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  body:has(.member-page) .topbar {
+    padding: 0 16px;
+  }
+
+  body:has(.member-page) .topbar .nav {
+    display: none;
+  }
+
+  .member-center {
+    gap: 18px;
+  }
+
+  .order-filter-bar,
+  .wallet-ledger-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .member-balance > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* ===== Final admin IA + visual system ===== */
 .admin-page {
   --admin-bg: #F6F8FC;
