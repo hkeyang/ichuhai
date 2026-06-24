@@ -4222,7 +4222,7 @@ function adminToolbar(fields, action = '', scope = adminFilterScope()) {
     }).join('')}
     </div>
     <div class="admin-toolbar-actions">
-      <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">重置</button>
+      <button class="secondary" data-action="adminClearFilters" data-filter-scope="${scope}" type="button">清空筛选</button>
       ${action}
     </div>
   </div>`;
@@ -5397,7 +5397,7 @@ function adminContent(tab) {
     if (sub === 'deliveries') {
       const deliveries = state.adminData.deliveries || [];
       const ordersById = new Map(orderList.map((o) => [String(o.id), o]));
-      body = `<div class="admin-panel"><div class="admin-section-title"><h2>交付记录</h2><span>查看订单发货结果与交付状态。</span></div>${adminTable([{ label: '订单号' }, { label: '商品' }, { label: '发货方式' }, { label: '发货结果' }, { label: '交付时间' }], deliveries.map((d) => {
+      body = `<div class="admin-orders-view"><div class="admin-panel admin-deliveries-panel"><div class="admin-section-title"><h2>交付记录</h2><span>查看订单发货结果与交付状态。</span></div>${adminTable([{ label: '订单号' }, { label: '商品' }, { label: '发货方式' }, { label: '发货结果' }, { label: '交付时间' }], deliveries.map((d) => {
         const matchedOrder = ordersById.get(String(d.orderId || '')) || {};
         return [
           escapeHtml(d.orderNo || matchedOrder.orderNo || d.orderId || '-'),
@@ -5406,9 +5406,9 @@ function adminContent(tab) {
           adminStatus(d.status === 'sent' ? '发货成功' : d.status === 'failed' ? '发货失败' : d.status, d.status === 'sent' ? 'success' : adminToneFromStatus(d.status)),
           timeFrom(d.createdAt)
         ];
-      }), { title: '暂无发货记录', desc: '订单完成发货后将在这里显示。', action: '<a class="primary small link-button" href="/" target="_blank" rel="noopener">去前台查看</a>' })}</div>`;
+      }), { title: '暂无发货记录', desc: '订单完成发货后将在这里显示。', action: '<a class="primary small link-button" href="/" target="_blank" rel="noopener">去前台查看</a>' })}</div></div>`;
     } else {
-      body = `${adminToolbar([{ name: 'q', label: '关键词搜索', placeholder: '搜索订单号、用户 UID、Telegram 或 TXID' }, { name: 'range', label: '时间范围', type: 'select', value: '近7天', options: ['今天','近30天','自定义'] }], '', scope)}<div class="admin-tabs static admin-status-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}（${orderTabCount(key)}）</button>`).join('')}</div>${errorBanner}<div class="admin-panel admin-orders-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在加载订单数据...</span></div>' : adminTable([{ label: '订单号', width: '1.1fr' }, { label: '商品', width: '1.2fr' }, { label: '金额', width: '.72fr' }, { label: '支付状态', width: '.68fr' }, { label: '发货状态', width: '.68fr' }, { label: '用户', width: '1fr' }, { label: '创建时间', width: '.86fr' }, { label: '操作', width: '.9fr', sticky: true }], rows, emptyState)}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}`;
+      body = `<div class="admin-orders-view">${adminToolbar([{ name: 'q', label: '关键词搜索', placeholder: '搜索订单号、用户 UID、Telegram 或 TXID' }, { name: 'range', label: '时间范围', type: 'select', value: '近7天', options: ['今天','近30天','自定义'] }], '', scope)}<div class="admin-tabs static admin-status-tabs">${orderTabs.map(([key, label]) => `<button class="${orderTab === key ? 'active' : ''}" data-action="adminOrderTab" data-order-tab="${key}" type="button">${label}（${orderTabCount(key)}）</button>`).join('')}</div>${errorBanner}<div class="admin-panel admin-orders-panel">${slice.loading ? '<div class="admin-empty"><b>加载中…</b><span>正在加载订单数据...</span></div>' : adminTable([{ label: '订单号', width: '.98fr' }, { label: '商品', width: '1.28fr' }, { label: '金额', width: '.84fr' }, { label: '支付状态', width: '.68fr' }, { label: '发货状态', width: '.68fr' }, { label: '用户', width: '.95fr' }, { label: '创建时间', width: '.82fr' }, { label: '操作', width: '.98fr', sticky: true }], rows, emptyState)}${adminPagerServer('orders')}</div>${adminOrderDetailPanel()}</div>`;
     }
     return adminPage('订单管理', '统一管理订单状态、支付结果与发货记录。', body, { tabKey: 'orders', tabs });
   }
