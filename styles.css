@@ -18829,6 +18829,233 @@ body {
   font-weight: 700;
 }
 
+/* User management final match: compact mockup density */
+.admin-page .admin-content:has(.admin-users-surface) {
+  gap: 12px;
+  padding: 14px 20px 28px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) {
+  grid-template-columns: 176px minmax(0, 1fr);
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav {
+  width: 176px;
+  padding: 10px 12px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav .admin-brand {
+  min-height: 72px;
+  padding: 4px 10px 14px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav .admin-brand img {
+  width: 100px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav button {
+  min-height: 32px;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav button span {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav-svg {
+  width: 14px;
+  height: 14px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-nav button.active::before {
+  left: -8px;
+  top: 6px;
+  bottom: 6px;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-topbar > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-topbar > div:first-child span,
+.admin-page .admin-shell:has(.admin-users-surface) .admin-topbar > div:first-child strong {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.admin-page .admin-shell:has(.admin-users-surface) .admin-topbar > div:first-child span::after {
+  content: " /";
+  color: #94A3B8;
+  margin-left: 4px;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-page-head {
+  min-height: 54px;
+  padding: 0;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-page-head h1 {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 700;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-page-head span {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-tabs {
+  min-height: 34px;
+  height: 34px;
+  gap: 24px;
+  padding: 0 0 1px;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-tabs button {
+  min-height: 32px;
+  padding: 0 0 8px;
+  border-radius: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+.admin-page .admin-content:has(.admin-users-surface) .admin-tabs button.active {
+  border-bottom: 2px solid var(--admin-brand) !important;
+  background: transparent !important;
+  color: var(--admin-brand) !important;
+}
+
+.admin-users-surface {
+  gap: 12px;
+}
+
+.admin-users-surface .admin-toolbar {
+  min-height: 50px;
+  padding: 10px 12px;
+  border-radius: 8px !important;
+}
+
+.admin-users-surface .admin-toolbar-fields,
+.admin-users-surface .admin-toolbar-count-1 .admin-toolbar-fields {
+  width: 330px;
+  max-width: 330px;
+}
+
+.admin-users-surface .admin-toolbar input {
+  min-height: 30px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.admin-users-surface .admin-toolbar-actions button {
+  min-width: 58px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.admin-users-panel {
+  border-radius: 8px !important;
+}
+
+.admin-users-panel .admin-data-table {
+  border-radius: 8px !important;
+}
+
+.admin-users-panel .admin-data-head {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.admin-users-panel .admin-data-row {
+  min-height: 43px;
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.admin-users-panel .admin-data-row b {
+  font-size: 12px;
+}
+
+.admin-users-panel .admin-data-row small {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.admin-users-panel .admin-data-row button,
+.admin-users-panel .admin-data-row a {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--admin-brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-users-panel .status-badge {
+  min-height: 18px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-users-panel .admin-pager {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.admin-users-panel .admin-pager button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.admin-user-cell {
+  gap: 8px;
+}
+
+.admin-user-cell i {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+  font-size: 11px;
+}
+
+.admin-balance-value.negative,
+.admin-ledger-amount.negative {
+  color: #DC2626 !important;
+}
+
+.admin-ledger-amount {
+  font-size: 12px !important;
+}
+
 @media (max-width: 1100px) {
   .admin-page .admin-shell {
     grid-template-columns: 1fr;
